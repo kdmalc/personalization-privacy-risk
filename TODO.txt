@@ -14,3 +14,6 @@ To Do List
 
 Misc \ Low priority
 - Do we need to worry about num_samples >> num_features?
+- What is the smallest number of EMG data points we need in order to uniquely identify someone?
+- Can we still uniquely identify people from their EMG's aggregate statistics
+- EMG data should be highly unique, so in what ways can we leverage this or find new attack surfaces?
