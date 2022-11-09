@@ -1,0 +1,16 @@
+Current Goals
+1. Conduct ML Attack on filtered EMG data
+2. Want to show that as the decoder progresses, accuracy increases (thus the decoder learns and personalizes)
+3. Want to show that as the EMG data progresses, there is no change in accuracy 
+
+To Do List
+1. Implement Dec ML model on 2nd dec from each trial
+2. Repeat the above but using the last dec from each trial
+3. Momona Slack: EMG attack: 
+- Down sample: Make an envelope via moving average / RMS, 100 ms windows, no overlap
+- PCA on channels across all channels are participants, goal is to decrease the number of channels
+- Looking for 3-6 significant axes to apply actual ML model on 
+4. Put my ML pipeline into a .py file so it's standardized
+
+Misc \ Low priority
+- Do we need to worry about num_samples >> num_features?
