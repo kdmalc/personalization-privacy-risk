@@ -64,35 +64,36 @@ def train_test_val_split(input_df, label_df, rng_seed=2, validation=False, test_
         return X_train, y_train, X_test, y_test, 0, 0
         
 
-def train_model(my_model, X_train, y_train, cv, res_df, verbose=False):
-    #start_time = time.time()
+def train_model(my_model, X_train, y_train, cv, res_df, verbose=False, dec_num='NA'):
+    ''''''
+    
     train_pred_log, acc, acc_cv = fit_ml_algo(my_model, X_train, y_train, cv)
-    #log_time = (time.time() - start_time)
     if verbose:
         print(f"{str(my_model)}")
         print(f"Accuracy: {acc}")
         print(f"Accuracy CV 10-Fold: {acc_cv}")
         print()
-        #print(f"Run Time: {log_time:.3f}")
 
-    my_metrics_cols = ['Algorithm', 'One Off Acc', 'CV Acc', 'K Folds']
-    temp_df = pd.DataFrame([[str(my_model), acc, acc_cv, cv]], columns=my_metrics_cols)
+    my_metrics_cols = ['Algorithm', 'One Off Acc', 'CV Acc', 'K Folds', 'N']
+    temp_df = pd.DataFrame([[str(my_model), acc, acc_cv, cv, dec_num]], columns=my_metrics_cols)
     res_df = pd.concat((res_df, temp_df))
     
     return res_df
     
 
-def test_model(model, X_train, y_train, X_test, y_test, test_df, cv, num_decimals=3, verbose=False, my_cols=['Algorithm', 'CV Acc', 'Test Acc', 'K Folds']):
-    _, _, acc_cv, trained_model = fit_ml_algo(model, X_train, y_train, cv, testing=True)
+def test_model(model_name, X_train, y_train, X_test, y_test, test_df, cv, num_decimals=3, verbose=False, my_cols=['Algorithm', 'CV Acc', 'Test Acc', 'K Folds', 'N'], dec_num='NA'):
+    ''''''
+    
+    _, _, acc_cv, trained_model = fit_ml_algo(model_name, X_train, y_train, cv, testing=True)
     y_pred = trained_model.predict(X_test)
     test_acc = round(metrics.accuracy_score(y_test, y_pred) * 100, num_decimals)
     
     if verbose:
-        print(str(model))
+        print(str(model_name))
         print(f"CV Accuracy: {acc_cv}")
         print(f"Test Accuracy: {test_acc}")
         print()
         
-    temp_df = pd.DataFrame([str(model), acc_cv, test_acc, cv], index=my_cols).T
+    temp_df = pd.DataFrame([str(model_name), acc_cv, test_acc, cv, dec_num], index=my_cols).T
     test_df = pd.concat((test_df, temp_df))
     return test_df
