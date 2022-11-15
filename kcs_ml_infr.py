@@ -51,13 +51,14 @@ def train_test_val_split(input_df, label_df, rng_seed=2, validation=False, test_
     ## TRAIN / TEST
     # Stratify might be good to ensure that all classes are represented, I'm not sure if it'll do that by default
     X_train, X_test, y_train, y_test = train_test_split(
-        x_train, y_train_reg, test_size=test_percent, random_state=rng_seed)
+        x_train, y_train_reg, test_size=test_percent, random_state=rng_seed, shuffle=True)
+    # Not sure how shuffle and random state interact...
 
+    # Should just use cross val instead of manually making val split
     if validation:
         ## TRAIN / VAL
-        # Might not use... easier to just use cross validation I think
         X_train_pv, X_val, y_train_pv, y_val = train_test_split(
-            X_train, y_train, test_size=val_percent, random_state=rng_seed)
+            X_train, y_train, test_size=val_percent, random_state=rng_seed, shuffle=True)
 
         return X_train_pv, y_train_pv, X_test, y_test, X_val, y_val
     else:
