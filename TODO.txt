@@ -1,19 +1,66 @@
+Post 11/16 Meeting
+
+NARRATIVE
+- Moving from raw to filtered to enveloped EMG goes from higher to lower linkability
+- Dec learns and becomes more personalized, and thus higher linkability
+- How to add privacy as we go? Ideally small amounts at each step
+- Adversary's ML model acc should drop as noise increases (or more privacy is added). We can recompute person's Y for the sanitized EMG and see how it compares (may assume no co-adaptation)
+- Individualized Interfaces; Personalization-Privacy Tradeoff; Context dependent privacy
+
 Current Goals
-1. Conduct ML Attack on filtered EMG data
-2. Want to show that as the decoder progresses, accuracy increases (thus the decoder learns and personalizes)
-3. Want to show that as the EMG data progresses, there is no change in accuracy 
+1. Is there a difference in accuracy when using the enveloped EMG vs just the filtered EMG?
+2. Plot dec ML model acc VS CPHS cursor error/accuracy --> Does one increase/decrease faster than the other and thus make a good spot for stopping personalization early?
+3. Make separate models for pos and neg init dec conditions --> This should improve the performance of KNN since there may be cleaner clusters (as same inits should possibly converge to the same points)
+   - If this improves linkability (model performance) then make the reocmmendation to completely randomly init decs in the future
+   - If so for the above, how would this work for federated learning? Intuitively if you intercept someone's starting model it might reveal lots of info about them
+4. Try sanitizing filtered EMG and observe effects
 
-To Do List
-1. Implement Dec ML model on 2nd dec from each trial
-2. Repeat the above but using the last dec from each trial
-3. Momona Slack: EMG attack: 
-- Down sample: Make an envelope via moving average / RMS, 100 ms windows, no overlap
-- PCA on channels across all channels are participants, goal is to decrease the number of channels
-- Looking for 3-6 significant axes to apply actual ML model on 
-4. Put my ML pipeline into a .py file so it's standardized
+Open Questions
+1. Could investigate how condition number affects linkability
+2. Move into Differential Privacy: how to meet LINDDUN goals
+   - Deniability sounds like having to use DiffPri
+4. Could you realize fake data --> synth data, adversarial data, and/or sanitized data?
+   - I'm not sure what I was going for here lol.  Maybe if we could pass in fake data to fool the dec // still get high cursor performance?
+   - Keep in mind that if the human is indeed learning, then changing the dec would change the expressed EMG data.  Not sure it makes sense to just create an EMG data vec since it ought to be learning in tandem to deal with the decoder
+5. What do decoders depend most on: task, prior, user, time/personalization
+6. Still seems like we should be able to cluster decoder matrices somehow, do they actually move towards stable points?
+   - Flatten dec into a vec, which is essentially just a point in very high dimensions.  
+   - Then she did Euclidean distance... from the origin? Not sure
+   - Her graph assumed that the Machine (dec) and Human were both scalar gains
+7. PERSONALIZATION / FEDERATED LEARNING: you give me a sample of their EMG data, I give you a prefit / more specific decoder initialization
+   - We may be able to determine a way to generate generalized models that are specific based on preliminary EMG data, but we wouldn't be able to test how the performance is since the person ought to be adapting as well
+   - In what time scales / tasks is federated learning even worthwhile? EMG fitting takes about 10 updates and then stops changing, within 5 minutes.  Does federated learning still offer a benefit?
+8. If user EMG isn't affected by dec (e.g. there is no co-adpative learning, it is just the human learning or just the dec learning), then we could run sims with "more private" decs and observe privacy gains vs accuracy losses
 
-Misc \ Low priority
+Low priority
 - Do we need to worry about num_samples >> num_features?
 - What is the smallest number of EMG data points we need in order to uniquely identify someone?
+- What is the smallest datset sizes that we can still link Decoders to?
 - Can we still uniquely identify people from their EMG's aggregate statistics
 - EMG data should be highly unique, so in what ways can we leverage this or find new attack surfaces?
+   - But why is it highly unique?  How to quantify
+
+Accomplished So Far
+1. Conducted ML Attack on filtered EMG data
+2. Showed that as the decoder progresses, accuracy increases (thus the decoder learns and personalizes).  Note that first 2 decoders are the same (and are initialized to the same thing) so that explains why some models have 100% accuracy and then drop off and follow trend
+3. Showed that as the EMG data progresses, there is no change in accuracy (except for the last interval, not sure why there's a massive drop)
+4. Conducted ML Attack on Decoders (both norms and on flattened decs, linking to subject)
+5. Pseudo-clustered Decoders... not super useful
+
+Misc Observations
+- People may "learn faster" in Block 2
+
+Resolved / Known Issues
+1. Decoder Updates 0 and 1 have the exact same value (eg no update occurs)
+2. Half the conditions have the same dec inits (eg pos or neg inits), this is what gives some models 100% acc at dec 0/1 update.  This should just be dropped as it is an artefact from how the trial was conducted
+3. EMG data model accs decay at the end because the final "update" only has 3 values.  Update indices don't map nicely.  Just drop the last "update"
+
+Pivots
+1. Not worth looking at how different filters affect privacy, as researchers will already have their data processsing pipelines set up and not want to change it.  Plus working on the raw EMG data would take forever
+
+
+
+
+
+
+
