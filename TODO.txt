@@ -2,9 +2,9 @@ Post 11/16 Meeting
 
 NARRATIVE
 - Moving from raw to filtered to enveloped EMG goes from higher to lower linkability
-- Dec learns and becomes more personalized, and thus higher linkability
+- Dec learns and becomes more personalized, and thus linkability increases
 - How to add privacy as we go? Ideally small amounts at each step
-- Adversary's ML model acc should drop as noise increases (or more privacy is added). We can recompute person's Y for the sanitized EMG and see how it compares (may assume no co-adaptation)
+- Adversary's ML model acc should drop as noise increases (or more privacy is added). We can recompute person's Y for the sanitized EMG and see how it compares (this would assume no co-adaptation)
 - Individualized Interfaces; Personalization-Privacy Tradeoff; Context dependent privacy
 
 Current Goals
@@ -31,6 +31,7 @@ Open Questions
    - We may be able to determine a way to generate generalized models that are specific based on preliminary EMG data, but we wouldn't be able to test how the performance is since the person ought to be adapting as well
    - In what time scales / tasks is federated learning even worthwhile? EMG fitting takes about 10 updates and then stops changing, within 5 minutes.  Does federated learning still offer a benefit?
 8. If user EMG isn't affected by dec (e.g. there is no co-adpative learning, it is just the human learning or just the dec learning), then we could run sims with "more private" decs and observe privacy gains vs accuracy losses
+9. How to group / cluster / profile EMG data and decoders? 7 users may not be enough to observe actual clusters
 
 Low priority
 - Do we need to worry about num_samples >> num_features?
@@ -49,6 +50,10 @@ Accomplished So Far
 
 Misc Observations
 - People may "learn faster" in Block 2
+- Subjects don't have any real control for the first decoder or so since the match is bad
+- Slow learning rate improved performance, otherwise conditions didn't matter for performance
+- Don't do PCA transform on EMG data, as negative EMG data isn't real (EMG data gets rectified before being input)
+- There exist too many dimensions, believe there are multiple stable points (thus why they tried multiple inits)
 
 Resolved / Known Issues
 1. Decoder Updates 0 and 1 have the exact same value (eg no update occurs)

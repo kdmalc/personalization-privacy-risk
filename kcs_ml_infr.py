@@ -98,3 +98,51 @@ def test_model(model_name, X_train, y_train, X_test, y_test, test_df, cv, num_de
     temp_df = pd.DataFrame([str(model_name), acc_cv, test_acc, cv, dec_num], index=my_cols).T
     test_df = pd.concat((test_df, temp_df))
     return test_df
+
+
+def nth_decoder_model(flat_dec_expanded_df, n, my_models, key_to_num_dict=key_to_num, my_metrics_cols=['Algorithm', 'One Off Acc', 'CV Acc', 'K Folds', 'N'], cv=5, test=False):
+    ''''''
+    
+    # Look at just update number n
+    non_nth_update_idxs = flat_dec_expanded_df[~(flat_dec_expanded_df['Update Number'] == n)].index
+    dec_df = flat_dec_expanded_df.drop(non_nth_update_idxs)
+    
+    dec_labels_df = pd.DataFrame(dec_df['Subject'].map(key_to_num_dict))
+    dec_df.drop(['Subject', 'Update Number'], axis=1, inplace=True)
+    
+    X_train, y_train, X_test, y_test, X_val, y_val = train_test_val_split(dec_df, dec_labels_df)
+    y_train = np.ravel(y_train)
+
+    dec_res_df = pd.DataFrame(columns=my_metrics_cols)
+    #print("TRAINING")
+    for model_num, model in enumerate(my_models):
+        #print(f"{model_num} of {len(my_models)}")
+        dec_res_df = train_model(model, X_train, y_train, cv, dec_res_df, dec_num=n)
+        
+    test_df = pd.DataFrame(columns=['Algorithm', 'CV Acc', 'Test Acc', 'K Folds'])
+    if test:
+        #print("TESTING")
+        for model in my_models:
+            #print(f"{model_num} of {len(my_models)}")
+            test_df = test_model(model, X_train, y_train, X_test, y_test, test_df, cv, dec_num=n)
+            
+    return dec_res_df, test_df
+
+###################################################################################################
+# From CPHS
+def calc_time_domain_error(X, Y):
+    """calc_time_domain_error
+
+    Args:
+        X (n_time x n_dim): time-series data of position, e.g. reference position (time x dimensions)
+        Y (n_time x n_dim): time-series data of another position, e.g. cursor position (time x dimensions)
+
+    Returns:
+        td_error (n_time x 1): time-series data of the Euclidean distance between X position and Y position
+    """
+    # make sure that the shapes are the same
+    assert(X.shape == Y.shape)
+
+    td_error = np.linalg.norm(X - Y, axis=1)
+
+    return td_error
