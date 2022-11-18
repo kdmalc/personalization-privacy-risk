@@ -99,6 +99,12 @@ def test_model(model_name, X_train, y_train, X_test, y_test, test_df, cv, num_de
     test_df = pd.concat((test_df, temp_df))
     return test_df
 
+keys = ['METACPHS_S106', 'METACPHS_S107','METACPHS_S108', 'METACPHS_S109', 'METACPHS_S110', 'METACPHS_S111', 'METACPHS_S112']
+key_to_num = dict()
+num_to_key = dict()
+for idx, key in enumerate(keys):
+    key_to_num[key] = idx
+    num_to_key[idx] = key
 
 def nth_decoder_model(flat_dec_expanded_df, n, my_models, key_to_num_dict=key_to_num, my_metrics_cols=['Algorithm', 'One Off Acc', 'CV Acc', 'K Folds', 'N'], cv=5, test=False):
     ''''''
