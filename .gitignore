@@ -1,6 +1,8 @@
 .ipynb_checkpoints
+__pycache__
 cphs_data_block1.pickle
 cphs_data_block2.pickle
-cphs2022.ipynb
+000_cphs2022.ipynb
+001_Simulations.ipynb
 Data
 *.csv
