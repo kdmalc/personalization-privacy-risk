@@ -134,6 +134,29 @@ def nth_decoder_model(flat_dec_expanded_df, n, my_models, key_to_num_dict=key_to
             
     return dec_res_df, test_df
 
+
+# Did not use this one because I deleted NB 109 and redid it in 106. 106 does not shuffle rn
+def shuffle_and_separate_labels(data_df, labels_df, frac=1, verbose=False):
+    # First, attach labels so we can keep track of them after shuffling
+    data_df['Label'] = labels_df
+
+    # Shuffle the DF
+    shuffled_df = data_df.sample(frac=1)
+    frac_df = shuffled_df.iloc[int(shuffled_df.shape[0]//(1/frac)):, :]
+
+    # Now un-attach labels
+    shuffled_labels_df = frac_df['Label']
+    frac_df.drop('Label', axis=1, inplace=True)
+    
+    if verbose==True:
+        print(f"Shuffled_labels_df size: {shuffled_labels_df.shape}")
+        print(f"Frac_df size: {frac_df.shape}")
+        # Print it just looks bad
+        #print(frac_df.head())
+
+    return frac_df, shuffled_labels_df
+
+
 ###################################################################################################
 # From CPHS
 def calc_time_domain_error(X, Y):
