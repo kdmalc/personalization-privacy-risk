@@ -6,6 +6,21 @@ from sklearn.model_selection import train_test_split
 from sklearn import model_selection, tree, preprocessing, metrics, linear_model
 
 random.seed(a=1)
+num_conds = 8
+num_channels = 64
+# Default number of k-folds
+cv = 5 # Changed to 5 from 10 because the smallest class in cross val only has (had?) 7 instances
+my_metrics_cols=['Algorithm', 'One Off Acc', 'CV Acc', 'K Folds']
+update_ix = np.load(r"Data\update_ix.npy")
+
+
+keys = ['METACPHS_S106', 'METACPHS_S107', 'METACPHS_S108', 'METACPHS_S109', 'METACPHS_S110', 'METACPHS_S111', 'METACPHS_S112', 'METACPHS_S113', 'METACPHS_S114', 'METACPHS_S115', 'METACPHS_S116', 'METACPHS_S117', 'METACPHS_S118', 'METACPHS_S119']
+key_to_num = dict()
+num_to_key = dict()
+for idx, key in enumerate(keys):
+    key_to_num[key] = idx
+    num_to_key[idx] = key
+    
 
 def fit_ml_algo(algo, X_train, y_train, cv, verbose=False, num_decimals=3, testing=False):
     '''Runs given algorithm and returns the accuracy metrics'''
@@ -50,8 +65,7 @@ def train_test_val_split(input_df, label_df, rng_seed=2, validation=False, test_
 
     ## TRAIN / TEST
     # Stratify might be good to ensure that all classes are represented, I'm not sure if it'll do that by default
-    X_train, X_test, y_train, y_test = train_test_split(
-        x_train, y_train_reg, test_size=test_percent, random_state=rng_seed, shuffle=True)
+    X_train, X_test, y_train, y_test = train_test_split(x_train, y_train_reg, test_size=test_percent, random_state=rng_seed, shuffle=True)
     # Not sure how shuffle and random state interact...
 
     # Should just use cross val instead of manually making val split
@@ -99,12 +113,6 @@ def test_model(model_name, X_train, y_train, X_test, y_test, test_df, cv, num_de
     test_df = pd.concat((test_df, temp_df))
     return test_df
 
-keys = ['METACPHS_S106', 'METACPHS_S107','METACPHS_S108', 'METACPHS_S109', 'METACPHS_S110', 'METACPHS_S111', 'METACPHS_S112']
-key_to_num = dict()
-num_to_key = dict()
-for idx, key in enumerate(keys):
-    key_to_num[key] = idx
-    num_to_key[idx] = key
 
 def nth_decoder_model(flat_dec_expanded_df, n, my_models, key_to_num_dict=key_to_num, my_metrics_cols=['Algorithm', 'One Off Acc', 'CV Acc', 'K Folds', 'N'], cv=5, test=False):
     ''''''
