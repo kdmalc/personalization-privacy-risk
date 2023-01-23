@@ -2,6 +2,22 @@ from torch import nn
 import torch.nn.functional as F
 
 
+class SmoothBatch():
+    # Is this actually SmoothBatch lol or is that a separate instance?
+    ## I think there's 2 optimziations happening, one for D* and then one for SmoothBatch
+    ### I don't see why SmoothBatch would need to be federated also...
+    def __init__():
+        pass
+    
+    # Do I need a forward method?
+    #E Not sure where that gets called...
+    
+    # Where are global_model.to() and such defined?
+    ## Is that a function of PyTorch or something they defined somewhere?
+    
+    pass
+
+
 class MLP(nn.Module):
     def __init__(self, dim_in, dim_hidden, dim_out):
         super(MLP, self).__init__()

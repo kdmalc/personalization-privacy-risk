@@ -1,7 +1,7 @@
 # From AshwinRJ: https://github.com/AshwinRJ/Federated-Learning-PyTorch/blob/master/src/options.py
 
 import argparse
-
+# python src/emg_fl_main.py --num_users=14, --model=___, --dataset=___, --num_classes=___, --iid=0)
 
 def args_parser():
     parser = argparse.ArgumentParser()
@@ -21,9 +21,6 @@ def args_parser():
                         help='learning rate')
     parser.add_argument('--momentum', type=float, default=0.5,
                         help='SGD momentum (default: 0.5)')
-    
-    
-    
     
     
     # I shouldn't need these since I"m not suing their model...
@@ -46,20 +43,14 @@ def args_parser():
                         help="Whether use max pooling rather than \
                         strided convolutions")
     #'''
-    # For our implementation:
-    #KAI: parser.add_argument('--model', type=str, default='dec loss', help='model name')
 
-    
-    
     
     # other arguments
     # This needs to be updated... our dataset is the processed EMG? With labels?
     # Wait I don't think we have any labels lol what
     # What we need to change it to eventually.  
     #      Figure out what dataset to use... all EMG data?
-    #parser.add_argument('--dataset', type=str, default='emg', help="name \
-    #                    of dataset")
-    parser.add_argument('--dataset', type=str, default='emg', help="name \
+    parser.add_argument('--dataset', type=str, default='mnist', help="name \
                         of dataset")
     parser.add_argument('--num_classes', type=int, default=10, help="number \
                         of classes")
