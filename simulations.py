@@ -3,7 +3,7 @@ import numpy as np
 
 # set up gradient of cost:
 # d(c_L2(D))/d(D) = 2*(DF + HV - V+)*F.T + 2*alphaD*D
-def gradient_cost_l2(F, D, H, V, alphaF=1e-2, alphaD=1e-2):
+def gradient_cost_l2(F, D, H, V, alphaF=1e-2, alphaD=1e-2, learning_batch=8):
     '''
     F: 64 channels x time EMG signals
     V: 2 x time target velocity
@@ -25,7 +25,7 @@ def gradient_cost_l2(F, D, H, V, alphaF=1e-2, alphaD=1e-2):
 
 # set up gradient of cost:
 # d(c_L2(D))/d(D) = 2*(DF + HV - V+)*F.T + 2*alphaD*D
-def gradient_cost_l2_discrete(F, D, H, V, alphaF=1e-2, alphaD=1e-2):
+def gradient_cost_l2_discrete(F, D, H, V, alphaF=1e-2, alphaD=1e-2, learning_batch=8):
     '''
     F: 64 channels x time EMG signals
     V: 2 x time target velocity
@@ -49,7 +49,7 @@ def gradient_cost_l2_discrete(F, D, H, V, alphaF=1e-2, alphaD=1e-2):
     
 # set up the cost function: 
 # c_L2 = (||DF + HV - V+||_2)^2 + alphaD*(||D||_2)^2 + alphaF*(||F||_2)^2
-def cost_l2_discrete(F, D, H, V, alphaF=1e-2, alphaD=1e-2):
+def cost_l2_discrete(F, D, H, V, alphaF=1e-2, alphaD=1e-2, learning_batch=8):
     '''
     F: 64 channels x time EMG signals
     V: 2 x time target velocity
@@ -74,7 +74,7 @@ def cost_l2_discrete(F, D, H, V, alphaF=1e-2, alphaD=1e-2):
 
 # set up the cost function: 
 # c_L2 = (||DF + HV - V+||_2)^2 + alphaD*(||D||_2)^2 + alphaF*(||F||_2)^2
-def cost_l2(F, D, H, V, alphaF=1e-2, alphaD=1e-2):
+def cost_l2(F, D, H, V, alphaF=1e-2, alphaD=1e-2, learning_batch=8):
     '''
     F: 64 channels x time EMG signals
     V: 2 x time target velocity
@@ -103,7 +103,7 @@ def estimate_decoder(F, H, V):
 def simulation(D,learning_batch,alpha,alphaF=1e-2,alphaD=1e-2,display_info=False,num_iters=False):
     p_classify = []
     accuracy_temp = []
-    num_updates = int(np.floor((filtered_signals.shape[0]-1)/learning_batch)) # how many times can we update decoder based on learning batch    
+    num_updates = int(np.floor((filtered_signals.shape[0]-1)/learning_batch)) # how many times can we update decoder based on learning batch 
 
     # RANDOMIZE DATASET
     randomized_integers = np.random.permutation(range(0,cued_target_position.shape[0]))
@@ -224,8 +224,19 @@ def output_new_decoder_constant_intention(s,D,p_intended):
     return v_intended,p_constrained
 
 
-def classify(decoded_cursor_velocity, print_indx = False):
+def classify(decoded_cursor_velocity, target_positions, print_indx = False):
+    #Kai: I added target_positions to be a parameter
+    # Idk what print_indx is doing lol
     
+    #This was not in the function originally, just floating in the Simulations NB
+    #################################################################################################
+    # This seems like it is specific to the discrete task...
+    #num_targets = 4
+    #TARGET_LOCATION_RADIUS = 10
+    #thetas = 2*np.pi/num_targets*np.arange(0,num_targets) # convert number of targets to angles
+    #target_positions = TARGET_LOCATION_RADIUS*np.asarray([np.cos(thetas),np.sin(thetas)]).T
+    #################################################################################################
+
     # pick the smallest distance diff
     dist_diffs = np.linalg.norm((decoded_cursor_velocity.T - target_positions),
                                 axis = 1) # this should be an array
