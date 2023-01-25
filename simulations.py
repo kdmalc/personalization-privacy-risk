@@ -222,3 +222,32 @@ def output_new_decoder_constant_intention(s,D,p_intended):
     # compute error between intended and actual position and take derivative to get intended velocity
     v_intended = p_intended # (2,60) # divide by 60 was removed
     return v_intended,p_constrained
+
+
+def classify(decoded_cursor_velocity, print_indx = False):
+    
+    # pick the smallest distance diff
+    dist_diffs = np.linalg.norm((decoded_cursor_velocity.T - target_positions),
+                                axis = 1) # this should be an array
+    
+    min_dist_diffs = np.argmin(dist_diffs)
+
+    classified_target = target_positions[min_dist_diffs,:]#[:, None]
+
+    # target_postions is a global variabe
+    return classified_target
+
+
+def classification_accuracy(p_target,p_classify): 
+    '''
+    inputs: 
+        p_target: target positions (trials x 2)
+        p_classify: classified positions (trials x 2)
+    output:
+        success_rate: classification accuracy (number)
+    '''
+    target_pos_diff = p_classify - p_target
+    target_pos_diff_norm = np.linalg.norm(target_pos_diff, axis = 1)
+    target_pos_count = sum(target_pos_diff_norm < 0.01)
+    success_rate = target_pos_count / len(target_pos_diff_norm)
+    return success_rate
