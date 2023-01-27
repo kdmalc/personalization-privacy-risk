@@ -3,7 +3,7 @@ import numpy as np
 
 # set up gradient of cost:
 # d(c_L2(D))/d(D) = 2*(DF + HV - V+)*F.T + 2*alphaD*D
-def gradient_cost_l2(F, D, H, V, learning_batch, alphaF=1e-2, alphaD=1e-2):
+def gradient_cost_l2(F, D, H, V, learning_batch, alphaF, alphaD):
     '''
     F: 64 channels x time EMG signals
     V: 2 x time target velocity
@@ -23,58 +23,9 @@ def gradient_cost_l2(F, D, H, V, learning_batch, alphaF=1e-2, alphaD=1e-2):
         + 2 * alphaD * D / (Nd*Ne)).flatten())
 
 
-# set up gradient of cost:
-# d(c_L2(D))/d(D) = 2*(DF + HV - V+)*F.T + 2*alphaD*D
-def gradient_cost_l2_discrete(F, D, H, V, learning_batch, alphaF=1e-2, alphaD=1e-2):
-    '''
-    F: 64 channels x time EMG signals
-    V: 2 x time target velocity
-    D: 2 (x y vel) x 64 channels decoder # TODO: we now have a timeseries component - consult Sam
-    H: 2 x 2 state transition matrix
-    ''' 
-    Nd = 2
-    Ne = 64
-    Nt = learning_batch
-
-    # TODO: add depth (time) to D
-    D = np.reshape(D,(Nd, Ne))
-    Vplus = V[:,1:]
-    Vminus = V[:,:-1]
-    v_unbounded = D@F
-    theta = np.arctan2(v_unbounded[1],v_unbounded[0])
-    v_actual = np.asarray([10*np.cos(theta),10*np.sin(theta)])
-    return ((2 * (v_actual + H@Vminus - Vplus) @ F.T / (Nd*Nt) 
-        + 2 * alphaD * D / (Nd*Ne)).flatten())
-
-    
 # set up the cost function: 
 # c_L2 = (||DF + HV - V+||_2)^2 + alphaD*(||D||_2)^2 + alphaF*(||F||_2)^2
-def cost_l2_discrete(F, D, H, V, learning_batch, alphaF=1e-2, alphaD=1e-2):
-    '''
-    F: 64 channels x time EMG signals
-    V: 2 x time target velocity
-    D: 2 (x y vel) x 64 channels decoder
-    H: 2 x 2 state transition matrix
-    ''' 
-    Nd = 2
-    Ne = 64 # default = 64
-    Nt = learning_batch
-    # TODO: add depth (time) to D
-    D = np.reshape(D,(Nd,Ne))
-    Vplus = V[:,1:]
-    Vminus = V[:,:-1]
-    v_unbounded = D@F
-    theta = np.arctan2(v_unbounded[1],v_unbounded[0])
-    v_actual = np.asarray([10*np.cos(theta),10*np.sin(theta)])
-    e = ( np.sum( (v_actual + H@Vminus - Vplus)**2 ) / (Nd*Nt) 
-            + alphaD * np.sum( D**2 ) / (Nd*Ne)
-            + alphaF * np.sum( F**2 ) / (Ne*Nt) )
-    return e
-
-
-# set up the cost function: 
-# c_L2 = (||DF + HV - V+||_2)^2 + alphaD*(||D||_2)^2 + alphaF*(||F||_2)^2
-def cost_l2(F, D, H, V, learning_batch, alphaF=1e-2, alphaD=1e-2):
+def cost_l2(F, D, H, V, learning_batch, alphaF, alphaD):
     '''
     F: 64 channels x time EMG signals
     V: 2 x time target velocity
@@ -201,66 +152,3 @@ def output_new_decoder(s,D,p_intended):
     # compute error between intended and actual position and take derivative to get intended velocity
     v_intended = p_intended - p_constrained # (2,60)
     return v_intended,p_constrained
-
-
-# given decoder, what is the new position?
-def output_new_decoder_constant_intention(s,D,p_intended):
-    '''
-    s: (64 x (60 timepoints x learning batch size))
-    D: (2 x 64) previous D computed or random
-    p_intended: (2 x 60 timepoints x learning batch size)
-    '''
-    # take first trial, random decoder, and do target classification
-    v = D@s # actual decoded velocity (2,60)
-
-    # integrate decoded velocities into positions
-    p = []
-    for ix in range(v.shape[1]):
-        p.append(np.sum(v[:,:ix],axis=1))
-    p = np.asarray(p).T # actual decoded position (2,60)
-
-    # want error between intended and actual velocity but need to constrain actual velocity to target radius
-    p_constrained = np.asarray([constrain_p_actual(p_) for p_ in p.T]).T # constrained, (2,60)
-    # compute error between intended and actual position and take derivative to get intended velocity
-    v_intended = p_intended # (2,60) # divide by 60 was removed
-    return v_intended,p_constrained
-
-
-def classify(decoded_cursor_velocity, target_positions, print_indx = False):
-    #Kai: I added target_positions to be a parameter
-    # Idk what print_indx is doing lol
-    
-    #This was not in the function originally, just floating in the Simulations NB
-    #################################################################################################
-    # This seems like it is specific to the discrete task...
-    #num_targets = 4
-    #TARGET_LOCATION_RADIUS = 10
-    #thetas = 2*np.pi/num_targets*np.arange(0,num_targets) # convert number of targets to angles
-    #target_positions = TARGET_LOCATION_RADIUS*np.asarray([np.cos(thetas),np.sin(thetas)]).T
-    #################################################################################################
-
-    # pick the smallest distance diff
-    dist_diffs = np.linalg.norm((decoded_cursor_velocity.T - target_positions),
-                                axis = 1) # this should be an array
-    
-    min_dist_diffs = np.argmin(dist_diffs)
-
-    classified_target = target_positions[min_dist_diffs,:]#[:, None]
-
-    # target_postions is a global variabe
-    return classified_target
-
-
-def classification_accuracy(p_target,p_classify): 
-    '''
-    inputs: 
-        p_target: target positions (trials x 2)
-        p_classify: classified positions (trials x 2)
-    output:
-        success_rate: classification accuracy (number)
-    '''
-    target_pos_diff = p_classify - p_target
-    target_pos_diff_norm = np.linalg.norm(target_pos_diff, axis = 1)
-    target_pos_count = sum(target_pos_diff_norm < 0.01)
-    success_rate = target_pos_count / len(target_pos_diff_norm)
-    return success_rate
