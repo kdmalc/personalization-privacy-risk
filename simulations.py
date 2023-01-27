@@ -3,7 +3,7 @@ import numpy as np
 
 # set up gradient of cost:
 # d(c_L2(D))/d(D) = 2*(DF + HV - V+)*F.T + 2*alphaD*D
-def gradient_cost_l2(F, D, H, V, alphaF=1e-2, alphaD=1e-2, learning_batch=8):
+def gradient_cost_l2(F, D, H, V, learning_batch, alphaF=1e-2, alphaD=1e-2):
     '''
     F: 64 channels x time EMG signals
     V: 2 x time target velocity
@@ -25,7 +25,7 @@ def gradient_cost_l2(F, D, H, V, alphaF=1e-2, alphaD=1e-2, learning_batch=8):
 
 # set up gradient of cost:
 # d(c_L2(D))/d(D) = 2*(DF + HV - V+)*F.T + 2*alphaD*D
-def gradient_cost_l2_discrete(F, D, H, V, alphaF=1e-2, alphaD=1e-2, learning_batch=8):
+def gradient_cost_l2_discrete(F, D, H, V, learning_batch, alphaF=1e-2, alphaD=1e-2):
     '''
     F: 64 channels x time EMG signals
     V: 2 x time target velocity
@@ -49,7 +49,7 @@ def gradient_cost_l2_discrete(F, D, H, V, alphaF=1e-2, alphaD=1e-2, learning_bat
     
 # set up the cost function: 
 # c_L2 = (||DF + HV - V+||_2)^2 + alphaD*(||D||_2)^2 + alphaF*(||F||_2)^2
-def cost_l2_discrete(F, D, H, V, alphaF=1e-2, alphaD=1e-2, learning_batch=8):
+def cost_l2_discrete(F, D, H, V, learning_batch, alphaF=1e-2, alphaD=1e-2):
     '''
     F: 64 channels x time EMG signals
     V: 2 x time target velocity
@@ -74,7 +74,7 @@ def cost_l2_discrete(F, D, H, V, alphaF=1e-2, alphaD=1e-2, learning_batch=8):
 
 # set up the cost function: 
 # c_L2 = (||DF + HV - V+||_2)^2 + alphaD*(||D||_2)^2 + alphaF*(||F||_2)^2
-def cost_l2(F, D, H, V, alphaF=1e-2, alphaD=1e-2, learning_batch=8):
+def cost_l2(F, D, H, V, learning_batch, alphaF=1e-2, alphaD=1e-2):
     '''
     F: 64 channels x time EMG signals
     V: 2 x time target velocity
@@ -99,8 +99,9 @@ def estimate_decoder(F, H, V):
     return (V[:,1:]-H@V[:,:-1])@np.linalg.pinv(F)
 
 
-# Added 2 new parameters
-def simulation(D,learning_batch,alpha,alphaF=1e-2,alphaD=1e-2,display_info=False,num_iters=False):
+# Added 2 new parameters; use the up-to-date code in NB 200
+'''
+def simulation(D, learning_batch, alpha, alphaF=1e-2, alphaD=1e-2, display_info=False, num_iters=False):
     p_classify = []
     accuracy_temp = []
     num_updates = int(np.floor((filtered_signals.shape[0]-1)/learning_batch)) # how many times can we update decoder based on learning batch 
@@ -154,6 +155,7 @@ def simulation(D,learning_batch,alpha,alphaF=1e-2,alphaD=1e-2,display_info=False
 
     p_classify = np.asarray(p_classify)
     return accuracy_temp,D,p_constrained
+'''
 
 
 # constrain p - do we want to include radius distance when we update the new decoder?
