@@ -6,3 +6,5 @@ Data
 *.csv
 *.pkl
 *.pickle
+*.png
+*.jpg
