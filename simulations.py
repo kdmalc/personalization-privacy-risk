@@ -3,13 +3,14 @@ import numpy as np
 
 # set up gradient of cost:
 # d(c_L2(D))/d(D) = 2*(DF + HV - V+)*F.T + 2*alphaD*D
-def gradient_cost_l2(F, D, H, V, learning_batch, alphaF, alphaD):
-    print("GRAD LAMBDA_E")
+def gradient_cost_l2(F, D, H, V, learning_batch, alphaF, alphaD, alphaE=1e-6):
     '''
     F: 64 channels x time EMG signals
     V: 2 x time target velocity
     D: 2 (x y vel) x 64 channels decoder # TODO: we now have a timeseries component - consult Sam
     H: 2 x 2 state transition matrix
+    
+    alphaE is 1e-6 for all conditions
     ''' 
     Nd = 2
     Ne = 64
@@ -20,19 +21,20 @@ def gradient_cost_l2(F, D, H, V, learning_batch, alphaF, alphaD):
     Vplus = V[:,1:]
     Vminus = V[:,:-1]
 
-    return ((2 * (D@F + H@Vminus - Vplus) @ F.T*(1e-6) #/ (Nd*Nt) # They multiply F.T by lambdaE
-        + 2 * alphaD * D ).flatten())  #/ (Nd*Ne)
+    return ((2 * (D@F + H@Vminus - Vplus)@F.T*(alphaE) #/ (Nd*Nt) # They multiply F.T by lambdaE
+        + 2*alphaD*D ).flatten())  #/ (Nd*Ne)
 
 
 # set up the cost function: 
 # c_L2 = (||DF + HV - V+||_2)^2 + alphaD*(||D||_2)^2 + alphaF*(||F||_2)^2
-def cost_l2(F, D, H, V, learning_batch, alphaF, alphaD):
-    print("LAMBDA_E")
+def cost_l2(F, D, H, V, learning_batch, alphaF, alphaD, alphaE=1e-6):
     '''
     F: 64 channels x time EMG signals
     V: 2 x time target velocity
     D: 2 (x y vel) x 64 channels decoder
     H: 2 x 2 state transition matrix
+    
+    alphaE is 1e-6 for all conditions
     ''' 
     Nd = 2
     Ne = 64 # default = 64
@@ -42,9 +44,9 @@ def cost_l2(F, D, H, V, learning_batch, alphaF, alphaD):
     Vplus = V[:,1:]
     Vminus = V[:,:-1]
 
-    e = ( np.sum( (D@F + H@Vminus - Vplus)**2 )*(1e-6) #/ (Nd*Nt) 
-            + alphaD*np.sum( D**2 ) #/ (Nd*Ne)
-            + alphaF*np.sum( F**2 ) ) #/ (Ne*Nt) )
+    e = ( np.sum((D@F + H@Vminus - Vplus)**2)*(alphaE) #/ (Nd*Nt) 
+            + alphaD*np.sum(D**2) #/ (Nd*Ne)
+            + alphaF*np.sum(F**2) ) #/ (Ne*Nt) )
     return e
 
 
@@ -53,6 +55,7 @@ def estimate_decoder(F, H, V):
 
 
 # Added 2 new parameters; use the up-to-date code in NB 200
+# Otherwise this is the original sims code.  It uses the discrete trial funcs still I believe
 '''
 def simulation(D, learning_batch, alpha, alphaF=1e-2, alphaD=1e-2, display_info=False, num_iters=False):
     p_classify = []
