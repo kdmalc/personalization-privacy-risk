@@ -3,7 +3,7 @@ import numpy as np
 
 # set up gradient of cost:
 # d(c_L2(D))/d(D) = 2*(DF + HV - V+)*F.T + 2*alphaD*D
-def gradient_cost_l2(F, D, H, V, learning_batch, alphaF, alphaD, alphaE=1e-6):
+def gradient_cost_l2(F, D, H, V, learning_batch, alphaF, alphaD, alphaE=1e-6, Nd=2, Ne=64):
     '''
     F: 64 channels x time EMG signals
     V: 2 x time target velocity
@@ -12,11 +12,9 @@ def gradient_cost_l2(F, D, H, V, learning_batch, alphaF, alphaD, alphaE=1e-6):
     
     alphaE is 1e-6 for all conditions
     ''' 
-    Nd = 2
-    Ne = 64
+    
     Nt = learning_batch
 
-    # TODO: add depth (time) to D
     D = np.reshape(D,(Nd, Ne))
     Vplus = V[:,1:]
     Vminus = V[:,:-1]
@@ -27,7 +25,7 @@ def gradient_cost_l2(F, D, H, V, learning_batch, alphaF, alphaD, alphaE=1e-6):
 
 # set up the cost function: 
 # c_L2 = (||DF + HV - V+||_2)^2 + alphaD*(||D||_2)^2 + alphaF*(||F||_2)^2
-def cost_l2(F, D, H, V, learning_batch, alphaF, alphaD, alphaE=1e-6):
+def cost_l2(F, D, H, V, learning_batch, alphaF, alphaD, alphaE=1e-6, Nd=2, Ne=64):
     '''
     F: 64 channels x time EMG signals
     V: 2 x time target velocity
@@ -36,10 +34,8 @@ def cost_l2(F, D, H, V, learning_batch, alphaF, alphaD, alphaE=1e-6):
     
     alphaE is 1e-6 for all conditions
     ''' 
-    Nd = 2
-    Ne = 64 # default = 64
+
     Nt = learning_batch
-    # TODO: add depth (time) to D
     D = np.reshape(D,(Nd,Ne))
     Vplus = V[:,1:]
     Vminus = V[:,:-1]
