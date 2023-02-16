@@ -40,10 +40,17 @@ def cost_l2(F, D, H, V, learning_batch, alphaF, alphaD, alphaE=1e-6, Nd=2, Ne=64
     Vplus = V[:,1:]
     Vminus = V[:,:-1]
 
-    e = ( np.sum((D@F + H@Vminus - Vplus)**2)*(alphaE) #/ (Nd*Nt) 
-            + alphaD*np.sum(D**2) #/ (Nd*Ne)
-            + alphaF*np.sum(F**2) ) #/ (Ne*Nt) )
-    return e
+    #e = ( np.sum((D@F + H@Vminus - Vplus)**2)*(alphaE) #/ (Nd*Nt) 
+    #        + alphaD*np.sum(D**2) #/ (Nd*Ne)
+    #        + alphaF*np.sum(F**2) ) #/ (Ne*Nt) )
+    
+    term1 = np.sum((D@F + H@Vminus - Vplus)**2)*(alphaE)
+    #term2 = alphaD*np.sum(D**2) #/ (Nd*Ne)
+    #term3 = alphaF*np.sum(F**2) #/ (Ne*Nt) )
+    term2 = alphaD*np.linalg.norm(D)
+    term3 = alphaF*np.linalg.norm(F)
+    
+    return (term1 + term2 + term3)
 
 
 def estimate_decoder(F, H, V):
