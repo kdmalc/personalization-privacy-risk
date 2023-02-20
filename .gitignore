@@ -6,3 +6,7 @@ Data
 *.csv
 *.pkl
 *.pickle
+*.png
+*.jpg
+NMF.txt
+cphs_sims_environment.yml
