@@ -19,7 +19,7 @@ def gradient_cost_l2(F, D, H, V, learning_batch, alphaF, alphaD, alphaE=1e-6, Nd
     Vplus = V[:,1:]
     Vminus = V[:,:-1]
 
-    return ((2 * (D@F + H@Vminus - Vplus)@F.T*(alphaE) #/ (Nd*Nt) # They multiply F.T by lambdaE
+    return ((2*(D@F + H@Vminus - Vplus)@F.T*(alphaE) #/ (Nd*Nt)
         + 2*alphaD*D ).flatten())  #/ (Nd*Ne)
 
 
@@ -44,9 +44,10 @@ def cost_l2(F, D, H, V, learning_batch, alphaF, alphaD, alphaE=1e-6, Nd=2, Ne=64
     #        + alphaD*np.sum(D**2) #/ (Nd*Ne)
     #        + alphaF*np.sum(F**2) ) #/ (Ne*Nt) )
     
-    term1 = np.sum((D@F + H@Vminus - Vplus)**2)*(alphaE)
+    #term1 = np.sum((D@F + H@Vminus - Vplus)**2)*(alphaE)
     #term2 = alphaD*np.sum(D**2) #/ (Nd*Ne)
     #term3 = alphaF*np.sum(F**2) #/ (Ne*Nt) )
+    term1 = np.linalg.norm((D@F + H@Vminus - Vplus))*(alphaE)
     term2 = alphaD*np.linalg.norm(D)
     term3 = alphaF*np.linalg.norm(F)
     
