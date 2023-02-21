@@ -1,6 +1,11 @@
 import numpy as np
 
 
+def hessian_cost(F, alphaD, alphaE=1e-6):
+    return ((2*alphaE*(F * F.T).T  # Idk if HV-V+ drops, I think it would stay.  Online calc says it drops lol
+        + 2*alphaD ).flatten())
+
+
 # set up gradient of cost:
 # d(c_L2(D))/d(D) = 2*(DF + HV - V+)*F.T + 2*alphaD*D
 def gradient_cost_l2(F, D, H, V, learning_batch, alphaF, alphaD, alphaE=1e-6, Nd=2, Ne=64):
