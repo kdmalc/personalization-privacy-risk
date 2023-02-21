@@ -1,3 +1,5 @@
+2/21/23: Refer to issues in Github instead of this doc
+
 FL:
 TO DO
 1. Implement FL (FedAvg) for our dataset (probably will not perform well since it is homogenuous global model)
