@@ -1,8 +1,10 @@
 # I never went through and double checked which of these I'm actually using
 import numpy as np
+import pandas as pd
 import random
 from scipy.optimize import minimize
 import copy
+from matplotlib import pyplot as plt
 
 from experiment_params import *
 from cost_funcs import *
@@ -25,9 +27,9 @@ class ModelBase:
         self.w = w  # Linear regression weights AKA the decoder
         self.w_prev = copy.copy(w)
         self.dec_log = [w]
-        self.local_error_log = [0]
-        self.global_error_log = [0]
-        self.personalized_error_log = [0]
+        self.local_error_log = [(0,0)]
+        self.global_error_log = [(0,0)]
+        self.personalized_error_log = [(0,0)]
         self.method = method
         self.current_round = current_round
         self.verbose = verbose
@@ -78,6 +80,7 @@ class Server(ModelBase):
         self.C = C  # Fraction of clients to use each round
         self.experimental_plotting = False
         self.experimental_inclusion_round = [0]
+        self.init_lst = [(0,0)]
         
         self.set_available_clients_list(init=True)
         
@@ -95,6 +98,7 @@ class Server(ModelBase):
                 if my_client in self.chosen_clients_lst:
                     my_client.global_w = self.w
                 else:
+                    # This won't work because it is expected [(round, loss) (round, loss) etc]
                     my_client.local_error_log.append(my_client.local_error_log[-1])
                     my_client.global_error_log.append(my_client.global_error_log[-1])    
                     my_client.personalized_error_log.append(my_client.personalized_error_log[-1])    
@@ -113,13 +117,14 @@ class Server(ModelBase):
         elif self.method=='NoFL':
             self.train_client_and_log(client_set=self.all_clients)
         else:
-            print('Method not currently supported')
-            print('Please reset method to FedAvg')
+            raise('Method not currently supported, please reset method to FedAvg')
         # Save the new decoder to the log
         self.dec_log.append(self.w)
         # Reset all clients so no one is chosen for the next round
-        for my_client in self.available_clients_lst:
-            my_client.reset_chosen()
+        for my_client in self.all_clients:  # Would it be better to use just the chosen_clients or do all_clients?
+            if type(my_client)==int:
+                raise("All my clients are all integers...")
+            my_client.chosen_status = 0
         
     # 1.1
     def set_available_clients_list(self, init=False):
@@ -141,12 +146,14 @@ class Server(ModelBase):
         # Now choose frac C clients from the resulting available clients
         if self.num_avail_clients > 0:
             self.num_chosen_clients = int(np.ceil(self.num_avail_clients*self.C))
+            if self.num_chosen_clients<1:
+                raise("ERROR: Choose only no clients for some reason")
             # Right now it chooses 2 at random: 14*.1=1.4 --> 2
             self.chosen_clients_lst = random.sample(self.available_clients_lst, len(self.available_clients_lst))[:self.num_chosen_clients]
             for my_client in self.chosen_clients_lst:
                 my_client.chosen_status = 1
         else:
-            print(f"ERROR: Number of available clients must be greater than 0: {self.num_avail_clients}")
+            raise(f"ERROR: Number of available clients must be greater than 0: {self.num_avail_clients}")
         
     # 2
     def train_client_and_log(self, client_set):
@@ -158,10 +165,21 @@ class Server(ModelBase):
             if self.method != 'NoFL':
                 current_global_lst.append((my_client.ID, my_client.eval_model(which='global')))
         # Append (ID, COST) to SERVER'S error log.  Note that round is implicit, it is just the index of the error log
-        self.local_error_log.append(current_local_lst)
+        #self.local_error_log.append(current_local_lst)
+        if self.local_error_log==self.init_lst:
+            # There has to be a better solution to this...
+            self.local_error_log = []
+            self.local_error_log.append(current_local_lst)
+        else:
+            self.local_error_log.append(current_local_lst)
         if self.method != 'NoFL':
             # NoFL case has no global model since there's... no FL
-            self.global_error_log.append(current_global_lst)
+            #self.global_error_log.append(current_global_lst)
+            if self.global_error_log==self.init_lst:
+                self.global_error_log = []
+                self.global_error_log.append(current_global_lst)
+            else:
+                self.global_error_log.append(current_global_lst)
     
     # 3
     def agg_local_weights(self):
@@ -336,9 +354,6 @@ class Client(ModelBase, TrainingMethods):
         self.w = self.smoothbatch*self.w + ((1 - self.smoothbatch)*self.w_prev)
         # Save the new decoder to the log
         self.dec_log.append(self.w)
-    
-    def reset_chosen(self):
-        self.chosen_status = 0
         
     def eval_model(self, which):
         if which=='local':
@@ -369,10 +384,21 @@ class Client(ModelBase, TrainingMethods):
         pass
      
         
-def external_plot_error(user_lst, exclusion_lst=[], dim_reduc_factor=10, global_error=True, local_error=True, different_local_round_thresh_per_client=False, num_participants=14):
+def external_plot_error(user_lst, exclusion_lst=[], dim_reduc_factor=10, global_error=True, local_error=True, different_local_round_thresh_per_client=False, num_participants=14, show_update_change=True, custom_title="", ylim=-1):
     id2color = {0:'lightcoral', 1:'maroon', 2:'chocolate', 3:'darkorange', 4:'gold', 5:'olive', 6:'olivedrab', 
             7:'lawngreen', 8:'aquamarine', 9:'deepskyblue', 10:'steelblue', 11:'violet', 12:'darkorchid', 13:'deeppink'}
     
+    if custom_title:
+        my_title = custom_title
+    elif global_error and local_error:
+        my_title = 'Global and Local Costs Per Iteration'
+    elif global_error:
+        my_title = 'Global Cost Per Iteration'
+    elif local_error:
+        my_title = 'Local Costs Per Iteration'
+    else:
+        raise("You set both global and local to False.  At least one must be true in order to plot something.")
+
     for i in range(num_participants):
         if i in exclusion_lst:
             pass
@@ -380,23 +406,32 @@ def external_plot_error(user_lst, exclusion_lst=[], dim_reduc_factor=10, global_
             if global_error:
                 df = pd.DataFrame(user_lst[i].global_error_log)
                 df10 = df.groupby(df.index//dim_reduc_factor, axis=0).mean()
-                plt.plot(df10.values[:, 0], df10.values[:, 1], color=id2color[i], linewidth=2.5, linestyle='--')
+                plt.plot(df10.values[1:, 0], df10.values[1:, 1], color=id2color[i], linewidth=2.5, linestyle='--')
 
             if local_error:
                 df = pd.DataFrame(user_lst[i].local_error_log)
                 df10 = df.groupby(df.index//dim_reduc_factor, axis=0).mean()
-                plt.plot(df10.values[:, 0], df10.values[:, 1], color=id2color[i], linewidth=1)
+                plt.plot(df10.values[1:, 0], df10.values[1:, 1], color=id2color[i], linewidth=1)
                 if different_local_round_thresh_per_client:
                     if user_lst[i].data_stream == 'streaming':
                         for my_update_transition in user_lst[i].update_transition_log:
                             plt.scatter(my_update_transition+1, user_lst[i].local_error_log[my_update_transition][1], color=id2color[i], marker='*')
-                elif user_lst[i].ID==0:  # Proxy for just printing it once...
+                elif user_lst[i].ID==0 and show_update_change:  # Proxy for just printing it once...
                     for thresh_idx in range(user_lst[i].current_threshold // user_lst[i].local_round_threshold):
                         plt.axvline(x=(thresh_idx+1)*user_lst[i].local_round_threshold, color="k", linewidth=1, linestyle=':')
 
     plt.ylabel('Cost L2')
     plt.xlabel('Iteration Number')
-    plt.title('Global and Local Costs Per Iteration')
+    plt.title(my_title)
+    
+    num_ticks = 5
+    my_upper = len(user_lst[i].local_error_log)
+    my_xticks = list(range(0,my_upper+1,my_upper//num_ticks))
+    plt.xticks(ticks=my_xticks)
+    
+    if ylim!=-1:
+        plt.ylim(ylim)
+    
     plt.show()
     
     
