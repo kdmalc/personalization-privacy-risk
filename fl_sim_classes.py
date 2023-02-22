@@ -16,6 +16,8 @@ class ModelBase:
     num_updates = 19
     cphs_starting_update = 10
     update_ix = [0,  1200,  2402,  3604,  4806,  6008,  7210,  8412,  9614, 10816, 12018, 13220, 14422, 15624, 16826, 18028, 19230, 20432, 20769]
+    id2color = {0:'lightcoral', 1:'maroon', 2:'chocolate', 3:'darkorange', 4:'gold', 5:'olive', 6:'olivedrab', 
+            7:'lawngreen', 8:'aquamarine', 9:'deepskyblue', 10:'steelblue', 11:'violet', 12:'darkorchid', 13:'deeppink'}
     
     def __init__(self, ID, w, method, smoothbatch=1, verbose=False, PCA_comps=7, current_round=0):
         self.type = 'Base'  # This gets overwritten but is required for __repr__ below
@@ -23,9 +25,9 @@ class ModelBase:
         self.w = w  # Linear regression weights AKA the decoder
         self.w_prev = copy.copy(w)
         self.dec_log = [w]
-        self.local_error_log = []
-        self.global_error_log = []
-        self.personalized_error_log = []
+        self.local_error_log = [0]
+        self.global_error_log = [0]
+        self.personalized_error_log = [0]
         self.method = method
         self.current_round = current_round
         self.verbose = verbose
@@ -65,7 +67,7 @@ class TrainingMethods:
         
         
 class Server(ModelBase):
-    def __init__(self, ID, D0, method, all_clients, smoothbatch=1, C=0.1, current_round=0, PCA_comps=7, verbose=False):
+    def __init__(self, ID, D0, method, all_clients, smoothbatch=1, C=0.1, current_round=0, PCA_comps=7, verbose=False, experimental_plotting=False):
         super().__init__(ID, D0, method, smoothbatch=smoothbatch, current_round=current_round, PCA_comps=PCA_comps, verbose=verbose)
         self.type = 'Server'
         self.num_avail_clients = 0
@@ -74,6 +76,8 @@ class Server(ModelBase):
         self.chosen_clients_lst = [0]*len(all_clients)
         self.all_clients = all_clients
         self.C = C  # Fraction of clients to use each round
+        self.experimental_plotting = False
+        self.experimental_inclusion_round = [0]
         
         self.set_available_clients_list(init=True)
         
@@ -87,8 +91,16 @@ class Server(ModelBase):
             self.set_available_clients_list()
             self.choose_clients()
             # Send those clients the current global model
-            for my_client in self.chosen_clients_lst:
-                my_client.global_w = self.w
+            if self.experimental_plotting:
+                if my_client in self.chosen_clients_lst:
+                    my_client.global_w = self.w
+                else:
+                    my_client.local_error_log.append(my_client.local_error_log[-1])
+                    my_client.global_error_log.append(my_client.global_error_log[-1])    
+                    my_client.personalized_error_log.append(my_client.personalized_error_log[-1])    
+            else:
+                for my_client in self.chosen_clients_lst:
+                    my_client.global_w = self.w
             # Let those clients train (this autoselects the chosen_client_lst to use)
             self.train_client_and_log(client_set=self.chosen_clients_lst)
             # AGGREGATION
@@ -148,7 +160,7 @@ class Server(ModelBase):
         # Append (ID, COST) to SERVER'S error log.  Note that round is implicit, it is just the index of the error log
         self.local_error_log.append(current_local_lst)
         if self.method != 'NoFL':
-            # NoFL case has no global model since there's no FL
+            # NoFL case has no global model since there's... no FL
             self.global_error_log.append(current_global_lst)
     
     # 3
@@ -162,7 +174,6 @@ class Server(ModelBase):
         for my_client in self.chosen_clients_lst:
             aggr_w += (my_client.learning_batch/summed_num_datapoints) * my_client.w
         self.w = aggr_w
-        # Still not clear how the global decoder will be able to adapt to different channels for different orientations
 
 
 class Client(ModelBase, TrainingMethods):
@@ -174,6 +185,7 @@ class Client(ModelBase, TrainingMethods):
         # NOT INPUT
         self.type = 'Client'
         self.chosen_status = 0
+        #self.update_transition_log = []  # Not using right now.  Probably ought to track global round
         # Sentinel Values
         self.F = None
         self.V = None
@@ -268,7 +280,9 @@ class Client(ModelBase, TrainingMethods):
                 # Switching back to it
                 self.current_threshold += self.local_round_threshold
                 #self.current_threshold += self.current_threshold
+                
                 self.current_update += 1
+                #self.update_transition_log.append(self.current_round)
                 if self.verbose==True and self.ID==1:
                     print(f"Client {self.ID}: New update after lrt passed: (new update, current round): {self.current_update, self.current_round}")
                     print()
@@ -353,8 +367,39 @@ class Client(ModelBase, TrainingMethods):
         # Would this be generating a new decoder to test on provided data, or just testing the current decoder on it?
         print("Testing Functionality Not Written Yet")
         pass
+     
         
+def external_plot_error(user_lst, exclusion_lst=[], dim_reduc_factor=10, global_error=True, local_error=True, different_local_round_thresh_per_client=False, num_participants=14):
+    id2color = {0:'lightcoral', 1:'maroon', 2:'chocolate', 3:'darkorange', 4:'gold', 5:'olive', 6:'olivedrab', 
+            7:'lawngreen', 8:'aquamarine', 9:'deepskyblue', 10:'steelblue', 11:'violet', 12:'darkorchid', 13:'deeppink'}
+    
+    for i in range(num_participants):
+        if i in exclusion_lst:
+            pass
+        else:
+            if global_error:
+                df = pd.DataFrame(user_lst[i].global_error_log)
+                df10 = df.groupby(df.index//dim_reduc_factor, axis=0).mean()
+                plt.plot(df10.values[:, 0], df10.values[:, 1], color=id2color[i], linewidth=2.5, linestyle='--')
 
+            if local_error:
+                df = pd.DataFrame(user_lst[i].local_error_log)
+                df10 = df.groupby(df.index//dim_reduc_factor, axis=0).mean()
+                plt.plot(df10.values[:, 0], df10.values[:, 1], color=id2color[i], linewidth=1)
+                if different_local_round_thresh_per_client:
+                    if user_lst[i].data_stream == 'streaming':
+                        for my_update_transition in user_lst[i].update_transition_log:
+                            plt.scatter(my_update_transition+1, user_lst[i].local_error_log[my_update_transition][1], color=id2color[i], marker='*')
+                elif user_lst[i].ID==0:  # Proxy for just printing it once...
+                    for thresh_idx in range(user_lst[i].current_threshold // user_lst[i].local_round_threshold):
+                        plt.axvline(x=(thresh_idx+1)*user_lst[i].local_round_threshold, color="k", linewidth=1, linestyle=':')
+
+    plt.ylabel('Cost L2')
+    plt.xlabel('Iteration Number')
+    plt.title('Global and Local Costs Per Iteration')
+    plt.show()
+    
+    
 # Code for saving data needed for running sims
 #cond0_dict_list = [0]*num_participants
 #for idx in range(num_participants):
