@@ -424,13 +424,16 @@ def external_plot_error(user_lst, exclusion_lst=[], dim_reduc_factor=10, global_
     plt.xlabel('Iteration Number')
     plt.title(my_title)
     
+    running_max = 0
+    for my_user in user_lst:
+        if len(my_user.local_error_log) > running_max:
+            running_max = len(my_user.local_error_log)
     num_ticks = 5
-    my_upper = len(user_lst[i].local_error_log)
-    my_xticks = list(range(0,my_upper+1,my_upper//num_ticks))
-    plt.xticks(ticks=my_xticks)
+    plt.xticks(ticks=np.linspace(0,running_max,num_ticks,dtype=int))
     
+    plt.xlim((0,running_max+1))
     if ylim!=-1:
-        plt.ylim(ylim)
+        plt.ylim((0,ylim))
     
     plt.show()
     
