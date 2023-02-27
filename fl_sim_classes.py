@@ -71,7 +71,7 @@ class TrainingMethods:
         
         
 class Server(ModelBase):
-    def __init__(self, ID, D0, method, all_clients, smoothbatch=1, C=0.1, current_round=0, PCA_comps=7, verbose=False, experimental_plotting=False):
+    def __init__(self, ID, D0, method, all_clients, smoothbatch=1, C=0.1, current_round=0, PCA_comps=7, verbose=False, experimental_plotting=False, tau=10):
         super().__init__(ID, D0, method, smoothbatch=smoothbatch, current_round=current_round, PCA_comps=PCA_comps, verbose=verbose, num_participants=14, log_init=0)
         self.type = 'Server'
         self.num_avail_clients = 0
@@ -85,7 +85,17 @@ class Server(ModelBase):
         self.init_lst = [self.log_init]*self.num_participants
         
         self.set_available_clients_list(init=True)
-        
+        if self.method=='APFL':
+            self.set_available_clients_list()
+            self.choose_clients()
+            self.K = len(self.chosen_clients_lst)
+            # NOTE: TAU IS USED OVER CLIENT'S NUM_STEPS FOR APFL
+            self.tau = tau
+            # This isn't a great solution since clients could join after this...
+            for my_client in self.available_clients_lst:
+                my_client.tau = self.tau
+
+                
     # 0: Main Loop
     def execute_FL_loop(self):
         # Update global round number
@@ -97,13 +107,13 @@ class Server(ModelBase):
             self.choose_clients()
             # Send those clients the current global model
             if self.experimental_plotting:
-                if my_client in self.chosen_clients_lst:
-                    my_client.global_w = self.w
-                else:
-                    # This won't work because it is expected [(round, loss) (round, loss) etc]
-                    my_client.local_error_log.append(my_client.local_error_log[-1])
-                    my_client.global_error_log.append(my_client.global_error_log[-1])    
-                    my_client.personalized_error_log.append(my_client.personalized_error_log[-1])    
+                for my_client in self.available_clients_lst:
+                    if my_client in self.chosen_clients_lst:
+                        my_client.global_w = self.w
+                    else:
+                        my_client.local_error_log.append(my_client.local_error_log[-1])
+                        my_client.global_error_log.append(my_client.global_error_log[-1])    
+                        my_client.personalized_error_log.append(my_client.personalized_error_log[-1])    
             else:
                 for my_client in self.chosen_clients_lst:
                     my_client.global_w = self.w
@@ -119,8 +129,32 @@ class Server(ModelBase):
         elif self.method=='NoFL':
             self.train_client_and_log(client_set=self.all_clients)
         elif self.method=='APFL':
+            t = self.current_round
             
-            pass
+            running_dec_aggr = 0
+            # They wrote: "if t not devices Tau then" but that seem like it would only run 1 update per t, 
+            # AKA 50 t's to select new clients.  I'll write it like they did ig...
+            if t%self.tau!=0:
+                self.train_client_and_log(client_set=self.chosen_clients_lst)
+                for my_client in list(set(self.available_clients_lst) ^ set(self.chosen_clients_lst)):
+                    # Otherwise indices will break when calculating finalized running terms
+                    my_client.p.append(my_client.p[-1])
+            else:
+                # Aggregate global dec every tau iters
+                running_global_dec = 0
+                for my_client in self.chosen_clients_lst:
+                    running_global_dec += my_client.global_w
+                self.w = copy.copy(running_global_dec)
+                self.set_available_clients_list()
+                self.choose_clients()
+                # Presumably len(self.chosen_clients_lst) will always be the same (same C)... 
+                # otherwise would need to re-set K as so:
+                #self.K = len(self.chosen_clients_lst)
+
+                for my_client in self.chosen_clients_lst:
+                    my_client.global_w = copy.copy(self.w)  
+                    #^ Is copy necessary? Depends if updated or overwritten...
+            self.w = (1/self.K)*running_dec_aggr
         else:
             raise('Method not currently supported, please reset method to FedAvg')
         # Save the new decoder to the log
@@ -166,6 +200,8 @@ class Server(ModelBase):
         current_global_lst = []
         for my_client in self.available_clients_lst:  # Implications of using this instead of all_clients?
             my_client.current_global_round = self.current_round
+            #^ Need to overwrite client with the curernt global round, for t later
+            
             # This isn't great code because it checks the init every single time it runs
             #  Maybe move this to be before this loop?
             if self.local_error_log[-1]==self.log_init:
@@ -190,7 +226,6 @@ class Server(ModelBase):
                                                global_init_carry_val))
         # Append (ID, COST) to SERVER'S error log.  
         #  Note that round is implicit, it is just the index of the error log
-        
         if self.local_error_log==self.init_lst:
             # Overwrite the [(0,0)] hold
             self.local_error_log = []
@@ -216,7 +251,26 @@ class Server(ModelBase):
         for my_client in self.chosen_clients_lst:
             aggr_w += (my_client.learning_batch/summed_num_datapoints) * my_client.w
         self.w = aggr_w
-
+        
+    # Function for getting the finalized personalized and global model 
+    def set_finalized_APFL_models(self):
+        # Defining params used in the next section
+        for t in range(T):
+            summed_chosen_globals = np.sum([chosen_client.global_w for chosen_client in self.chosen_clients_lst])
+            for my_client in self.available_clients_lst:
+                my_client.running_pers_term += my_client.p[t]*(my_client.adap_alpha*my_client.local_w + (1-my_client.adap_alpha)*(1/K)*summed_chosen_globals) 
+                my_client.running_global_term += my_client.p[t]*summed_chosen_globals
+        # The actual models                                                    
+        # "tin for i=1,...,n"
+        for my_client in self.available_clients_lst:
+            S_T = np.sum(my_client.p)
+            # All these random params are defined in theorem 2 on Page 10
+            # "Output" --> lol and do what with
+            # Personalized model: v^hat AKA personalized_w = (1/S_T)*\sum_1^T(p_t(alpha_i*v_i^t + (1-alpha_i)*(1/K)*(\sum_{j in chosen clients} w_j^t)))
+            my_client.final_personalized_w = (1/S_T)*my_client.running_pers_term
+            # Global model: w^hat = 1/(K*S_T)*(\sum_1^T p_t*(\sum_j w_j^t))
+            my_client.final_global_w = (1/K*S_T)*my_client.running_global_term
+                                                               
 
 class Client(ModelBase, TrainingMethods):
     def __init__(self, ID, w, method, local_data, data_stream, smoothbatch=1, current_round=0, PCA_comps=7, availability=1, global_method='FedAvg', eta=1, num_steps=1, delay_scaling=5, random_delays=False, download_delay=1, upload_delay=1, local_round_threshold=50, condition_number=0, verbose=False):
@@ -291,8 +345,18 @@ class Client(ModelBase, TrainingMethods):
         self.local_error_log = copy.copy(temp_lst)
         self.global_error_log = copy.copy(temp_lst)
         self.personalized_error_log = copy.copy(temp_lst)
-        
-         
+        # APFL Stuff
+        self.running_pers_term = 0
+        self.running_global_term = 0
+        self.global_w = copy.copy(self.w)
+        self.local_w = copy.copy(self.w)
+        self.mixed_w = copy.copy(self.w)
+        self.adap_alpha = 1  # Probably should find a better init... what did they use?
+        self.final_personalized_w = None
+        self.final_global_w = None
+        self.tau = 10
+        self.p = [0]
+                                                               
     # 0: Main Loop
     def execute_training_loop(self):
         self.simulate_data_stream()
@@ -384,24 +448,42 @@ class Client(ModelBase, TrainingMethods):
     def train_model(self):
         D_0 = self.w_prev
         # Set the w_prev equal to the current w:
-        self.w_prev = copy.copy(self.w)
-        if self.global_method!="NoFL":
+        self.w_prev = self.w
+        if self.global_method=="FedAvg":
             # Overwrite local model with the new global model
             self.w = self.global_w
-        for i in range(self.num_steps):
-            if self.method=='EtaGradStep':
-                self.w = self.train_eta_gradstep(self.w, self.eta, self.F, self.D, self.H, self.V, self.learning_batch, self.alphaF, self.alphaD, PCA_comps=self.PCA_comps)
-            elif self.method=='EtaScipyMinStep':
-                self.w = self.train_eta_scipyminstep(self.w, self.eta, self.F, self.D, self.H, self.V, self.learning_batch, self.alphaF, self.alphaD, D_0, self.verbose, PCA_comps=self.PCA_comps)
-            elif self.method=='FullScipyMinStep':
-                self.w = self.train_eta_scipyminstep(self.w, self.eta, self.F, self.D, self.H, self.V, self.learning_batch, self.alphaF, self.alphaD, D_0, self.verbose, PCA_comps=self.PCA_comps, full=True)
-            else:
-                print("Unrecognized method")
-        # Do SmoothBatch
-        # Maybe move this to only happen after each update? Does it really need to happen every iter?
-        # I'd have to add weird flags just for this in various places... put on hold for now
-        #W_new = alpha*D[-1] + ((1 - alpha) * W_hat)
-        self.w = self.smoothbatch*self.w + ((1 - self.smoothbatch)*self.w_prev)
+        if self.global_method=="FedAvg" or self.global_method=="NoFL":
+            for i in range(self.num_steps):
+                if self.method=='EtaGradStep':
+                    self.w = self.train_eta_gradstep(self.w, self.eta, self.F, self.D, self.H, self.V, self.learning_batch, self.alphaF, self.alphaD, PCA_comps=self.PCA_comps)
+                elif self.method=='EtaScipyMinStep':
+                    self.w = self.train_eta_scipyminstep(self.w, self.eta, self.F, self.D, self.H, self.V, self.learning_batch, self.alphaF, self.alphaD, D_0, self.verbose, PCA_comps=self.PCA_comps)
+                elif self.method=='FullScipyMinStep':
+                    self.w = self.train_eta_scipyminstep(self.w, self.eta, self.F, self.D, self.H, self.V, self.learning_batch, self.alphaF, self.alphaD, D_0, self.verbose, PCA_comps=self.PCA_comps, full=True)
+                else:
+                    print("Unrecognized method")
+            # Do SmoothBatch
+            # Maybe move this to only happen after each update? Does it really need to happen every iter?
+            # I'd have to add weird flags just for this in various places... put on hold for now
+            #W_new = alpha*D[-1] + ((1 - alpha) * W_hat)
+            self.w = self.smoothbatch*self.w + ((1 - self.smoothbatch)*self.w_prev)
+        elif self.global_method=='APFL': 
+            t = self.current_global_round  # Should this be global or local? Global based on how they wrote it...
+            mu = self.alphaD
+            L = np.linalg.norm(( self.F@np.transpose(self.F) + self.alphaD*np.identity(self.F.shape[0])))
+            kappa = L/mu
+            a = np.max([128*kappa, self.tau])  # Max works on an array input, not multiple inputs
+            eta_t = 16 / (mu*(t+a))
+            self.p.append((t+a)**2)
+
+            # NOTE: eta_t IS DIFFERENT FROM CLIENT'S ETA (WHICH IS NOT USED)
+            # I think these really ought to be reshaping this automatically, not sure why it's not
+            #my_client.global_w -= my_client.eta * grad(f_i(my_client.global_w; my_client.smallChi))
+            self.global_w -= eta_t * np.reshape(gradient_cost_l2(self.F, self.global_w, self.H, self.V, self.learning_batch, self.alphaF, self.alphaD, Ne=self.PCA_comps), (2, self.PCA_comps))
+            #my_client.local_w -= my_client.eta * grad_v(f_i(my_client.v_bar; my_client.smallChi))
+            self.local_w -= eta_t * np.reshape(gradient_cost_l2(self.F, self.mixed_w, self.H, self.V, self.learning_batch, self.alphaF, self.alphaD, Ne=self.PCA_comps), (2, self.PCA_comps))
+            self.mixed_w = self.adap_alpha*self.local_w - (1 - self.adap_alpha) * self.global_w
+        
         # Save the new decoder to the log
         self.dec_log.append(self.w)
         
@@ -444,7 +526,7 @@ class Client(ModelBase, TrainingMethods):
 
 
 # This func needs to be finished...
-def condesned_external_plotting(user_lst, exclusion_lst=[], dim_reduc_factor=10, global_error=True, local_error=True, different_local_round_thresh_per_client=False, num_participants=14, show_update_change=True, custom_title="", ylim=-1):
+def condensed_external_plotting(user_lst, exclusion_lst=[], dim_reduc_factor=10, global_error=True, local_error=True, different_local_round_thresh_per_client=False, num_participants=14, show_update_change=True, custom_title="", ylim=-1):
     id2color = {0:'lightcoral', 1:'maroon', 2:'chocolate', 3:'darkorange', 4:'gold', 5:'olive', 6:'olivedrab', 
             7:'lawngreen', 8:'aquamarine', 9:'deepskyblue', 10:'steelblue', 11:'violet', 12:'darkorchid', 13:'deeppink'}
     
