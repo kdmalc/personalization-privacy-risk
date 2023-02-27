@@ -118,6 +118,9 @@ class Server(ModelBase):
             #^ Note when self.smoothbatch=1 (default), we just keep the new self.w (no mixing)
         elif self.method=='NoFL':
             self.train_client_and_log(client_set=self.all_clients)
+        elif self.method=='APFL':
+            
+            pass
         else:
             raise('Method not currently supported, please reset method to FedAvg')
         # Save the new decoder to the log
@@ -309,7 +312,10 @@ class Client(ModelBase, TrainingMethods):
         else:
             time.sleep(self.upload_delay+random.random())
             
-    def simulate_data_stream(self):
+    def simulate_data_stream(self, streaming_method=True):
+        if streaming_method:
+            streaming_method = self.data_stream
+        need_to_advance=True
         self.current_round += 1
         if self.current_update==17:
             #print("Maxxed out your update (you are on update 19), continuing training on last update only")
@@ -319,12 +325,12 @@ class Client(ModelBase, TrainingMethods):
             lower_bound = (update_ix[-2] + update_ix[-1])//2  #Use only the second half of each update
             upper_bound = update_ix[-1]
             self.learning_batch = upper_bound - lower_bound
-        elif self.data_stream=='full_data':
+        elif streaming_method=='full_data':
             #print("FULL")
             lower_bound = update_ix[0]  # Starts at 0 and not update 10, for now
             upper_bound = update_ix[-1]
             self.learning_batch = upper_bound - lower_bound
-        elif self.data_stream=='streaming':
+        elif streaming_method=='streaming':
             #print("STREAMING")
             if self.current_round >= self.current_threshold:
                 self.current_threshold += self.local_round_threshold
@@ -335,12 +341,20 @@ class Client(ModelBase, TrainingMethods):
                 if self.verbose==True and self.ID==1:
                     print(f"Client {self.ID}: New update after lrt passed: (new update, current global round, current local round): {self.current_update, self.current_global_round, self.current_round}")
                     print()
-            #lower_bound = update_ix[self.current_update]
-            lower_bound = (update_ix[self.current_update] + update_ix[self.current_update+1])//2  
-            #^Use only the second half of each update
-            upper_bound = update_ix[self.current_update+1]
-            self.learning_batch = upper_bound - lower_bound
-        elif self.data_stream=='advance_each_iter':
+                    
+                # Using only the second half of each update for co-adaptivity reasons
+                lower_bound = (update_ix[self.current_update] + update_ix[self.current_update+1])//2  
+                upper_bound = update_ix[self.current_update+1]
+                self.learning_batch = upper_bound - lower_bound
+            elif self.current_round>2:  # Allow the init condition to still run
+                # The update number didn't change so we don't need to overwrite everything with the same data
+                need_to_advance = False
+            else:
+                # Using only the second half of each update for co-adaptivity reasons
+                lower_bound = (update_ix[self.current_update] + update_ix[self.current_update+1])//2  
+                upper_bound = update_ix[self.current_update+1]
+                self.learning_batch = upper_bound - lower_bound
+        elif streaming_method=='advance_each_iter':
             #print("ADVANCE")
             #lower_bound = update_ix[self.current_update]
             lower_bound = (update_ix[self.current_update] + update_ix[self.current_update+1])//2  
@@ -351,18 +365,21 @@ class Client(ModelBase, TrainingMethods):
         else:
             raise ValueError('This data streaming functionality is not supported')
             
-        s_temp = self.training_data[lower_bound:upper_bound,:]
-        if self.PCA_comps!=self.pca_channel_default:  # Do PCA unless it is set to 64, AKA just the num channels
-            pca = PCA(n_components=self.PCA_comps)
-            s_temp = pca.fit_transform(s_temp)
-        s = np.transpose(s_temp)
-        v_actual = self.w@s
-        p_actual = np.cumsum(v_actual, axis=1)*self.dt  # Numerical integration of v_actual to get p_actual
-        p_reference = np.transpose(self.labels[lower_bound:upper_bound,:])
-        # Now set the values used in the cost function
-        self.F = s[:,:-1] # note: truncate F for estimate_decoder
-        self.V = (p_reference - p_actual)*self.dt
-        self.D = copy.copy(self.w)
+        if need_to_advance:
+            s_temp = self.training_data[lower_bound:upper_bound,:]
+            # Do PCA unless it is set to 64, AKA just the default num channels i.e. no reduction
+            # Also probably ought to find a global transform if possible so I don't recompute it every time...
+            if self.PCA_comps!=self.pca_channel_default:  
+                pca = PCA(n_components=self.PCA_comps)
+                s_temp = pca.fit_transform(s_temp)
+            s = np.transpose(s_temp)
+            v_actual = self.w@s
+            p_actual = np.cumsum(v_actual, axis=1)*self.dt  # Numerical integration of v_actual to get p_actual
+            p_reference = np.transpose(self.labels[lower_bound:upper_bound,:])
+            # Now set the values used in the cost function
+            self.F = s[:,:-1] # note: truncate F for estimate_decoder
+            self.V = (p_reference - p_actual)*self.dt
+            self.D = copy.copy(self.w)
     
     def train_model(self):
         D_0 = self.w_prev
@@ -408,16 +425,128 @@ class Client(ModelBase, TrainingMethods):
             out = round(temp, 3)
         return out
         
-    def test_inference(self):
-        # Essentially, choose a random(?) section of data and compare how dec performs
-        # Is this really any different from the eval funcs?
+    def test_inference(self, test_dec=True):
+        ''' No training / optimization, this just tests the fed in dec '''
         
-        # Would this be generating a new decoder to test on provided data?
-        # Or just testing the current decoder on it?
-        print("Testing Functionality Not Written Yet")
-        pass
-     
+        if test_dec:
+            test_dec = self.w
+        # This sets FVD using the full client dataset
+        # Since we aren't doing any optimization then it shouldn't matter if we use updates or not...
+        simulate_data_stream(streaming_method='full_data')
+        # Evaluate cost
+        temp = cost_l2(self.F, test_dec, self.H, self.V, self.learning_batch, self.alphaF, self.alphaD, Ne=self.PCA_comps)
+        dec_cost = round(temp, 3)
+        # Also want to see actual output 
+        # This might be the cost and not the actual position...
+        D_reshaped = np.reshape(test_dec,(2,self.PCA_comps))
+        dec_pos = D_reshaped@self.F + self.H@self.V[:,:-1] - self.V[:,1:]
+        return dec_cost, dec_pos
+
+
+# This func needs to be finished...
+def condesned_external_plotting(user_lst, exclusion_lst=[], dim_reduc_factor=10, global_error=True, local_error=True, different_local_round_thresh_per_client=False, num_participants=14, show_update_change=True, custom_title="", ylim=-1):
+    id2color = {0:'lightcoral', 1:'maroon', 2:'chocolate', 3:'darkorange', 4:'gold', 5:'olive', 6:'olivedrab', 
+            7:'lawngreen', 8:'aquamarine', 9:'deepskyblue', 10:'steelblue', 11:'violet', 12:'darkorchid', 13:'deeppink'}
+    
+    def moving_average(numbers, window_size):
+        i = 0
+        moving_averages = []
+        while i < len(numbers) - window_size + 1:
+            this_window = numbers[i : i + window_size]
+
+            window_average = sum(this_window) / window_size
+            moving_averages.append(window_average)
+            i += window_size
+        return moving_averages
+    
+    if custom_title:
+        my_title = custom_title
+    elif global_error and local_error:
+        my_title = 'Global and Local Costs Per Iteration'
+    elif global_error:
+        my_title = 'Global Cost Per Iteration'
+    elif local_error:
+        my_title = 'Local Costs Per Iteration'
+    else:
+        raise("You set both global and local to False.  At least one must be true in order to plot something.")
+
+    # This will be the integrated one
+    running_max = 0
+    for i in range(len(user_lst)):
+        # Skip over users that distort the scale
+        if user_lst[i] in exclusion_lst:
+            continue 
+        # This is used for plotting later
+        if len(user_lst[i].local_error_log) > running_max:
+            running_max = len(user_lst[i].local_error_log)
+        if global_error:
+            df = pd.DataFrame(user_lst[i].global_error_log)
+            df10 = df.groupby(df.index//dim_reduc_factor, axis=0).mean()
+            plt.plot(df10.values[1:, 0], df10.values[1:, 1], color=id2color[user_lst[i].ID], linewidth=2.5, 
+                     linestyle='--')
+        if local_error:
+            df = pd.DataFrame(user_lst[i].local_error_log)
+            df10 = df.groupby(df.index//dim_reduc_factor, axis=0).mean()
+            plt.plot(df10.values[1:, 0], df10.values[1:, 1], color=id2color[user_lst[i].ID], linewidth=1)
+    ##########################################################################################################
+    running_max = 0
+    for i in range(len(user_lst)):
+        # Skip over users that distort the scale
+        if user_lst[i] in exclusion_lst:
+            continue 
+        # This is used for plotting later
+        if len(user_lst[i].local_error_log) > running_max:
+            running_max = len(user_lst[i].local_error_log)
+        if global_error:
+            df = pd.DataFrame(user_lst[i].global_error_log)
+            df10 = df.groupby(df.index//dim_reduc_factor, axis=0).mean()
+            plt.plot(df10.values[1:, 0], df10.values[1:, 1], color=id2color[user_lst[i].ID], linewidth=2.5, 
+                     linestyle='--')
+        if local_error:
+            df = pd.DataFrame(user_lst[i].local_error_log)
+            df10 = df.groupby(df.index//dim_reduc_factor, axis=0).mean()
+            plt.plot(df10.values[1:, 0], df10.values[1:, 1], color=id2color[user_lst[i].ID], linewidth=1)
+    ##########################################################################################################
+    for i in range(len(server.all_clients)):
+        if server.all_clients[i] in exclusion_lst:
+            continue
         
+        client_loss = []
+        client_global_round = [] 
+        if global_error:
+            for j in range(server.current_round):
+                client_loss.append(server.global_error_log[j][i][2])
+                # This is actually the client local round
+                client_global_round.append(server.global_error_log[j][i][1])
+            plt.plot(moving_average(client_global_round, dim_reduc_factor)[1:], moving_average(client_loss, dim_reduc_factor)[1:], color=id2color[i], linewidth=1, linestyle='--', alpha=0.7)
+
+        client_loss = []
+        client_global_round = []
+        if local_error:
+            for j in range(server.current_round):
+                client_loss.append(server.local_error_log[j][i][2])
+                client_global_round.append(server.local_error_log[j][i][1])
+            plt.plot(moving_average(client_global_round, dim_reduc_factor)[1:], moving_average(client_loss, dim_reduc_factor)[1:], color=id2color[i], linewidth=2)
+
+        if show_update_change:
+            for update_round in range(server.all_clients[i].update_transistion_log):
+                plt.axvline(x=(update_round), color=id2color[i], linewidth=0.75, linestyle=':')          
+    ####################################################################################################        
+    plt.ylabel('Cost L2')
+    plt.xlabel('Iteration Number')
+    plt.title(my_title)
+    if version=='global':
+        running_max = server.current_round
+    num_ticks = 5
+    plt.xticks(ticks=np.linspace(0,running_max,num_ticks,dtype=int))
+    plt.xlim((0,running_max+1))
+    if ylim!=-1:
+        plt.ylim((0,ylim))
+    plt.show()
+    
+        
+# This and the following func ought to be condensed into a single func...
+# Maybe even added as a static method
 def external_plot_error(user_lst, exclusion_lst=[], dim_reduc_factor=10, global_error=True, local_error=True, different_local_round_thresh_per_client=False, num_participants=14, show_update_change=True, custom_title="", ylim=-1):
     id2color = {0:'lightcoral', 1:'maroon', 2:'chocolate', 3:'darkorange', 4:'gold', 5:'olive', 6:'olivedrab', 
             7:'lawngreen', 8:'aquamarine', 9:'deepskyblue', 10:'steelblue', 11:'violet', 12:'darkorchid', 13:'deeppink'}
@@ -433,22 +562,27 @@ def external_plot_error(user_lst, exclusion_lst=[], dim_reduc_factor=10, global_
     else:
         raise("You set both global and local to False.  At least one must be true in order to plot something.")
 
-    for i in range(num_participants):
-        if i in exclusion_lst:
-            continue
-        else:
-            if global_error:
-                df = pd.DataFrame(user_lst[i].global_error_log)
-                #df.drop(0, axis=1, inplace=True)
-                df10 = df.groupby(df.index//dim_reduc_factor, axis=0).mean()
-                plt.plot(df10.values[1:, 0], df10.values[1:, 1], color=id2color[i], linewidth=2.5, 
-                         linestyle='--')
+    running_max = 0
+    for i in range(len(user_lst)):
+        # Skip over users that distort the scale
+        if user_lst[i] in exclusion_lst:
+            continue 
+        # This is used for plotting later
+        if len(user_lst[i].local_error_log) > running_max:
+            running_max = len(user_lst[i].local_error_log)
+            
+        if global_error:
+            df = pd.DataFrame(user_lst[i].global_error_log)
+            #df.drop(0, axis=1, inplace=True)
+            df10 = df.groupby(df.index//dim_reduc_factor, axis=0).mean()
+            plt.plot(df10.values[1:, 0], df10.values[1:, 1], color=id2color[user_lst[i].ID], linewidth=2.5, 
+                     linestyle='--')
 
-            if local_error:
-                df = pd.DataFrame(user_lst[i].local_error_log)
-                #df.drop(0, axis=1, inplace=True)
-                df10 = df.groupby(df.index//dim_reduc_factor, axis=0).mean()
-                plt.plot(df10.values[1:, 0], df10.values[1:, 1], color=id2color[i], linewidth=1)
+        if local_error:
+            df = pd.DataFrame(user_lst[i].local_error_log)
+            #df.drop(0, axis=1, inplace=True)
+            df10 = df.groupby(df.index//dim_reduc_factor, axis=0).mean()
+            plt.plot(df10.values[1:, 0], df10.values[1:, 1], color=id2color[user_lst[i].ID], linewidth=1)
                 # This is super broken...
                 #if different_local_round_thresh_per_client:
                 #    print("DIFFERENT LOCAL THRESH FOR EACH CLIENT")
@@ -465,10 +599,6 @@ def external_plot_error(user_lst, exclusion_lst=[], dim_reduc_factor=10, global_
     plt.xlabel('Iteration Number')
     plt.title(my_title)
     
-    running_max = 0
-    for my_user in user_lst:
-        if len(my_user.local_error_log) > running_max:
-            running_max = len(my_user.local_error_log)
     num_ticks = 5
     plt.xticks(ticks=np.linspace(0,running_max,num_ticks,dtype=int))
     
@@ -509,39 +639,30 @@ def external_plot_error_GLOBAL(server, exclusion_lst=[], dim_reduc_factor=10, gl
     else:
         raise("You set both global and local to False.  At least one must be true in order to plot something.")
 
-    # No easy way to exclude participants in exclusion list...
-    if global_error:
-        for i in range(server.all_clients):
-            if i in exclusion_lst:
-                pass
-            else:
-                client_loss = []
-                client_global_round = []
-                for j in range(server.current_round):
-                    client_loss.append(server.global_error_log[j][i][2])
-                    # This is actually the client local round
-                    client_global_round.append(server.global_error_log[j][i][1])
-                plt.plot(moving_average(client_global_round, dim_reduc_factor)[1:], moving_average(client_loss, dim_reduc_factor)[1:], color=id2color[i], linewidth=2.5, linestyle='--')
+    for i in range(len(server.all_clients)):
+        if server.all_clients[i] in exclusion_lst:
+            continue
+        
+        client_loss = []
+        client_global_round = [] 
+        if global_error:
+            for j in range(server.current_round):
+                client_loss.append(server.global_error_log[j][i][2])
+                # This is actually the client local round
+                client_global_round.append(server.global_error_log[j][i][1])
+            plt.plot(moving_average(client_global_round, dim_reduc_factor)[1:], moving_average(client_loss, dim_reduc_factor)[1:], color=id2color[i], linewidth=1, alpha=0.7)
 
-    if local_error:
-        for i in range(server.all_clients):
-            if i in exclusion_lst:
-                pass
-            else:
-                client_loss = []
-                client_global_round = []
-                for j in range(server.current_round):
-                    client_loss.append(server.local_error_log[j][i][2])
-                    client_global_round.append(server.local_error_log[j][i][1])
-                plt.plot(moving_average(client_global_round, dim_reduc_factor)[1:], moving_average(client_loss, dim_reduc_factor)[1:], color=id2color[i], linewidth=2.5)
+        client_loss = []
+        client_global_round = []
+        if local_error:
+            for j in range(server.current_round):
+                client_loss.append(server.local_error_log[j][i][2])
+                client_global_round.append(server.local_error_log[j][i][1])
+            plt.plot(moving_average(client_global_round, dim_reduc_factor)[1:], moving_average(client_loss, dim_reduc_factor)[1:], color=id2color[i], linewidth=2)
 
-    if show_update_change:
-        for i in range(server.all_clients):  # Could change this to be self.all_clients...
-            if i in exclusion_lst:
-                pass
-            else:
-                for update_round in range(server.all_clients[i].update_transistion_log):
-                    plt.axvline(x=(update_round), color=id2color[i], linewidth=1, linestyle=':')
+        if show_update_change:
+            for update_round in range(server.all_clients[i].update_transistion_log):
+                plt.axvline(x=(update_round), color=id2color[i], linewidth=1, linestyle=':')
 
     plt.ylabel('Cost L2')
     plt.xlabel('Iteration Number')
