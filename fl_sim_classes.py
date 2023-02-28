@@ -70,7 +70,7 @@ class TrainingMethods:
         
         
 class Server(ModelBase):
-    def __init__(self, ID, D0, method, all_clients, smoothbatch=1, C=0.1, current_round=0, PCA_comps=7, verbose=False, experimental_plotting=False, tau=10):
+    def __init__(self, ID, D0, method, all_clients, smoothbatch=1, C=0.1, current_round=0, PCA_comps=7, verbose=False, experimental_plotting=False, num_steps=10):
         super().__init__(ID, D0, method, smoothbatch=smoothbatch, current_round=current_round, PCA_comps=PCA_comps, verbose=verbose, num_participants=14, log_init=0)
         self.type = 'Server'
         self.num_avail_clients = 0
@@ -89,10 +89,11 @@ class Server(ModelBase):
             self.choose_clients()
             self.K = len(self.chosen_clients_lst)
             # NOTE: TAU IS USED OVER CLIENT'S NUM_STEPS FOR APFL
-            self.tau = tau
+            self.tau = num_steps
             # This isn't a great solution since clients could join after this...
-            for my_client in self.available_clients_lst:
-                my_client.tau = self.tau
+            #for my_client in self.available_clients_lst:
+            #    my_client.tau = num_steps
+            # Just assume they're already set up correctly
 
                 
     # 0: Main Loop
@@ -139,6 +140,15 @@ class Server(ModelBase):
                     # Otherwise indices will break when calculating finalized running terms
                     my_client.p.append(my_client.p[-1])
             else:
+                # Carry forward the existing costs in the logs so the update/indices still match
+                for my_client in self.all_clients:
+                    # This should do no training but log everything we need I think?
+                    self.train_client_and_log([])
+                #    # Do I need to go in and edit the current round or can I just leave it? I think just leave it
+                #    my_client.local_error_log.append(self.local_error_log[-1])
+                #    my_client.global_error_log.append(self.global_error_log[-1])
+                #    my_client.personalized_error_log.append(self.personalized_error_log[-1])
+                
                 # Aggregate global dec every tau iters
                 running_global_dec = 0
                 for my_client in self.chosen_clients_lst:
@@ -185,7 +195,7 @@ class Server(ModelBase):
         if self.num_avail_clients > 0:
             self.num_chosen_clients = int(np.ceil(self.num_avail_clients*self.C))
             if self.num_chosen_clients<1:
-                raise("ERROR: Choose no clients for some reason")
+                raise(f"ERROR: Chose {self.num_chosen_clients} clients for some reason, must choose more than 1")
             # Right now it chooses 2 at random: 14*.1=1.4 --> 2
             self.chosen_clients_lst = random.sample(self.available_clients_lst, len(self.available_clients_lst))[:self.num_chosen_clients]
             for my_client in self.chosen_clients_lst:
@@ -197,6 +207,7 @@ class Server(ModelBase):
     def train_client_and_log(self, client_set):
         current_local_lst = []
         current_global_lst = []
+        current_pers_lst = []
         for my_client in self.available_clients_lst:  # Implications of using this instead of all_clients?
             my_client.current_global_round = self.current_round
             #^ Need to overwrite client with the curernt global round, for t later
@@ -206,10 +217,13 @@ class Server(ModelBase):
             if self.local_error_log[-1]==self.log_init:
                 local_init_carry_val = 0
                 global_init_carry_val = 0
+                pers_init_carry_val = 0
             else:
                 local_init_carry_val = self.local_error_log[-1][my_client.ID][2]#[0]
                 if self.method != 'NoFL':
                     global_init_carry_val = self.global_error_log[-1][my_client.ID][2]#[0]
+                if self.method == 'APFL':
+                    pers_init_carry_val = self.personalized_error_log[-1][my_client.ID][2]#[0]
             if my_client in client_set:
                 my_client.execute_training_loop()
                 current_local_lst.append((my_client.ID, self.current_round, 
@@ -217,12 +231,18 @@ class Server(ModelBase):
                 if self.method != 'NoFL':
                     current_global_lst.append((my_client.ID, self.current_round, 
                                                my_client.eval_model(which='global')))
+                if self.method == 'APFL':
+                    current_pers_lst.append((my_client.ID, self.current_round, 
+                                               my_client.eval_model(which='pers')))
             else:
                 current_local_lst.append((my_client.ID, self.current_round, 
                                           local_init_carry_val))
                 if self.method != 'NoFL':
                     current_global_lst.append((my_client.ID, self.current_round,
                                                global_init_carry_val))
+                if self.method == 'APFL':
+                    current_pers_lst.append((my_client.ID, self.current_round,
+                                               pers_init_carry_val))
         # Append (ID, COST) to SERVER'S error log.  
         #  Note that round is implicit, it is just the index of the error log
         if self.local_error_log==self.init_lst:
@@ -238,6 +258,12 @@ class Server(ModelBase):
                 self.global_error_log.append(current_global_lst)
             else:
                 self.global_error_log.append(current_global_lst)
+        if self.method == 'APFL':
+            if self.personalized_error_log==self.init_lst:
+                self.personalized_error_log = []
+                self.personalized_error_log.append(current_pers_lst)
+            else:
+                self.personalized_error_log.append(current_pers_lst)
     
     # 3
     def agg_local_weights(self):
@@ -272,7 +298,7 @@ class Server(ModelBase):
                                                                
 
 class Client(ModelBase, TrainingMethods):
-    def __init__(self, ID, w, method, local_data, data_stream, smoothbatch=1, current_round=0, PCA_comps=7, availability=1, global_method='FedAvg', eta=1, num_steps=1, delay_scaling=5, random_delays=False, download_delay=1, upload_delay=1, local_round_threshold=50, condition_number=0, verbose=False):
+    def __init__(self, ID, w, method, local_data, data_stream, smoothbatch=1, current_round=0, PCA_comps=7, availability=1, global_method='FedAvg', adaptive=True, eta=1, num_steps=1, delay_scaling=5, random_delays=False, download_delay=1, upload_delay=1, local_round_threshold=50, condition_number=0, verbose=False):
         super().__init__(ID, w, method, smoothbatch=smoothbatch, current_round=current_round, PCA_comps=PCA_comps, verbose=verbose, num_participants=14, log_init=0)
         '''
         Note self.smoothbatch gets overwritten according to the condition number!  
@@ -339,8 +365,8 @@ class Client(ModelBase, TrainingMethods):
             print("That condition number is not yet supported")
         if smoothbatch=='off':
             self.smoothbatch = 1  # AKA Use only the new dec, no mixing
-        #
-        temp_lst = [(0,0)] #[(0,0) for _ in self.local_error_log]
+        # Overwrite the logs since global and local track in slightly different ways
+        temp_lst = [(0,0)]
         self.local_error_log = copy.copy(temp_lst)
         self.global_error_log = copy.copy(temp_lst)
         self.personalized_error_log = copy.copy(temp_lst)
@@ -350,10 +376,15 @@ class Client(ModelBase, TrainingMethods):
         self.global_w = copy.copy(self.w)
         self.local_w = copy.copy(self.w)
         self.mixed_w = copy.copy(self.w)
-        self.adap_alpha = [1]  # Probably should find a better init... what did they use?
+        self.adaptive = adaptive
+        #They observed best results with 0.25, but initialized adap_alpha to 0.01 for the adaptive case
+        if self.adaptive:
+            self.adap_alpha = [0.01]  
+        else:
+            self.adap_alpha = [0.25] 
         self.final_personalized_w = None
         self.final_global_w = None
-        self.tau = 10
+        self.tau = self.num_steps
         self.p = [0]
                                                                
     # 0: Main Loop
@@ -386,7 +417,7 @@ class Client(ModelBase, TrainingMethods):
             #print("Maxxed out your update (you are on update 19), continuing training on last update only")
             # Probably ought to track that we maxed out
             #lower_bound = update_ix[-2]  
-            #^ Used to be 0 (e.g. full dataset instead of last update), saw bad behaviour...
+            # ^Used to be 0 (e.g. full dataset instead of last update), saw bad behaviour...
             lower_bound = (update_ix[-2] + update_ix[-1])//2  #Use only the second half of each update
             upper_bound = update_ix[-1]
             self.learning_batch = upper_bound - lower_bound
@@ -477,9 +508,15 @@ class Client(ModelBase, TrainingMethods):
             eta_t = 16 / (mu*(t+a))
             self.p.append((t+a)**2)
             
-            self.adap_alpha.append(self.adap_alpha[-1] - eta_t*np.outer((self.local_w-self.global_w), np.reshape(gradient_cost_l2(self.F, self.mixed_w, self.H, self.V, self.learning_batch, self.alphaF, self.alphaD, Ne=self.PCA_comps), (2, self.PCA_comps))))
-            # This is theoretically the same but I'm not sure what grad_alpha means
-            #self.sus_adap_alpha.append()
+            if self.adaptive:
+                self.adap_alpha.append(self.adap_alpha[-1] - eta_t*np.inner(np.reshape((self.local_w-self.global_w), (self.PCA_comps*2)), np.reshape(gradient_cost_l2(self.F, self.mixed_w, self.H, self.V, self.learning_batch, self.alphaF, self.alphaD, Ne=self.PCA_comps), (2*self.PCA_comps,))))
+                # This is theoretically the same but I'm not sure what grad_alpha means
+                #self.sus_adap_alpha.append() ... didn't write yet
+            else:
+                #self.adap_alpha.append(self.adap_alpha[-1])  
+                # ^alpha does not change in this case (non-adpative)
+                # I don't think I need to do that since I index based on -1 not t
+                pass
 
             # NOTE: eta_t IS DIFFERENT FROM CLIENT'S ETA (WHICH IS NOT USED)
             # I think these really ought to be reshaping this automatically, not sure why it's not
@@ -533,9 +570,14 @@ class Client(ModelBase, TrainingMethods):
 
 
 # Add this as a static method?
-def condensed_external_plotting(input_data, version, exclusion_ID_lst=[], dim_reduc_factor=10, global_error=True, local_error=True, different_local_round_thresh_per_client=False, num_participants=14, show_update_change=False, custom_title="", ylim=-1):
+def condensed_external_plotting(input_data, version, exclusion_ID_lst=[], dim_reduc_factor=10, global_error=True, local_error=True, pers_error=False, different_local_round_thresh_per_client=False, num_participants=14, show_update_change=False, custom_title="", ylim=-1):
     id2color = {0:'lightcoral', 1:'maroon', 2:'chocolate', 3:'darkorange', 4:'gold', 5:'olive', 6:'olivedrab', 
             7:'lawngreen', 8:'aquamarine', 9:'deepskyblue', 10:'steelblue', 11:'violet', 12:'darkorchid', 13:'deeppink'}
+    
+    global_alpha = 0.25
+    global_linewidth = 3.5
+    local_linewidth = 0.5
+    pers_linewidth = 1
     
     def moving_average(numbers, window_size):
         i = 0
@@ -581,11 +623,15 @@ def condensed_external_plotting(input_data, version, exclusion_ID_lst=[], dim_re
                 if global_error:
                     df = pd.DataFrame(user_database[i].global_error_log)
                     df10 = df.groupby(df.index//dim_reduc_factor, axis=0).mean()
-                    plt.plot(df10.values[1:, 0], df10.values[1:, 1], color=id2color[user_database[i].ID], linewidth=3.5, alpha=0.3)
+                    plt.plot(df10.values[1:, 0], df10.values[1:, 1], color=id2color[user_database[i].ID], linewidth=global_linewidth, alpha=global_alpha)
                 if local_error:
                     df = pd.DataFrame(user_database[i].local_error_log)
                     df10 = df.groupby(df.index//dim_reduc_factor, axis=0).mean()
-                    plt.plot(df10.values[1:, 0], df10.values[1:, 1], color=id2color[user_database[i].ID], linewidth=0.5)
+                    plt.plot(df10.values[1:, 0], df10.values[1:, 1], color=id2color[user_database[i].ID], linewidth=local_linewidth)
+                if pers_error:
+                    df = pd.DataFrame(user_database[i].personalized_error_log)
+                    df10 = df.groupby(df.index//dim_reduc_factor, axis=0).mean()
+                    plt.plot(df10.values[1:, 0], df10.values[1:, 1], color=id2color[user_database[i].ID], linewidth=pers_linewidth, linestyle="--")
                 #if different_local_round_thresh_per_client:
                 #    print("DIFFERENT LOCAL THRESH FOR EACH CLIENT")
                 #    if user_lst[i].data_stream == 'streaming':
@@ -597,28 +643,36 @@ def condensed_external_plotting(input_data, version, exclusion_ID_lst=[], dim_re
                 #        plt.axvline(x=(thresh_idx+1)*user_lst[i].local_round_threshold, color="k", linewidth=1, 
                 #                    linestyle=':')
             elif version.upper()=='GLOBAL':
-                client_loss = []
-                client_global_round = [] 
                 if global_error:
+                    client_loss = []
+                    client_global_round = []
                     for j in range(input_data.current_round):
                         client_loss.append(input_data.global_error_log[j][i][2])
                         # This is actually the client local round
                         client_global_round.append(input_data.global_error_log[j][i][1])
                     # Why is the [1:] here?  What happens when dim_reduc=1? 
                     # Verify that this is the same as my envelope code...
-                    plt.plot(moving_average(client_global_round, dim_reduc_factor)[1:], moving_average(client_loss, dim_reduc_factor)[1:], color=id2color[user_database[i].ID], linewidth=3.5, alpha=0.3)
+                    plt.plot(moving_average(client_global_round, dim_reduc_factor)[1:], moving_average(client_loss, dim_reduc_factor)[1:], color=id2color[user_database[i].ID], linewidth=global_linewidth, alpha=global_alpha)
 
-                client_loss = []
-                client_global_round = []
                 if local_error:
+                    client_loss = []
+                    client_global_round = []
                     for j in range(input_data.current_round):
                         client_loss.append(input_data.local_error_log[j][i][2])
                         client_global_round.append(input_data.local_error_log[j][i][1])
-                    plt.plot(moving_average(client_global_round, dim_reduc_factor)[1:], moving_average(client_loss, dim_reduc_factor)[1:], color=id2color[user_database[i].ID], linewidth=0.5)
+                    plt.plot(moving_average(client_global_round, dim_reduc_factor)[1:], moving_average(client_loss, dim_reduc_factor)[1:], color=id2color[user_database[i].ID], linewidth=local_linewidth)
+               
+                if pers_error:
+                    client_loss = []
+                    client_global_round = []
+                    for j in range(input_data.current_round):
+                        client_loss.append(input_data.personalized_error_log[j][i][2])
+                        client_global_round.append(input_data.personalized_error_log[j][i][1])
+                    plt.plot(moving_average(client_global_round, dim_reduc_factor)[1:], moving_average(client_loss, dim_reduc_factor)[1:], color=id2color[user_database[i].ID], linewidth=pers_linewidth, linestyle="--")
 
                 if show_update_change:
                     for update_round in user_database[i].update_transition_log:
-                        plt.axvline(x=(update_round), color=id2color[user_database[i].ID], linewidth=0.5, alpha=0.5)  
+                        plt.axvline(x=(update_round), color=id2color[user_database[i].ID], linewidth=0.5, alpha=0.6)  
 
     plt.ylabel('Cost L2')
     plt.xlabel('Iteration Number')
