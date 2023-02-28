@@ -350,7 +350,7 @@ class Client(ModelBase, TrainingMethods):
         self.global_w = copy.copy(self.w)
         self.local_w = copy.copy(self.w)
         self.mixed_w = copy.copy(self.w)
-        self.adap_alpha = 1  # Probably should find a better init... what did they use?
+        self.adap_alpha = [1]  # Probably should find a better init... what did they use?
         self.final_personalized_w = None
         self.final_global_w = None
         self.tau = 10
@@ -360,14 +360,16 @@ class Client(ModelBase, TrainingMethods):
     def execute_training_loop(self):
         self.simulate_data_stream()
         self.train_model()
-        local_loss = self.eval_model(which='local')
+        
         # Append (ROUND, COST) to the CLIENT error log
+        local_loss = self.eval_model(which='local')
         self.local_error_log.append((self.current_round, local_loss))
-        #
         if self.global_method!="NoFL":
             global_loss = self.eval_model(which='global')
-            # Append (ROUND, COST) to the CLIENT error log
             self.global_error_log.append((self.current_round, global_loss))
+        if self.global_method=="APFL":
+            pers_loss = self.eval_model(which='pers')
+            self.personalized_error_log.append((self.current_round, pers_loss))
         
     def simulate_delay(self, incoming):
         if incoming:
@@ -474,6 +476,10 @@ class Client(ModelBase, TrainingMethods):
             a = np.max([128*kappa, self.tau])  # Max works on an array input, not multiple inputs
             eta_t = 16 / (mu*(t+a))
             self.p.append((t+a)**2)
+            
+            self.adap_alpha.append(self.adap_alpha[-1] - eta_t*np.outer((self.local_w-self.global_w), np.reshape(gradient_cost_l2(self.F, self.mixed_w, self.H, self.V, self.learning_batch, self.alphaF, self.alphaD, Ne=self.PCA_comps), (2, self.PCA_comps))))
+            # This is theoretically the same but I'm not sure what grad_alpha means
+            #self.sus_adap_alpha.append()
 
             # NOTE: eta_t IS DIFFERENT FROM CLIENT'S ETA (WHICH IS NOT USED)
             # I think these really ought to be reshaping this automatically, not sure why it's not
@@ -481,8 +487,8 @@ class Client(ModelBase, TrainingMethods):
             self.global_w -= eta_t * np.reshape(gradient_cost_l2(self.F, self.global_w, self.H, self.V, self.learning_batch, self.alphaF, self.alphaD, Ne=self.PCA_comps), (2, self.PCA_comps))
             #my_client.local_w -= my_client.eta * grad_v(f_i(my_client.v_bar; my_client.smallChi))
             self.local_w -= eta_t * np.reshape(gradient_cost_l2(self.F, self.mixed_w, self.H, self.V, self.learning_batch, self.alphaF, self.alphaD, Ne=self.PCA_comps), (2, self.PCA_comps))
-            self.mixed_w = self.adap_alpha*self.local_w - (1 - self.adap_alpha) * self.global_w
-        
+            self.mixed_w = self.adap_alpha[-1]*self.local_w - (1 - self.adap_alpha[-1]) * self.global_w
+            self.w = self.mixed_w  # I don't think I use self.w otherwise in this computation so might as well      
         # Save the new decoder to the log
         self.dec_log.append(self.w)
         
@@ -493,6 +499,8 @@ class Client(ModelBase, TrainingMethods):
         elif which=='global':
             my_dec = self.global_w
             #my_error_log = self.global_error_log
+        elif which=='pers' and self.global_method=='APFL':
+            my_dec = self.mixed_w
         else:
             print("Please set <which> to either local or global")
         # Just did this so we wouldn't have the 14 decimals points it always tries to give
