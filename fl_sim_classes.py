@@ -525,8 +525,8 @@ class Client(ModelBase, TrainingMethods):
         return dec_cost, dec_pos
 
 
-# This func needs to be finished...
-def condensed_external_plotting(user_lst, exclusion_lst=[], dim_reduc_factor=10, global_error=True, local_error=True, different_local_round_thresh_per_client=False, num_participants=14, show_update_change=True, custom_title="", ylim=-1):
+# Add this as a static method?
+def condensed_external_plotting(input_data, version, exclusion_lst=[], dim_reduc_factor=10, global_error=True, local_error=True, different_local_round_thresh_per_client=False, num_participants=14, show_update_change=True, custom_title="", ylim=-1):
     id2color = {0:'lightcoral', 1:'maroon', 2:'chocolate', 3:'darkorange', 4:'gold', 5:'olive', 6:'olivedrab', 
             7:'lawngreen', 8:'aquamarine', 9:'deepskyblue', 10:'steelblue', 11:'violet', 12:'darkorchid', 13:'deeppink'}
     
@@ -544,81 +544,68 @@ def condensed_external_plotting(user_lst, exclusion_lst=[], dim_reduc_factor=10,
     if custom_title:
         my_title = custom_title
     elif global_error and local_error:
-        my_title = 'Global and Local Costs Per Iteration'
+        my_title = f'Global and Local Costs Per {version.title()} Iter'
     elif global_error:
-        my_title = 'Global Cost Per Iteration'
+        my_title = f'Global Cost Per {version.title()} Iter'
     elif local_error:
-        my_title = 'Local Costs Per Iteration'
+        my_title = f'Local Costs Per {version.title()} Iter'
     else:
         raise("You set both global and local to False.  At least one must be true in order to plot something.")
 
-    # This will be the integrated one
-    running_max = 0
-    for i in range(len(user_lst)):
-        # Skip over users that distort the scale
-        if user_lst[i] in exclusion_lst:
-            continue 
-        # This is used for plotting later
-        if len(user_lst[i].local_error_log) > running_max:
-            running_max = len(user_lst[i].local_error_log)
-        if global_error:
-            df = pd.DataFrame(user_lst[i].global_error_log)
-            df10 = df.groupby(df.index//dim_reduc_factor, axis=0).mean()
-            plt.plot(df10.values[1:, 0], df10.values[1:, 1], color=id2color[user_lst[i].ID], linewidth=2.5, 
-                     linestyle='--')
-        if local_error:
-            df = pd.DataFrame(user_lst[i].local_error_log)
-            df10 = df.groupby(df.index//dim_reduc_factor, axis=0).mean()
-            plt.plot(df10.values[1:, 0], df10.values[1:, 1], color=id2color[user_lst[i].ID], linewidth=1)
-    ##########################################################################################################
-    running_max = 0
-    for i in range(len(user_lst)):
-        # Skip over users that distort the scale
-        if user_lst[i] in exclusion_lst:
-            continue 
-        # This is used for plotting later
-        if len(user_lst[i].local_error_log) > running_max:
-            running_max = len(user_lst[i].local_error_log)
-        if global_error:
-            df = pd.DataFrame(user_lst[i].global_error_log)
-            df10 = df.groupby(df.index//dim_reduc_factor, axis=0).mean()
-            plt.plot(df10.values[1:, 0], df10.values[1:, 1], color=id2color[user_lst[i].ID], linewidth=2.5, 
-                     linestyle='--')
-        if local_error:
-            df = pd.DataFrame(user_lst[i].local_error_log)
-            df10 = df.groupby(df.index//dim_reduc_factor, axis=0).mean()
-            plt.plot(df10.values[1:, 0], df10.values[1:, 1], color=id2color[user_lst[i].ID], linewidth=1)
-    ##########################################################################################################
-    for i in range(len(server.all_clients)):
-        if server.all_clients[i] in exclusion_lst:
-            continue
+    # Determine if this is global or local, based on the input for now... could probably add a flag but meh
+    if version.upper()=='LOCAL':
+        user_database = input_data
+    elif version.upper()=='GLOBAL':
+        user_database = input_data.all_clients
+    else:
+        raise ValueError("log_type must be either global or local, please retry")
         
-        client_loss = []
-        client_global_round = [] 
-        if global_error:
-            for j in range(server.current_round):
-                client_loss.append(server.global_error_log[j][i][2])
-                # This is actually the client local round
-                client_global_round.append(server.global_error_log[j][i][1])
-            plt.plot(moving_average(client_global_round, dim_reduc_factor)[1:], moving_average(client_loss, dim_reduc_factor)[1:], color=id2color[i], linewidth=1, linestyle='--', alpha=0.7)
+    running_max = 0
+    for i in range(len(user_database)):
+        # Skip over users that distort the scale
+        if i in exclusion_lst:
+            continue 
+        # This is used for plotting later
+        if len(user_database[i].local_error_log) > running_max:
+            running_max = len(user_database[i].local_error_log)
+         
+        if version.upper()=='LOCAL':
+            if global_error:
+                df = pd.DataFrame(user_database[i].global_error_log)
+                df10 = df.groupby(df.index//dim_reduc_factor, axis=0).mean()
+                plt.plot(df10.values[1:, 0], df10.values[1:, 1], color=id2color[user_database[i].ID], linewidth=2.5, 
+                         linestyle='--')
+            if local_error:
+                df = pd.DataFrame(user_database[i].local_error_log)
+                df10 = df.groupby(df.index//dim_reduc_factor, axis=0).mean()
+                plt.plot(df10.values[1:, 0], df10.values[1:, 1], color=id2color[user_database[i].ID], linewidth=1)
+        elif version.upper()=='GLOBAL':
+            client_loss = []
+            client_global_round = [] 
+            if global_error:
+                for j in range(input_data.current_round):
+                    client_loss.append(input_data.global_error_log[j][i][2])
+                    # This is actually the client local round
+                    client_global_round.append(input_data.global_error_log[j][i][1])
+                plt.plot(moving_average(client_global_round, dim_reduc_factor)[1:], moving_average(client_loss, dim_reduc_factor)[1:], color=id2color[user_database[i].ID], linewidth=1, linestyle='--', alpha=0.7)
 
-        client_loss = []
-        client_global_round = []
-        if local_error:
-            for j in range(server.current_round):
-                client_loss.append(server.local_error_log[j][i][2])
-                client_global_round.append(server.local_error_log[j][i][1])
-            plt.plot(moving_average(client_global_round, dim_reduc_factor)[1:], moving_average(client_loss, dim_reduc_factor)[1:], color=id2color[i], linewidth=2)
+            client_loss = []
+            client_global_round = []
+            if local_error:
+                for j in range(input_data.current_round):
+                    client_loss.append(input_data.local_error_log[j][i][2])
+                    client_global_round.append(input_data.local_error_log[j][i][1])
+                plt.plot(moving_average(client_global_round, dim_reduc_factor)[1:], moving_average(client_loss, dim_reduc_factor)[1:], color=id2color[user_database[i].ID], linewidth=2)
 
-        if show_update_change:
-            for update_round in range(server.all_clients[i].update_transistion_log):
-                plt.axvline(x=(update_round), color=id2color[i], linewidth=0.75, linestyle=':')          
-    ####################################################################################################        
+            if show_update_change:
+                for update_round in user_database[i].update_transition_log:
+                    plt.axvline(x=(update_round), color=id2color[user_database[i].ID], linewidth=0.75, linestyle=':')  
+
     plt.ylabel('Cost L2')
     plt.xlabel('Iteration Number')
     plt.title(my_title)
-    if version=='global':
-        running_max = server.current_round
+    if version.upper()=='GLOBAL':
+        running_max = input_data.current_round
     num_ticks = 5
     plt.xticks(ticks=np.linspace(0,running_max,num_ticks,dtype=int))
     plt.xlim((0,running_max+1))
@@ -627,8 +614,6 @@ def condensed_external_plotting(user_lst, exclusion_lst=[], dim_reduc_factor=10,
     plt.show()
     
         
-# This and the following func ought to be condensed into a single func...
-# Maybe even added as a static method
 def external_plot_error(user_lst, exclusion_lst=[], dim_reduc_factor=10, global_error=True, local_error=True, different_local_round_thresh_per_client=False, num_participants=14, show_update_change=True, custom_title="", ylim=-1):
     id2color = {0:'lightcoral', 1:'maroon', 2:'chocolate', 3:'darkorange', 4:'gold', 5:'olive', 6:'olivedrab', 
             7:'lawngreen', 8:'aquamarine', 9:'deepskyblue', 10:'steelblue', 11:'violet', 12:'darkorchid', 13:'deeppink'}
@@ -743,7 +728,7 @@ def external_plot_error_GLOBAL(server, exclusion_lst=[], dim_reduc_factor=10, gl
             plt.plot(moving_average(client_global_round, dim_reduc_factor)[1:], moving_average(client_loss, dim_reduc_factor)[1:], color=id2color[i], linewidth=2)
 
         if show_update_change:
-            for update_round in range(server.all_clients[i].update_transistion_log):
+            for update_round in range(server.all_clients[i].update_transition_log):
                 plt.axvline(x=(update_round), color=id2color[i], linewidth=1, linestyle=':')
 
     plt.ylabel('Cost L2')
