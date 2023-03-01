@@ -298,7 +298,7 @@ class Server(ModelBase):
                                                                
 
 class Client(ModelBase, TrainingMethods):
-    def __init__(self, ID, w, method, local_data, data_stream, smoothbatch=1, current_round=0, PCA_comps=7, availability=1, global_method='FedAvg', adaptive=True, eta=1, num_steps=1, delay_scaling=5, random_delays=False, download_delay=1, upload_delay=1, local_round_threshold=50, condition_number=0, verbose=False):
+    def __init__(self, ID, w, method, local_data, data_stream, smoothbatch=1, current_round=0, PCA_comps=7, availability=1, global_method='FedAvg', adaptive=True, eta=1, num_steps=1, delay_scaling=5, normalize_EMG=True, random_delays=False, download_delay=1, upload_delay=1, local_round_threshold=50, condition_number=0, verbose=False):
         super().__init__(ID, w, method, smoothbatch=smoothbatch, current_round=current_round, PCA_comps=PCA_comps, verbose=verbose, num_participants=14, log_init=0)
         '''
         Note self.smoothbatch gets overwritten according to the condition number!  
@@ -309,6 +309,7 @@ class Client(ModelBase, TrainingMethods):
         self.chosen_status = 0
         self.current_global_round = 0
         self.update_transition_log = []
+        self.normalize_EMG = normalize_EMG
         # Sentinel Values
         self.F = None
         self.V = None
@@ -463,12 +464,18 @@ class Client(ModelBase, TrainingMethods):
             
         if need_to_advance:
             s_temp = self.training_data[lower_bound:upper_bound,:]
-            # Do PCA unless it is set to 64, AKA just the default num channels i.e. no reduction
+            # First, normalize the entire s matrix
+            # Hope is that this will prevent FF.T from being massive in APFL
+            if self.normalize_EMG:
+                s_normed = s_temp/np.max(s_temp)
+            else:
+                s_normed = s_temp
+            # Now do PCA unless it is set to 64 (AKA the default num channels i.e. no reduction)
             # Also probably ought to find a global transform if possible so I don't recompute it every time...
             if self.PCA_comps!=self.pca_channel_default:  
                 pca = PCA(n_components=self.PCA_comps)
-                s_temp = pca.fit_transform(s_temp)
-            s = np.transpose(s_temp)
+                s_normed = pca.fit_transform(s_normed)
+            s = np.transpose(s_normed)
             v_actual = self.w@s
             p_actual = np.cumsum(v_actual, axis=1)*self.dt  # Numerical integration of v_actual to get p_actual
             p_reference = np.transpose(self.labels[lower_bound:upper_bound,:])
