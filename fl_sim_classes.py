@@ -298,7 +298,7 @@ class Server(ModelBase):
                                                                
 
 class Client(ModelBase, TrainingMethods):
-    def __init__(self, ID, w, method, local_data, data_stream, smoothbatch=1, current_round=0, PCA_comps=7, availability=1, global_method='FedAvg', adaptive=True, eta=1, num_steps=1, delay_scaling=5, normalize_EMG=True, random_delays=False, download_delay=1, upload_delay=1, local_round_threshold=50, condition_number=0, verbose=False):
+    def __init__(self, ID, w, method, local_data, data_stream, smoothbatch=1, current_round=0, PCA_comps=7, availability=1, global_method='FedAvg', adaptive=True, eta=1, num_steps=1, input_eta=False, delay_scaling=5, normalize_EMG=True, random_delays=False, download_delay=1, upload_delay=1, local_round_threshold=50, condition_number=0, verbose=False):
         super().__init__(ID, w, method, smoothbatch=smoothbatch, current_round=current_round, PCA_comps=PCA_comps, verbose=verbose, num_participants=14, log_init=0)
         '''
         Note self.smoothbatch gets overwritten according to the condition number!  
@@ -372,6 +372,7 @@ class Client(ModelBase, TrainingMethods):
         self.global_error_log = copy.copy(temp_lst)
         self.personalized_error_log = copy.copy(temp_lst)
         # APFL Stuff
+        self.input_eta = input_eta
         self.running_pers_term = 0
         self.running_global_term = 0
         self.global_w = copy.copy(self.w)
@@ -510,9 +511,16 @@ class Client(ModelBase, TrainingMethods):
             t = self.current_global_round  # Should this be global or local? Global based on how they wrote it...
             mu = self.alphaD
             L = np.linalg.norm(( self.F@np.transpose(self.F) + self.alphaD*np.identity(self.F.shape[0])))
+            if self.verbose:
+                print(f"ID: {self.ID}, L: {L}")
             kappa = L/mu
             a = np.max([128*kappa, self.tau])  # Max works on an array input, not multiple inputs
             eta_t = 16 / (mu*(t+a))
+            if self.input_eta:
+                eta_t = self.eta
+            if self.verbose:
+                print(f"ID: {self.ID}, eta_t: {eta_t}")
+                print()
             self.p.append((t+a)**2)
             
             if self.adaptive:
