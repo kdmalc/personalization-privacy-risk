@@ -38,7 +38,7 @@ def cost_l2(F, D, H, V, learning_batch, alphaF, alphaD, alphaE=1e-6, Nd=2, Ne=64
     D = np.reshape(D,(Nd,Ne))
     Vplus = V[:,1:]
     Vminus = V[:,:-1]
-    term1 = (np.linalg.norm((D@F + H@Vminus - Vplus))**2)*(alphaE)
+    term1 = alphaE*(np.linalg.norm((D@F + H@Vminus - Vplus))**2)
     term2 = alphaD*(np.linalg.norm(D)**2)
     term3 = alphaF*(np.linalg.norm(F)**2)
     return (term1 + term2 + term3)

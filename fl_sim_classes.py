@@ -298,7 +298,7 @@ class Server(ModelBase):
                                                                
 
 class Client(ModelBase, TrainingMethods):
-    def __init__(self, ID, w, method, local_data, data_stream, smoothbatch=1, current_round=0, PCA_comps=7, availability=1, global_method='FedAvg', adaptive=True, eta=1, num_steps=1, input_eta=False, delay_scaling=5, normalize_EMG=True, random_delays=False, download_delay=1, upload_delay=1, local_round_threshold=50, condition_number=0, verbose=False):
+    def __init__(self, ID, w, method, local_data, data_stream, smoothbatch=1, current_round=0, PCA_comps=7, availability=1, global_method='FedAvg', track_cost_components=False, adaptive=True, eta=1, num_steps=1, input_eta=False, delay_scaling=5, normalize_EMG=True, random_delays=False, download_delay=1, upload_delay=1, local_round_threshold=50, condition_number=0, verbose=False):
         super().__init__(ID, w, method, smoothbatch=smoothbatch, current_round=current_round, PCA_comps=PCA_comps, verbose=verbose, num_participants=14, log_init=0)
         '''
         Note self.smoothbatch gets overwritten according to the condition number!  
@@ -357,6 +357,7 @@ class Client(ModelBase, TrainingMethods):
             self.upload_delay = upload_delay
         #
         # ML Parameters / Conditions
+        self.alphaE = 1e-6
         # This should probably be a dictionary at some point
         if condition_number==0:
             self.smoothbatch = 0.25
@@ -366,11 +367,16 @@ class Client(ModelBase, TrainingMethods):
             print("That condition number is not yet supported")
         if smoothbatch=='off':
             self.smoothbatch = 1  # AKA Use only the new dec, no mixing
+        # PLOTTING
+        # ^Eg the local round is implicit, it can't have a skip in round
         # Overwrite the logs since global and local track in slightly different ways
-        temp_lst = [(0,0)]
-        self.local_error_log = copy.copy(temp_lst)
-        self.global_error_log = copy.copy(temp_lst)
-        self.personalized_error_log = copy.copy(temp_lst)
+        self.local_error_log = [0]
+        self.global_error_log = [0]
+        self.personalized_error_log = [0]
+        self.performance_log = [0]
+        self.Dnorm_log = [0]
+        self.Fnorm_log = [0]
+        self.track_cost_components = track_cost_components
         # APFL Stuff
         self.input_eta = input_eta
         self.running_pers_term = 0
@@ -396,13 +402,18 @@ class Client(ModelBase, TrainingMethods):
         
         # Append (ROUND, COST) to the CLIENT error log
         local_loss = self.eval_model(which='local')
-        self.local_error_log.append((self.current_round, local_loss))
+        self.local_error_log.append(local_loss)  # ((self.current_round, local_loss))
         if self.global_method!="NoFL":
             global_loss = self.eval_model(which='global')
-            self.global_error_log.append((self.current_round, global_loss))
+            self.global_error_log.append(global_loss)  # ((self.current_round, global_loss))
         if self.global_method=="APFL":
             pers_loss = self.eval_model(which='pers')
-            self.personalized_error_log.append((self.current_round, pers_loss))
+            self.personalized_error_log.append(pers_loss)  # ((self.current_round, pers_loss))
+        if self.track_cost_components:
+            D = self.w  # May want to add a way to test other w's (eg for APFL and other personalized versions)
+            self.performance_log.append(self.alphaE*(np.linalg.norm((D@self.F + self.H@self.V[:,:-1] - self.V[:,1:]))**2))
+            self.Dnorm_log.append(self.alphaD*(np.linalg.norm(D)**2))
+            self.Fnorm_log.append(self.alphaF*(np.linalg.norm(self.F)**2))
         
     def simulate_delay(self, incoming):
         if incoming:
@@ -585,7 +596,7 @@ class Client(ModelBase, TrainingMethods):
 
 
 # Add this as a static method?
-def condensed_external_plotting(input_data, version, exclusion_ID_lst=[], dim_reduc_factor=10, global_error=True, local_error=True, pers_error=False, different_local_round_thresh_per_client=False, num_participants=14, show_update_change=False, custom_title="", ylim=-1):
+def condensed_external_plotting(input_data, version, exclusion_ID_lst=[], dim_reduc_factor=10, global_error=True, local_error=True, pers_error=False, different_local_round_thresh_per_client=False, legend_on=False, plot_performance=False, plot_Dnorm=False, plot_Fnorm=False, num_participants=14, show_update_change=False, custom_title="", ylim=-1):
     id2color = {0:'lightcoral', 1:'maroon', 2:'chocolate', 3:'darkorange', 4:'gold', 5:'olive', 6:'olivedrab', 
             7:'lawngreen', 8:'aquamarine', 9:'deepskyblue', 10:'steelblue', 11:'violet', 12:'darkorchid', 13:'deeppink'}
     
@@ -637,16 +648,36 @@ def condensed_external_plotting(input_data, version, exclusion_ID_lst=[], dim_re
             if version.upper()=='LOCAL':
                 if global_error:
                     df = pd.DataFrame(user_database[i].global_error_log)
+                    # Need to append a col of indices for the dim reduc... just reset index?
+                    df.reset_index(inplace=True)
                     df10 = df.groupby(df.index//dim_reduc_factor, axis=0).mean()
                     plt.plot(df10.values[1:, 0], df10.values[1:, 1], color=id2color[user_database[i].ID], linewidth=global_linewidth, alpha=global_alpha)
                 if local_error:
                     df = pd.DataFrame(user_database[i].local_error_log)
+                    df.reset_index(inplace=True)
                     df10 = df.groupby(df.index//dim_reduc_factor, axis=0).mean()
                     plt.plot(df10.values[1:, 0], df10.values[1:, 1], color=id2color[user_database[i].ID], linewidth=local_linewidth)
                 if pers_error:
                     df = pd.DataFrame(user_database[i].personalized_error_log)
+                    df.reset_index(inplace=True)
                     df10 = df.groupby(df.index//dim_reduc_factor, axis=0).mean()
                     plt.plot(df10.values[1:, 0], df10.values[1:, 1], color=id2color[user_database[i].ID], linewidth=pers_linewidth, linestyle="--")
+                # NOT THE COST FUNC, THESE ARE THE INDIVIDUAL COMPONENTS OF IT
+                if plot_performance:
+                    df = pd.DataFrame(user_database[i].performance_log)
+                    df.reset_index(inplace=True)
+                    df10 = df.groupby(df.index//dim_reduc_factor, axis=0).mean()
+                    plt.plot(df10.values[1:, 0], df10.values[1:, 1], color=id2color[user_database[i].ID], linewidth=pers_linewidth, label=f"User{user_database[i].ID} Performance")
+                if plot_Dnorm:
+                    df = pd.DataFrame(user_database[i].Dnorm_log)
+                    df.reset_index(inplace=True)
+                    df10 = df.groupby(df.index//dim_reduc_factor, axis=0).mean()
+                    plt.plot(df10.values[1:, 0], df10.values[1:, 1], color=id2color[user_database[i].ID], linewidth=pers_linewidth, linestyle="--", label=f"User{user_database[i].ID} Dnorm")
+                if plot_Fnorm:
+                    df = pd.DataFrame(user_database[i].Fnorm_log)
+                    df.reset_index(inplace=True)
+                    df10 = df.groupby(df.index//dim_reduc_factor, axis=0).mean()
+                    plt.plot(df10.values[1:, 0], df10.values[1:, 1], color=id2color[user_database[i].ID], linewidth=pers_linewidth, linestyle=":", label=f"User{user_database[i].ID} Fnorm")
                 #if different_local_round_thresh_per_client:
                 #    print("DIFFERENT LOCAL THRESH FOR EACH CLIENT")
                 #    if user_lst[i].data_stream == 'streaming':
@@ -658,6 +689,9 @@ def condensed_external_plotting(input_data, version, exclusion_ID_lst=[], dim_re
                 #        plt.axvline(x=(thresh_idx+1)*user_lst[i].local_round_threshold, color="k", linewidth=1, 
                 #                    linestyle=':')
             elif version.upper()=='GLOBAL':
+                if plot_Fnorm or plot_Dnorm or plot_performance:
+                    print("Fnorm, Dnorm, and performance are currently not supported for version==GLOBAL")
+                    
                 if global_error:
                     client_loss = []
                     client_global_round = []
@@ -699,6 +733,8 @@ def condensed_external_plotting(input_data, version, exclusion_ID_lst=[], dim_re
     plt.xlim((0,running_max+1))
     if ylim!=-1:
         plt.ylim((0,ylim))
+    if legend_on:
+        plt.legend()
     plt.show()
     
         
