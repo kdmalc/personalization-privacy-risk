@@ -298,7 +298,7 @@ class Server(ModelBase):
                                                                
 
 class Client(ModelBase, TrainingMethods):
-    def __init__(self, ID, w, method, local_data, data_stream, smoothbatch=1, current_round=0, PCA_comps=7, availability=1, global_method='FedAvg', track_cost_components=False, adaptive=True, eta=1, num_steps=1, input_eta=False, delay_scaling=5, normalize_EMG=True, random_delays=False, download_delay=1, upload_delay=1, local_round_threshold=50, condition_number=0, verbose=False):
+    def __init__(self, ID, w, method, local_data, data_stream, smoothbatch=1, current_round=0, PCA_comps=7, availability=1, global_method='FedAvg', track_cost_components=True, adaptive=True, eta=1, track_gradient=True, num_steps=1, input_eta=False, delay_scaling=5, normalize_EMG=True, random_delays=False, download_delay=1, upload_delay=1, local_round_threshold=50, condition_number=0, verbose=False):
         super().__init__(ID, w, method, smoothbatch=smoothbatch, current_round=current_round, PCA_comps=PCA_comps, verbose=verbose, num_participants=14, log_init=0)
         '''
         Note self.smoothbatch gets overwritten according to the condition number!  
@@ -376,7 +376,9 @@ class Client(ModelBase, TrainingMethods):
         self.performance_log = [0]
         self.Dnorm_log = [0]
         self.Fnorm_log = [0]
+        self.gradient_log = [0]
         self.track_cost_components = track_cost_components
+        self.track_gradient = track_gradient
         # APFL Stuff
         self.input_eta = input_eta
         self.running_pers_term = 0
@@ -409,11 +411,17 @@ class Client(ModelBase, TrainingMethods):
         if self.global_method=="APFL":
             pers_loss = self.eval_model(which='pers')
             self.personalized_error_log.append(pers_loss)  # ((self.current_round, pers_loss))
+        D = self.w  # May want to add a way to test other w's (eg for APFL and other personalized versions)
         if self.track_cost_components:
-            D = self.w  # May want to add a way to test other w's (eg for APFL and other personalized versions)
             self.performance_log.append(self.alphaE*(np.linalg.norm((D@self.F + self.H@self.V[:,:-1] - self.V[:,1:]))**2))
             self.Dnorm_log.append(self.alphaD*(np.linalg.norm(D)**2))
             self.Fnorm_log.append(self.alphaF*(np.linalg.norm(self.F)**2))
+        if self.track_gradient:
+            # The gradient is a vector...
+            # So let's just save the L2 norm?
+            # How am I adding the gradient to D if it's a vector...
+            self.gradient_log.append(np.linalg.norm(gradient_cost_l2(self.F, D, self.H, self.V, self.learning_batch, self.alphaF, self.alphaD, Ne=self.PCA_comps)))
+
         
     def simulate_delay(self, incoming):
         if incoming:
@@ -512,7 +520,7 @@ class Client(ModelBase, TrainingMethods):
                 elif self.method=='FullScipyMinStep':
                     self.w = self.train_eta_scipyminstep(self.w, self.eta, self.F, self.D, self.H, self.V, self.learning_batch, self.alphaF, self.alphaD, D_0, self.verbose, PCA_comps=self.PCA_comps, full=True)
                 else:
-                    print("Unrecognized method")
+                    raise ValueError("Unrecognized method")
             # Do SmoothBatch
             # Maybe move this to only happen after each update? Does it really need to happen every iter?
             # I'd have to add weird flags just for this in various places... put on hold for now
@@ -520,10 +528,30 @@ class Client(ModelBase, TrainingMethods):
             self.w = self.smoothbatch*self.w + ((1 - self.smoothbatch)*self.w_prev)
         elif self.global_method=='APFL': 
             t = self.current_global_round  # Should this be global or local? Global based on how they wrote it...
-            mu = self.alphaD
-            L = np.linalg.norm(( self.F@np.transpose(self.F) + self.alphaD*np.identity(self.F.shape[0])))
+            ############################################################################
+            # Not confident in these that I analytically solved for
+            #mu = self.alphaD
+            #L = np.linalg.norm(( self.F@np.transpose(self.F) + self.alphaD*np.identity(self.F.shape[0])))
+            # Redo but using the Hessian now
+            # Is it just F or did Cesar forget/ignore the other smaller terms?
+            #
+            # Wait why do I care if the det is 0, I'm taking transpose not inverse
+            #if np.linalg.det(self.F.T@self.F)==0:
+            #    # Maybe I could do a pseudo inverse? Not sure
+            #    raise ValueError("Determinant is zero, thus F is not invertible")
+            # F is not symmetric, I don't think, so use eig not eigh
+            # Note that eig does not necessarily return ordered args
+            eigvals = np.linalg.eig(self.F.T@self.F)
+            mu = np.amin(eigvals)  # Mu is the minimum eigvalue
+            if mu==0:
+                # I don't think the below is valid
+                #nonzero_eigvals = eigvals[eigvals != 0]
+                #mu = np.amin(nonzero_eigvals)
+                raise ValueError("mu is 0")
+            L = np.amax(eigvals)  # L is the maximum eigvalue
+            ############################################################################
             if self.verbose:
-                print(f"ID: {self.ID}, L: {L}")
+                print(f"ID: {self.ID}, L: {L}, mu: {mu}")
             kappa = L/mu
             a = np.max([128*kappa, self.tau])  # Max works on an array input, not multiple inputs
             eta_t = 16 / (mu*(t+a))
@@ -532,6 +560,8 @@ class Client(ModelBase, TrainingMethods):
             if self.verbose:
                 print(f"ID: {self.ID}, eta_t: {eta_t}")
                 print()
+            if eta_t >= 1/(2*L):
+                raise ValueError("Learning rate is too large according to constaints on GD")
             self.p.append((t+a)**2)
             
             if self.adaptive:
@@ -596,7 +626,7 @@ class Client(ModelBase, TrainingMethods):
 
 
 # Add this as a static method?
-def condensed_external_plotting(input_data, version, exclusion_ID_lst=[], dim_reduc_factor=10, global_error=True, local_error=True, pers_error=False, different_local_round_thresh_per_client=False, legend_on=False, plot_performance=False, plot_Dnorm=False, plot_Fnorm=False, num_participants=14, show_update_change=False, custom_title="", ylim=-1):
+def condensed_external_plotting(input_data, version, exclusion_ID_lst=[], dim_reduc_factor=10, plot_gradient=False, global_error=True, local_error=True, pers_error=False, different_local_round_thresh_per_client=False, legend_on=False, plot_performance=False, plot_Dnorm=False, plot_Fnorm=False, num_participants=14, show_update_change=False, custom_title="", ylim=-1):
     id2color = {0:'lightcoral', 1:'maroon', 2:'chocolate', 3:'darkorange', 4:'gold', 5:'olive', 6:'olivedrab', 
             7:'lawngreen', 8:'aquamarine', 9:'deepskyblue', 10:'steelblue', 11:'violet', 12:'darkorchid', 13:'deeppink'}
     
@@ -625,7 +655,7 @@ def condensed_external_plotting(input_data, version, exclusion_ID_lst=[], dim_re
     elif local_error:
         my_title = f'Local Costs Per {version.title()} Iter'
     else:
-        raise("You set both global and local to False.  At least one must be true in order to plot something.")
+        raise ValueError("You set both global and local to False.  At least one must be true in order to plot something.")
 
     # Determine if this is global or local, based on the input for now... could probably add a flag but meh
     if version.upper()=='LOCAL':
@@ -678,6 +708,11 @@ def condensed_external_plotting(input_data, version, exclusion_ID_lst=[], dim_re
                     df.reset_index(inplace=True)
                     df10 = df.groupby(df.index//dim_reduc_factor, axis=0).mean()
                     plt.plot(df10.values[1:, 0], df10.values[1:, 1], color=id2color[user_database[i].ID], linewidth=pers_linewidth, linestyle=":", label=f"User{user_database[i].ID} Fnorm")
+                if plot_gradient:
+                    df = pd.DataFrame(user_database[i].gradient_log)
+                    df.reset_index(inplace=True)
+                    df10 = df.groupby(df.index//dim_reduc_factor, axis=0).mean()
+                    plt.plot(df10.values[1:, 0], df10.values[1:, 1], color=id2color[user_database[i].ID], linewidth=2, label=f"User{user_database[i].ID} Gradient")
                 #if different_local_round_thresh_per_client:
                 #    print("DIFFERENT LOCAL THRESH FOR EACH CLIENT")
                 #    if user_lst[i].data_stream == 'streaming':
