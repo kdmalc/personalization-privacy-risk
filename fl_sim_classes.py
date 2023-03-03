@@ -434,13 +434,14 @@ class Client(ModelBase, TrainingMethods):
             streaming_method = self.data_stream
         need_to_advance=True
         self.current_round += 1
-        if self.current_update==17:
-            #print("Maxxed out your update (you are on update 19), continuing training on last update only")
+        if self.current_update==16:  #17: previously 17 but the last update is super short so I cut it out
+            #print("Maxxed out your update (you are on update 18), continuing training on last update only")
             # Probably ought to track that we maxed out
             #lower_bound = update_ix[-2]  
             # ^Used to be 0 (e.g. full dataset instead of last update), saw bad behaviour...
-            lower_bound = (update_ix[-2] + update_ix[-1])//2  #Use only the second half of each update
-            upper_bound = update_ix[-1]
+            # We are stopping an update early, so use -3/-2 and not -2/-1 (the last update)
+            lower_bound = (update_ix[-3] + update_ix[-2])//2  #Use only the second half of each update
+            upper_bound = update_ix[-2]
             self.learning_batch = upper_bound - lower_bound
         elif streaming_method=='full_data':
             #print("FULL")
