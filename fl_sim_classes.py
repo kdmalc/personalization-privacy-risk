@@ -70,7 +70,7 @@ class TrainingMethods:
         
         
 class Server(ModelBase):
-    def __init__(self, ID, D0, method, all_clients, smoothbatch=1, C=0.1, current_round=0, PCA_comps=7, verbose=False, experimental_plotting=False, num_steps=10):
+    def __init__(self, ID, D0, method, all_clients, smoothbatch=1, C=0.1, normalize_dec=True, current_round=0, PCA_comps=7, verbose=False, experimental_plotting=False, num_steps=10):
         super().__init__(ID, D0, method, smoothbatch=smoothbatch, current_round=current_round, PCA_comps=PCA_comps, verbose=verbose, num_participants=14, log_init=0)
         self.type = 'Server'
         self.num_avail_clients = 0
@@ -82,7 +82,7 @@ class Server(ModelBase):
         self.experimental_plotting = False
         self.experimental_inclusion_round = [0]
         self.init_lst = [self.log_init]*self.num_participants
-        
+        self.normalize_dec = normalize_dec
         self.set_available_clients_list(init=True)
         if self.method=='APFL':
             self.set_available_clients_list()
@@ -274,7 +274,13 @@ class Server(ModelBase):
         # Aggregate local model weights, weighted by normalized local learning rate
         aggr_w = 0
         for my_client in self.chosen_clients_lst:
-            aggr_w += (my_client.learning_batch/summed_num_datapoints) * my_client.w
+            if self.normalize_dec:
+                normalization_term = np.amax(my_client.w)
+            else:
+                normalization_term = 1
+            aggr_w += (my_client.learning_batch/summed_num_datapoints) * my_client.w / normalization_term
+        if self.normalize_dec:
+            aggr_w /= np.amax(aggr_w)
         self.w = aggr_w
         
     # Function for getting the finalized personalized and global model 
@@ -298,7 +304,7 @@ class Server(ModelBase):
                                                                
 
 class Client(ModelBase, TrainingMethods):
-    def __init__(self, ID, w, method, local_data, data_stream, smoothbatch=1, current_round=0, PCA_comps=7, availability=1, global_method='FedAvg', track_cost_components=True, adaptive=True, eta=1, track_gradient=True, num_steps=1, input_eta=False, delay_scaling=5, normalize_EMG=True, random_delays=False, download_delay=1, upload_delay=1, local_round_threshold=50, condition_number=0, verbose=False):
+    def __init__(self, ID, w, method, local_data, data_stream, smoothbatch=1, current_round=0, PCA_comps=7, availability=1, global_method='FedAvg', normalize_dec=True, track_cost_components=True, tol=1e-10, adaptive=True, eta=1, track_gradient=True, num_steps=1, input_eta=False, safe_lr=False, delay_scaling=5, normalize_EMG=True, random_delays=False, download_delay=1, upload_delay=1, local_round_threshold=50, condition_number=0, verbose=False):
         super().__init__(ID, w, method, smoothbatch=smoothbatch, current_round=current_round, PCA_comps=PCA_comps, verbose=verbose, num_participants=14, log_init=0)
         '''
         Note self.smoothbatch gets overwritten according to the condition number!  
@@ -322,6 +328,7 @@ class Client(ModelBase, TrainingMethods):
         self.labels = local_data['labels']
         # Round minimization output to the nearest int or keep as a float?  Don't need arbitrary precision
         self.round2int = False
+        self.normalize_dec = normalize_dec
         # FL CLASS STUFF
         # Availability for training
         self.availability = availability
@@ -380,6 +387,7 @@ class Client(ModelBase, TrainingMethods):
         self.track_cost_components = track_cost_components
         self.track_gradient = track_gradient
         # APFL Stuff
+        self.tol = tol
         self.input_eta = input_eta
         self.running_pers_term = 0
         self.running_global_term = 0
@@ -396,6 +404,7 @@ class Client(ModelBase, TrainingMethods):
         self.final_global_w = None
         self.tau = self.num_steps
         self.p = [0]
+        self.safe_lr = safe_lr
                                                                
     # 0: Main Loop
     def execute_training_loop(self):
@@ -514,6 +523,12 @@ class Client(ModelBase, TrainingMethods):
             self.w = self.global_w
         if self.global_method=="FedAvg" or self.global_method=="NoFL":
             for i in range(self.num_steps):
+                ########################################
+                # Should I normalize the dec here?  
+                # I think this will prevent it from blowing up if I norm it every time
+                if self.normalize_dec:
+                    self.w /= np.amax(self.w)
+                ########################################
                 if self.method=='EtaGradStep':
                     self.w = self.train_eta_gradstep(self.w, self.eta, self.F, self.D, self.H, self.V, self.learning_batch, self.alphaF, self.alphaD, PCA_comps=self.PCA_comps)
                 elif self.method=='EtaScipyMinStep':
@@ -522,6 +537,11 @@ class Client(ModelBase, TrainingMethods):
                     self.w = self.train_eta_scipyminstep(self.w, self.eta, self.F, self.D, self.H, self.V, self.learning_batch, self.alphaF, self.alphaD, D_0, self.verbose, PCA_comps=self.PCA_comps, full=True)
                 else:
                     raise ValueError("Unrecognized method")
+            ########################################
+            # Or should I normalize the dec here?
+            #if self.normalize_dec:
+            #    self.w /= np.amax(self.w)
+            ########################################
             # Do SmoothBatch
             # Maybe move this to only happen after each update? Does it really need to happen every iter?
             # I'd have to add weird flags just for this in various places... put on hold for now
@@ -542,19 +562,40 @@ class Client(ModelBase, TrainingMethods):
             #    raise ValueError("Determinant is zero, thus F is not invertible")
             # F is not symmetric, I don't think, so use eig not eigh
             # Note that eig does not necessarily return ordered args
-            eigvals = np.linalg.eig(self.F.T@self.F)
+            # eig returns eigvals, eigvecs
+            eigvals, _ = np.linalg.eig(self.F.T@self.F)
             mu = np.amin(eigvals)  # Mu is the minimum eigvalue
-            if mu==0:
-                # I don't think the below is valid
-                #nonzero_eigvals = eigvals[eigvals != 0]
-                #mu = np.amin(nonzero_eigvals)
-                raise ValueError("mu is 0")
+            if mu.imag < self.tol and mu.real < self.tol:
+                #mu = 0
+                # Implies it is not mu-strongly convex
+                #raise ValueError("mu is 0")
+                
+                # Fudge factor... based off my closed form solution...
+                mu = self.alphaD
+            elif mu.imag < self.tol:
+                mu = mu.real
+            elif mu.real < self.tol:
+                mu.real = 0
+            else:
+                # I don't think it can do float addition if it's still in complex form...
+                pass
             L = np.amax(eigvals)  # L is the maximum eigvalue
+            if L.imag < self.tol and L.real < self.tol:
+                L = 0
+                # Implies it is not L-smooth
+                raise ValueError("L is 0")
+            elif mu.imag < self.tol:
+                L = L.real
+            elif L.real < self.tol:
+                L.real = 0
+            else:
+                # I don't think it can do float addition if it's still in complex form...
+                pass
             ############################################################################
             if self.verbose:
                 print(f"ID: {self.ID}, L: {L}, mu: {mu}")
             kappa = L/mu
-            a = np.max([128*kappa, self.tau])  # Max works on an array input, not multiple inputs
+            a = np.max([128*kappa, self.tau])
             eta_t = 16 / (mu*(t+a))
             if self.input_eta:
                 eta_t = self.eta
@@ -563,6 +604,10 @@ class Client(ModelBase, TrainingMethods):
                 print()
             if eta_t >= 1/(2*L):
                 raise ValueError("Learning rate is too large according to constaints on GD")
+            if self.safe_lr!=False:
+                if self.input_eta:
+                    raise ValueError("Cannot input eta AND use safe learning rate (they overwrite each other)")
+                eta_t = 1/(self.safe_lr*L)
             self.p.append((t+a)**2)
             
             if self.adaptive:
@@ -570,9 +615,7 @@ class Client(ModelBase, TrainingMethods):
                 # This is theoretically the same but I'm not sure what grad_alpha means
                 #self.sus_adap_alpha.append() ... didn't write yet
             else:
-                #self.adap_alpha.append(self.adap_alpha[-1])  
-                # ^alpha does not change in this case (non-adpative)
-                # I don't think I need to do that since I index based on -1 not t
+                # No update needed, alpha is constant
                 pass
 
             # NOTE: eta_t IS DIFFERENT FROM CLIENT'S ETA (WHICH IS NOT USED)
