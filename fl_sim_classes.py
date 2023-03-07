@@ -304,7 +304,7 @@ class Server(ModelBase):
                                                                
 
 class Client(ModelBase, TrainingMethods):
-    def __init__(self, ID, w, method, local_data, data_stream, smoothbatch=1, current_round=0, PCA_comps=7, availability=1, global_method='FedAvg', normalize_dec=True, track_cost_components=True, tol=1e-10, adaptive=True, eta=1, track_gradient=True, num_steps=1, input_eta=False, safe_lr=False, delay_scaling=5, normalize_EMG=True, random_delays=False, download_delay=1, upload_delay=1, local_round_threshold=50, condition_number=0, verbose=False):
+    def __init__(self, ID, w, method, local_data, data_stream, smoothbatch=1, current_round=0, PCA_comps=7, availability=1, global_method='FedAvg', normalize_dec=True, track_cost_components=True, gradient_clipping=False, clipping_threshold=100, tol=1e-10, adaptive=True, eta=1, track_gradient=True, num_steps=1, input_eta=False, safe_lr=False, delay_scaling=5, normalize_EMG=True, random_delays=False, download_delay=1, upload_delay=1, local_round_threshold=50, condition_number=0, verbose=False):
         super().__init__(ID, w, method, smoothbatch=smoothbatch, current_round=current_round, PCA_comps=PCA_comps, verbose=verbose, num_participants=14, log_init=0)
         '''
         Note self.smoothbatch gets overwritten according to the condition number!  
@@ -405,6 +405,8 @@ class Client(ModelBase, TrainingMethods):
         self.tau = self.num_steps
         self.p = [0]
         self.safe_lr = safe_lr
+        self.gradient_clipping = gradient_clipping
+        self.clipping_threshold = clipping_threshold
                                                                
     # 0: Main Loop
     def execute_training_loop(self):
@@ -538,9 +540,9 @@ class Client(ModelBase, TrainingMethods):
                 else:
                     raise ValueError("Unrecognized method")
             ########################################
-            # Or should I normalize the dec here?
-            #if self.normalize_dec:
-            #    self.w /= np.amax(self.w)
+            # Or should I normalize the dec here?  I'll also turn this on since idc about computational speed rn
+            if self.normalize_dec:
+                self.w /= np.amax(self.w)
             ########################################
             # Do SmoothBatch
             # Maybe move this to only happen after each update? Does it really need to happen every iter?
@@ -618,14 +620,39 @@ class Client(ModelBase, TrainingMethods):
                 # No update needed, alpha is constant
                 pass
 
+            # GRADIENT DESCENT BASED MODEL UPDATE
             # NOTE: eta_t IS DIFFERENT FROM CLIENT'S ETA (WHICH IS NOT USED)
-            # I think these really ought to be reshaping this automatically, not sure why it's not
-            #my_client.global_w -= my_client.eta * grad(f_i(my_client.global_w; my_client.smallChi))
-            self.global_w -= eta_t * np.reshape(gradient_cost_l2(self.F, self.global_w, self.H, self.V, self.learning_batch, self.alphaF, self.alphaD, Ne=self.PCA_comps), (2, self.PCA_comps))
-            #my_client.local_w -= my_client.eta * grad_v(f_i(my_client.v_bar; my_client.smallChi))
-            self.local_w -= eta_t * np.reshape(gradient_cost_l2(self.F, self.mixed_w, self.H, self.V, self.learning_batch, self.alphaF, self.alphaD, Ne=self.PCA_comps), (2, self.PCA_comps))
-            self.mixed_w = self.adap_alpha[-1]*self.local_w - (1 - self.adap_alpha[-1]) * self.global_w
-            self.w = self.mixed_w  # I don't think I use self.w otherwise in this computation so might as well      
+            # I think the grads really ought to be reshaping this automatically, not sure why it's not
+            
+            # Gradient clipping
+            global_gradient = np.reshape(gradient_cost_l2(self.F, self.global_w, self.H, self.V, self.learning_batch, self.alphaF, self.alphaD, Ne=self.PCA_comps), (2, self.PCA_comps))
+            if np.linalg.norm(global_gradient) > self.clipping_threshold:
+                global_gradient = self.clipping_threshold*global_gradient/np.linalg.norm(global_gradient)
+            local_gradient = np.reshape(gradient_cost_l2(self.F, self.mixed_w, self.H, self.V, self.learning_batch, self.alphaF, self.alphaD, Ne=self.PCA_comps), (2, self.PCA_comps))
+            if np.linalg.norm(local_gradient) > self.clipping_threshold:
+                local_gradient = self.clipping_threshold*local_gradient/np.linalg.norm(local_gradient)
+                
+            ########################################
+            # Or should I normalize the dec here?  I'll also turn this on since idc about computational speed rn
+            if self.normalize_dec:
+                self.global_w /= np.amax(self.global_w)
+                self.local_w /= np.amax(self.local_w)
+                self.mixed_w /= np.amax(self.mixed_w)
+            ########################################
+            
+            # PSEUDOCODE: my_client.global_w -= my_client.eta * grad(f_i(my_client.global_w; my_client.smallChi))
+            self.global_w -= eta_t * global_gradient
+            # PSEUDOCODE: my_client.local_w -= my_client.eta * grad_v(f_i(my_client.v_bar; my_client.smallChi))
+            self.local_w -= eta_t * local_gradient
+            self.mixed_w = self.adap_alpha[-1]*self.local_w - (1 - self.adap_alpha[-1])*self.global_w
+            ########################################
+            # Or should I normalize the dec here?  I'll also turn this on since idc about computational speed rn
+            if self.normalize_dec:
+                self.global_w /= np.amax(self.global_w)
+                self.local_w /= np.amax(self.local_w)
+                self.mixed_w /= np.amax(self.mixed_w)
+            ########################################
+            self.w = self.mixed_w  # I don't think I use self.w otherwise in this computation so might as well
         # Save the new decoder to the log
         self.dec_log.append(self.w)
         
