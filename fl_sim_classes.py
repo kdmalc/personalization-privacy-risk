@@ -499,7 +499,7 @@ class Client(ModelBase, TrainingMethods):
             # First, normalize the entire s matrix
             # Hope is that this will prevent FF.T from being massive in APFL
             if self.normalize_EMG:
-                s_normed = s_temp/np.max(s_temp)
+                s_normed = s_temp/np.amax(s_temp)
             else:
                 s_normed = s_temp
             # Now do PCA unless it is set to 64 (AKA the default num channels i.e. no reduction)
@@ -513,7 +513,12 @@ class Client(ModelBase, TrainingMethods):
             p_reference = np.transpose(self.labels[lower_bound:upper_bound,:])
             # Now set the values used in the cost function
             self.F = s[:,:-1] # note: truncate F for estimate_decoder
+            #self.V = (np.transpose(self.labels[lower_bound:upper_bound,:]) - np.cumsum(self.w@s, axis=1)*self.dt)*self.dt
             self.V = (p_reference - p_actual)*self.dt
+            if self.global_method=='APFL':
+                self.Vglobal = (np.transpose(self.labels[lower_bound:upper_bound,:]) - np.cumsum(self.global_w@s, axis=1)*self.dt)*self.dt
+                self.Vlocal = (np.transpose(self.labels[lower_bound:upper_bound,:]) - np.cumsum(self.local_w@s, axis=1)*self.dt)*self.dt
+                #^ Should this be local or mixed? I think local... even though it is evaluated at the mixed dec... not sure
             self.D = copy.copy(self.w)
     
     def train_model(self):
@@ -557,12 +562,7 @@ class Client(ModelBase, TrainingMethods):
             #L = np.linalg.norm(( self.F@np.transpose(self.F) + self.alphaD*np.identity(self.F.shape[0])))
             # Redo but using the Hessian now
             # Is it just F or did Cesar forget/ignore the other smaller terms?
-            #
-            # Wait why do I care if the det is 0, I'm taking transpose not inverse
-            #if np.linalg.det(self.F.T@self.F)==0:
-            #    # Maybe I could do a pseudo inverse? Not sure
-            #    raise ValueError("Determinant is zero, thus F is not invertible")
-            # F is not symmetric, I don't think, so use eig not eigh
+            # F.T@F is not symmetric, I don't think, so use eig not eigh
             # Note that eig does not necessarily return ordered args
             # eig returns eigvals, eigvecs
             eigvals, _ = np.linalg.eig(self.F.T@self.F)
@@ -577,10 +577,8 @@ class Client(ModelBase, TrainingMethods):
             elif mu.imag < self.tol:
                 mu = mu.real
             elif mu.real < self.tol:
+                # I don't think this runs since you can't write to x.real
                 mu.real = 0
-            else:
-                # I don't think it can do float addition if it's still in complex form...
-                pass
             L = np.amax(eigvals)  # L is the maximum eigvalue
             if L.imag < self.tol and L.real < self.tol:
                 L = 0
@@ -589,10 +587,8 @@ class Client(ModelBase, TrainingMethods):
             elif mu.imag < self.tol:
                 L = L.real
             elif L.real < self.tol:
+                # Also don't think this will work but probably will never be called
                 L.real = 0
-            else:
-                # I don't think it can do float addition if it's still in complex form...
-                pass
             ############################################################################
             if self.verbose:
                 print(f"ID: {self.ID}, L: {L}, mu: {mu}")
@@ -600,37 +596,37 @@ class Client(ModelBase, TrainingMethods):
             a = np.max([128*kappa, self.tau])
             eta_t = 16 / (mu*(t+a))
             if self.input_eta:
+                if self.safe_lr!=False:
+                    raise ValueError("Cannot input eta AND use safe learning rate (they overwrite each other)")
                 eta_t = self.eta
+            elif self.safe_lr!=False:
+                eta_t = 1/(self.safe_lr*L)
+            elif eta_t >= 1/(2*L):
+                # Note that we only check when automatically setting
+                # ie if you manually input it will do whatever you tell it to do
+                raise ValueError("Learning rate is too large according to constaints on GD")
             if self.verbose:
                 print(f"ID: {self.ID}, eta_t: {eta_t}")
                 print()
-            if eta_t >= 1/(2*L):
-                raise ValueError("Learning rate is too large according to constaints on GD")
-            if self.safe_lr!=False:
-                if self.input_eta:
-                    raise ValueError("Cannot input eta AND use safe learning rate (they overwrite each other)")
-                eta_t = 1/(self.safe_lr*L)
             self.p.append((t+a)**2)
             
             if self.adaptive:
                 self.adap_alpha.append(self.adap_alpha[-1] - eta_t*np.inner(np.reshape((self.local_w-self.global_w), (self.PCA_comps*2)), np.reshape(gradient_cost_l2(self.F, self.mixed_w, self.H, self.V, self.learning_batch, self.alphaF, self.alphaD, Ne=self.PCA_comps), (2*self.PCA_comps,))))
                 # This is theoretically the same but I'm not sure what grad_alpha means
                 #self.sus_adap_alpha.append() ... didn't write yet
-            else:
-                # No update needed, alpha is constant
-                pass
 
             # GRADIENT DESCENT BASED MODEL UPDATE
             # NOTE: eta_t IS DIFFERENT FROM CLIENT'S ETA (WHICH IS NOT USED)
             # I think the grads really ought to be reshaping this automatically, not sure why it's not
             
-            # Gradient clipping
             global_gradient = np.reshape(gradient_cost_l2(self.F, self.global_w, self.H, self.V, self.learning_batch, self.alphaF, self.alphaD, Ne=self.PCA_comps), (2, self.PCA_comps))
-            if np.linalg.norm(global_gradient) > self.clipping_threshold:
-                global_gradient = self.clipping_threshold*global_gradient/np.linalg.norm(global_gradient)
             local_gradient = np.reshape(gradient_cost_l2(self.F, self.mixed_w, self.H, self.V, self.learning_batch, self.alphaF, self.alphaD, Ne=self.PCA_comps), (2, self.PCA_comps))
-            if np.linalg.norm(local_gradient) > self.clipping_threshold:
-                local_gradient = self.clipping_threshold*local_gradient/np.linalg.norm(local_gradient)
+            # Gradient clipping
+            if self.gradient_clipping:
+                if np.linalg.norm(global_gradient) > self.clipping_threshold:
+                    global_gradient = self.clipping_threshold*global_gradient/np.linalg.norm(global_gradient)
+                if np.linalg.norm(local_gradient) > self.clipping_threshold:
+                    local_gradient = self.clipping_threshold*local_gradient/np.linalg.norm(local_gradient)
                 
             ########################################
             # Or should I normalize the dec here?  I'll also turn this on since idc about computational speed rn
@@ -652,7 +648,7 @@ class Client(ModelBase, TrainingMethods):
                 self.local_w /= np.amax(self.local_w)
                 self.mixed_w /= np.amax(self.mixed_w)
             ########################################
-            self.w = self.mixed_w  # I don't think I use self.w otherwise in this computation so might as well
+            self.w = self.mixed_w  # SELF.W IS USED FOR V IN THE GRADIENT!!!!! THIS NEEDS TO BE FIXED
         # Save the new decoder to the log
         self.dec_log.append(self.w)
         
