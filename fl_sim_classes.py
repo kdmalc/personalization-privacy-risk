@@ -407,6 +407,10 @@ class Client(ModelBase, TrainingMethods):
         self.safe_lr = safe_lr
         self.gradient_clipping = gradient_clipping
         self.clipping_threshold = clipping_threshold
+        self.Vlocal = None
+        self.Vglobal = None
+        #if self.global_method=='APFL':
+        #    self.w = None  # This is a massive issue....
                                                                
     # 0: Main Loop
     def execute_training_loop(self):
@@ -422,15 +426,13 @@ class Client(ModelBase, TrainingMethods):
         if self.global_method=="APFL":
             pers_loss = self.eval_model(which='pers')
             self.personalized_error_log.append(pers_loss)  # ((self.current_round, pers_loss))
-        D = self.w  # May want to add a way to test other w's (eg for APFL and other personalized versions)
+        D = self.mixed_model if self.global_method=='APFL' else: self.w
         if self.track_cost_components:
             self.performance_log.append(self.alphaE*(np.linalg.norm((D@self.F + self.H@self.V[:,:-1] - self.V[:,1:]))**2))
             self.Dnorm_log.append(self.alphaD*(np.linalg.norm(D)**2))
             self.Fnorm_log.append(self.alphaF*(np.linalg.norm(self.F)**2))
         if self.track_gradient:
-            # The gradient is a vector...
-            # So let's just save the L2 norm?
-            # How am I adding the gradient to D if it's a vector...
+            # The gradient is a vector... So let's just save the L2 norm?
             self.gradient_log.append(np.linalg.norm(gradient_cost_l2(self.F, D, self.H, self.V, self.learning_batch, self.alphaF, self.alphaD, Ne=self.PCA_comps)))
 
         
@@ -556,16 +558,9 @@ class Client(ModelBase, TrainingMethods):
             self.w = self.smoothbatch*self.w + ((1 - self.smoothbatch)*self.w_prev)
         elif self.global_method=='APFL': 
             t = self.current_global_round  # Should this be global or local? Global based on how they wrote it...
-            ############################################################################
-            # Not confident in these that I analytically solved for
-            #mu = self.alphaD
-            #L = np.linalg.norm(( self.F@np.transpose(self.F) + self.alphaD*np.identity(self.F.shape[0])))
-            # Redo but using the Hessian now
             # Is it just F or did Cesar forget/ignore the other smaller terms?
             # F.T@F is not symmetric, I don't think, so use eig not eigh
-            # Note that eig does not necessarily return ordered args
-            # eig returns eigvals, eigvecs
-            eigvals, _ = np.linalg.eig(self.F.T@self.F)
+            eigvals, _ = np.linalg.eig(self.F.T@self.F)  # eig returns (UNORDERED) eigvals, eigvecs
             mu = np.amin(eigvals)  # Mu is the minimum eigvalue
             if mu.imag < self.tol and mu.real < self.tol:
                 #mu = 0
@@ -573,6 +568,7 @@ class Client(ModelBase, TrainingMethods):
                 #raise ValueError("mu is 0")
                 
                 # Fudge factor... based off my closed form solution...
+                # Really ought to create a log file/system
                 mu = self.alphaD
             elif mu.imag < self.tol:
                 mu = mu.real
@@ -589,7 +585,6 @@ class Client(ModelBase, TrainingMethods):
             elif L.real < self.tol:
                 # Also don't think this will work but probably will never be called
                 L.real = 0
-            ############################################################################
             if self.verbose:
                 print(f"ID: {self.ID}, L: {L}, mu: {mu}")
             kappa = L/mu
@@ -619,8 +614,8 @@ class Client(ModelBase, TrainingMethods):
             # NOTE: eta_t IS DIFFERENT FROM CLIENT'S ETA (WHICH IS NOT USED)
             # I think the grads really ought to be reshaping this automatically, not sure why it's not
             
-            global_gradient = np.reshape(gradient_cost_l2(self.F, self.global_w, self.H, self.V, self.learning_batch, self.alphaF, self.alphaD, Ne=self.PCA_comps), (2, self.PCA_comps))
-            local_gradient = np.reshape(gradient_cost_l2(self.F, self.mixed_w, self.H, self.V, self.learning_batch, self.alphaF, self.alphaD, Ne=self.PCA_comps), (2, self.PCA_comps))
+            global_gradient = np.reshape(gradient_cost_l2(self.F, self.global_w, self.H, self.Vglobal, self.learning_batch, self.alphaF, self.alphaD, Ne=self.PCA_comps), (2, self.PCA_comps))
+            local_gradient = np.reshape(gradient_cost_l2(self.F, self.mixed_w, self.H, self.Vlocal, self.learning_batch, self.alphaF, self.alphaD, Ne=self.PCA_comps), (2, self.PCA_comps))
             # Gradient clipping
             if self.gradient_clipping:
                 if np.linalg.norm(global_gradient) > self.clipping_threshold:
@@ -648,9 +643,8 @@ class Client(ModelBase, TrainingMethods):
                 self.local_w /= np.amax(self.local_w)
                 self.mixed_w /= np.amax(self.mixed_w)
             ########################################
-            self.w = self.mixed_w  # SELF.W IS USED FOR V IN THE GRADIENT!!!!! THIS NEEDS TO BE FIXED
         # Save the new decoder to the log
-        self.dec_log.append(self.w)
+        self.dec_log.append(self.mixed_w)
         
     def eval_model(self, which):
         if which=='local':
