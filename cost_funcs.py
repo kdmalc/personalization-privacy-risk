@@ -1,8 +1,34 @@
 import numpy as np
 
+# For np.tensordot(a, b)
+#axes = 0 : tensor product 
+#axes = 1 : tensor dot product 
+#axes = 2 : (default) tensor double contraction 
 
-def hessian_cost(F, alphaD, alphaE=1e-6):
-    return ((2*alphaE*(F * F.T).T + 2*alphaD ).flatten())
+def hessian_cost_1_2identity(F, alphaD, alphaE=1e-6):
+    # These are technically supposed to be multipled (tensor product) with Identity 
+    return ((2*alphaE*(F@F.T).T + 2*alphaD*np.identity(F.shape[0]) ).flatten())
+def hessian_cost_1identity_2identity(F, alphaD, alphaE=1e-6):
+    # These are technically supposed to be multipled (tensor product) with Identity 
+    return ((2*alphaE*(F@F.T).T@np.identity(F.shape[0]) + 2*alphaD*np.identity(F.shape[0]) ).flatten())
+def hessian_cost_1_2ones(F, alphaD, alphaE=1e-6):
+    # These are technically supposed to be multipled (tensor product) with Identity 
+    return ((2*alphaE*(F@F.T).T + 2*alphaD*np.ones(F.shape) ).flatten())
+def hessian_cost_1ones_2ones(F, alphaD, alphaE=1e-6):
+    # These are technically supposed to be multipled (tensor product) with Identity 
+    return ((2*alphaE*(F@F.T).T@np.ones(F.shape) + 2*alphaD*np.ones(F.shape) ).flatten())
+def hessian_cost_1_2tpidentity(F, alphaD, alphaE=1e-6):
+    # These are technically supposed to be multipled (tensor product) with Identity 
+    return ((2*alphaE*(F@F.T).T + 2*alphaD*np.identity(F.shape[0]) ).flatten())
+def hessian_cost_1tpidentity_2tpidentity(F, alphaD, alphaE=1e-6):
+    # These are technically supposed to be multipled (tensor product) with Identity 
+    return ((np.tensordot((2*alphaE*(F@F.T).T), np.identity(F.shape[0])) + np.tensordot(2*alphaD, np.identity(F.shape[0])) ).flatten())
+def hessian_cost_1_2tpones(F, alphaD, alphaE=1e-6):
+    # These are technically supposed to be multipled (tensor product) with Identity 
+    return ((2*alphaE*(F@F.T).T + 2*alphaD*np.ones(F.shape) ).flatten())
+def hessian_cost_1tpones_2tpones(F, alphaD, alphaE=1e-6):
+    # These are technically supposed to be multipled (tensor product) with Identity 
+    return ((np.tensordot((2*alphaE*(F@F.T).T), np.ones(F.shape)) + np.tensordot(2*alphaD, np.ones(F.shape)) ).flatten())
 
 
 # set up gradient of cost:
