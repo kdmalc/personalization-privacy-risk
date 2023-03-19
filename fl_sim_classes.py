@@ -420,13 +420,14 @@ class Client(ModelBase, TrainingMethods):
         # Append (ROUND, COST) to the CLIENT error log
         local_loss = self.eval_model(which='local')
         self.local_error_log.append(local_loss)  # ((self.current_round, local_loss))
+        # Yes these should both be ifs, they may both need to run
         if self.global_method!="NoFL":
             global_loss = self.eval_model(which='global')
             self.global_error_log.append(global_loss)  # ((self.current_round, global_loss))
         if self.global_method=="APFL":
             pers_loss = self.eval_model(which='pers')
             self.personalized_error_log.append(pers_loss)  # ((self.current_round, pers_loss))
-        D = self.mixed_model if self.global_method=='APFL' else: self.w
+        D = self.mixed_model if self.global_method=='APFL' else self.w
         if self.track_cost_components:
             self.performance_log.append(self.alphaE*(np.linalg.norm((D@self.F + self.H@self.V[:,:-1] - self.V[:,1:]))**2))
             self.Dnorm_log.append(self.alphaD*(np.linalg.norm(D)**2))
@@ -565,6 +566,7 @@ class Client(ModelBase, TrainingMethods):
             if mu.imag < self.tol and mu.real < self.tol:
                 #mu = 0
                 # Implies it is not mu-strongly convex
+                print("mu is effectively 0... resetting to self.alphaD")
                 #raise ValueError("mu is 0")
                 
                 # Fudge factor... based off my closed form solution...
@@ -573,18 +575,16 @@ class Client(ModelBase, TrainingMethods):
             elif mu.imag < self.tol:
                 mu = mu.real
             elif mu.real < self.tol:
-                # I don't think this runs since you can't write to x.real
-                mu.real = 0
+                print("Setting to imaginary only")
+                mu = mu.imag
             L = np.amax(eigvals)  # L is the maximum eigvalue
             if L.imag < self.tol and L.real < self.tol:
-                L = 0
-                # Implies it is not L-smooth
-                raise ValueError("L is 0")
+                raise ValueError("L is 0, thus implying func is not L-smooth")
             elif mu.imag < self.tol:
                 L = L.real
             elif L.real < self.tol:
-                # Also don't think this will work but probably will never be called
-                L.real = 0
+                print("Setting to imaginary only")
+                L = L.imag
             if self.verbose:
                 print(f"ID: {self.ID}, L: {L}, mu: {mu}")
             kappa = L/mu
