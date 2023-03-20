@@ -90,10 +90,6 @@ class Server(ModelBase):
             self.K = len(self.chosen_clients_lst)
             # NOTE: TAU IS USED OVER CLIENT'S NUM_STEPS FOR APFL
             self.tau = num_steps
-            # This isn't a great solution since clients could join after this...
-            #for my_client in self.available_clients_lst:
-            #    my_client.tau = num_steps
-            # Just assume they're already set up correctly
 
                 
     # 0: Main Loop
@@ -304,7 +300,7 @@ class Server(ModelBase):
                                                                
 
 class Client(ModelBase, TrainingMethods):
-    def __init__(self, ID, w, method, local_data, data_stream, smoothbatch=1, current_round=0, PCA_comps=7, availability=1, global_method='FedAvg', normalize_dec=False, track_cost_components=True, gradient_clipping=False, clipping_threshold=100, tol=1e-10, adaptive=True, eta=1, track_gradient=True, num_steps=1, input_eta=False, safe_lr=False, delay_scaling=5, normalize_EMG=True, random_delays=False, download_delay=1, upload_delay=1, local_round_threshold=50, condition_number=0, verbose=False):
+    def __init__(self, ID, w, method, local_data, data_stream, smoothbatch=1, current_round=0, PCA_comps=7, availability=1, global_method='FedAvg', normalize_dec=False, track_cost_components=True, use_real_hess=False, gradient_clipping=False, clipping_threshold=100, tol=1e-10, adaptive=True, eta=1, track_gradient=True, num_steps=1, input_eta=False, safe_lr=False, delay_scaling=5, normalize_EMG=True, random_delays=False, download_delay=1, upload_delay=1, local_round_threshold=50, condition_number=0, verbose=False):
         super().__init__(ID, w, method, smoothbatch=smoothbatch, current_round=current_round, PCA_comps=PCA_comps, verbose=verbose, num_participants=14, log_init=0)
         '''
         Note self.smoothbatch gets overwritten according to the condition number!  
@@ -411,6 +407,10 @@ class Client(ModelBase, TrainingMethods):
         self.Vglobal = None
         #if self.global_method=='APFL':
         #    self.w = None  # This is a massive issue....
+        self.use_real_hess = use_real_hess
+        #
+        self.prev_update = None
+        self.prev_eigvals = None
                                                                
     # 0: Main Loop
     def execute_training_loop(self):
@@ -427,7 +427,7 @@ class Client(ModelBase, TrainingMethods):
         if self.global_method=="APFL":
             pers_loss = self.eval_model(which='pers')
             self.personalized_error_log.append(pers_loss)  # ((self.current_round, pers_loss))
-        D = self.mixed_model if self.global_method=='APFL' else self.w
+        D = self.mixed_w if self.global_method=='APFL' else self.w
         if self.track_cost_components:
             self.performance_log.append(self.alphaE*(np.linalg.norm((D@self.F + self.H@self.V[:,:-1] - self.V[:,1:]))**2))
             self.Dnorm_log.append(self.alphaD*(np.linalg.norm(D)**2))
@@ -468,7 +468,10 @@ class Client(ModelBase, TrainingMethods):
                 self.current_threshold += self.local_round_threshold
                 #self.current_threshold += self.current_threshold  # This is the "wrong" doubling version
                 
-                self.current_update += 1
+                ####################################################
+                self.prev_update = self.current_update
+                self.current_update = self.prev_update + 1
+                
                 self.update_transition_log.append(self.current_global_round)
                 if self.verbose==True and self.ID==1:
                     print(f"Client {self.ID}: New update after lrt passed: (new update, current global round, current local round): {self.current_update, self.current_global_round, self.current_round}")
@@ -493,7 +496,10 @@ class Client(ModelBase, TrainingMethods):
             #^Use only the second half of each update
             upper_bound = update_ix[self.current_update+1]
             self.learning_batch = upper_bound - lower_bound
-            self.current_update += 1
+            
+            ####################################################
+            self.prev_update = self.current_update
+            self.current_update = self.prev_update + 1
         else:
             raise ValueError('This data streaming functionality is not supported')
             
@@ -560,13 +566,23 @@ class Client(ModelBase, TrainingMethods):
         elif self.global_method=='APFL': 
             t = self.current_global_round  # Should this be global or local? Global based on how they wrote it...
             # Is it just F or did Cesar forget/ignore the other smaller terms?
-            # F.T@F is not symmetric, I don't think, so use eig not eigh
-            eigvals, _ = np.linalg.eig(self.F.T@self.F)  # eig returns (UNORDERED) eigvals, eigvecs
+            # F.T@F is not symmetric, so use eig not eigh
+            # eig returns (UNORDERED) eigvals, eigvecs
+            if self.use_real_hess:
+                if self.prev_update == self.current_update:
+                    # Note that this changes if you want to do SGD instead of GD
+                    eigvals = self.prev_eigvals
+                else:
+                    print(f"Client{self.ID}: Recalculating the Hessian for new update {self.current_update}!")
+                    eigvals, _ = np.linalg.eig(hessian_cost_l2(self.F, self.alphaD))
+                    self.prev_eigvals = eigvals
+            else:
+                eigvals, _ = np.linalg.eig(self.F.T@self.F)
             mu = np.amin(eigvals)  # Mu is the minimum eigvalue
             if mu.imag < self.tol and mu.real < self.tol:
                 #mu = 0
                 # Implies it is not mu-strongly convex
-                print("mu is effectively 0... resetting to self.alphaD")
+                #print(f"mu ({mu}) is effectively 0... resetting to self.alphaD: {self.alphaD}")
                 #raise ValueError("mu is 0")
                 
                 # Fudge factor... based off my closed form solution...
