@@ -569,13 +569,19 @@ class Client(ModelBase, TrainingMethods):
             # F.T@F is not symmetric, so use eig not eigh
             # eig returns (UNORDERED) eigvals, eigvecs
             if self.use_real_hess:
-                if self.prev_update == self.current_update:
+                # Need to be more clever here... for the first update it will not fire 
+                # Need a way to prevent recalculation for multisteps... 
+                #^ APFL is based on multi-iters, so rn we do 10 iters in a row before changing client
+                # May be better to check to see if the update is in the update_transition_log...
+                if self.prev_update == self.current_update:  # When is this condition ever true......
                     # Note that this changes if you want to do SGD instead of GD
                     eigvals = self.prev_eigvals
                 else:
                     print(f"Client{self.ID}: Recalculating the Hessian for new update {self.current_update}!")
                     eigvals, _ = np.linalg.eig(hessian_cost_l2(self.F, self.alphaD))
                     self.prev_eigvals = eigvals
+                    # Coping mechanism
+                    self.prev_update = self.current_update
             else:
                 eigvals, _ = np.linalg.eig(self.F.T@self.F)
             mu = np.amin(eigvals)  # Mu is the minimum eigvalue
