@@ -299,7 +299,7 @@ class Server(ModelBase):
                                                                
 
 class Client(ModelBase, TrainingMethods):
-    def __init__(self, ID, w, method, local_data, data_stream, smoothbatch=1, current_round=0, PCA_comps=7, availability=1, global_method='FedAvg', normalize_dec=False, track_cost_components=True, use_real_hess=False, gradient_clipping=False, clipping_threshold=100, tol=1e-10, adaptive=True, eta=1, track_gradient=True, num_steps=1, input_eta=False, safe_lr=False, delay_scaling=5, normalize_EMG=True, random_delays=False, download_delay=1, upload_delay=1, local_round_threshold=50, condition_number=0, verbose=False):
+    def __init__(self, ID, w, method, local_data, data_stream, smoothbatch=1, current_round=0, PCA_comps=7, availability=1, global_method='FedAvg', normalize_dec=False, normalize_EMG=True, track_cost_components=True, use_real_hess=False, gradient_clipping=False, clipping_threshold=100, tol=1e-10, adaptive=True, eta=1, track_gradient=True, num_steps=1, input_eta=False, safe_lr=False, delay_scaling=5, random_delays=False, download_delay=1, upload_delay=1, local_round_threshold=50, condition_number=0, verbose=False):
         super().__init__(ID, w, method, smoothbatch=smoothbatch, current_round=current_round, PCA_comps=PCA_comps, verbose=verbose, num_participants=14, log_init=0)
         '''
         Note self.smoothbatch gets overwritten according to the condition number!  
@@ -379,6 +379,8 @@ class Client(ModelBase, TrainingMethods):
         self.Dnorm_log = [0]
         self.Fnorm_log = [0]
         self.gradient_log = [0]
+        self.pers_gradient_log = [0]
+        self.global_gradient_log = [0]
         self.track_cost_components = track_cost_components
         self.track_gradient = track_gradient
         # APFL Stuff
@@ -408,7 +410,8 @@ class Client(ModelBase, TrainingMethods):
         #
         self.prev_update = None
         self.prev_eigvals = None
-                                                               
+            
+            
     # 0: Main Loop
     def execute_training_loop(self):
         self.simulate_data_stream()
@@ -434,11 +437,9 @@ class Client(ModelBase, TrainingMethods):
                 self.performance_log.append(self.alphaE*(np.linalg.norm((Dmixed@self.F + self.H@self.V[:,:-1] - self.V[:,1:]))**2))
                 self.Dnorm_log.append(self.alphaD*(np.linalg.norm(Dmixed)**2))
                 self.Fnorm_log.append(self.alphaF*(np.linalg.norm(self.F)**2))
-        if self.track_gradient:
+        if self.track_gradient==True and self.global_method!="APFL":
             # The gradient is a vector... So let's just save the L2 norm?
             self.gradient_log.append(np.linalg.norm(gradient_cost_l2(self.F, D, self.H, self.V, self.learning_batch, self.alphaF, self.alphaD, Ne=self.PCA_comps)))
-            if self.global_method=='APFL':
-                self.gradient_log.append(np.linalg.norm(gradient_cost_l2(self.F, Dmixed, self.H, self.Vmixed, self.learning_batch, self.alphaF, self.alphaD, Ne=self.PCA_comps)))
 
         
     def simulate_delay(self, incoming):
@@ -446,6 +447,7 @@ class Client(ModelBase, TrainingMethods):
             time.sleep(self.download_delay+random.random())
         else:
             time.sleep(self.upload_delay+random.random())
+            
             
     def simulate_data_stream(self, streaming_method=True):
         if streaming_method:
@@ -531,6 +533,7 @@ class Client(ModelBase, TrainingMethods):
                 # For V that is used with mixed I think it should actually be mixed.  Makes more sense
                 self.Vmixed = (p_reference - np.cumsum(self.mixed_w@s, axis=1)*self.dt)*self.dt
             self.D = copy.copy(self.w)
+    
     
     def train_model(self):
         D_0 = self.w_prev
@@ -643,6 +646,11 @@ class Client(ModelBase, TrainingMethods):
                     global_gradient = self.clipping_threshold*global_gradient/np.linalg.norm(global_gradient)
                 if np.linalg.norm(local_gradient) > self.clipping_threshold:
                     local_gradient = self.clipping_threshold*local_gradient/np.linalg.norm(local_gradient)
+            if self.track_gradient:
+                self.gradient_log.append(np.linalg.norm(gradient_cost_l2(self.F, self.w, self.H, self.V, self.learning_batch, self.alphaF, self.alphaD, Ne=self.PCA_comps)))
+                self.pers_gradient_log.append(np.linalg.norm(local_gradient))
+                # ^ Local gradient is evaluated wrt mixed inputs (eg w and V)
+                self.global_gradient_log.append(np.linalg.norm(global_gradient))
                 
             ########################################
             # Or should I normalize the dec here?  I'll also turn this on since idc about computational speed rn
@@ -669,13 +677,15 @@ class Client(ModelBase, TrainingMethods):
         #self.pers_dec_log.append(self.mixed_w)
         #self.global_dec_log.append(self.global_w)
         
+        
     def eval_model(self, which):
         if which=='local':
             my_dec = self.w
             my_V = self.V
         elif which=='global':
             my_dec = self.global_w
-            my_V = self.Vglobal
+            # self.V for non APFL case, only APFL defines Vglobal, as of 3/21
+            my_V = self.Vglobal if self.global_method=='APFL' else self.V
         elif which=='pers' and self.global_method=='APFL':
             my_dec = self.mixed_w
             my_V = self.Vmixed
@@ -700,7 +710,8 @@ class Client(ModelBase, TrainingMethods):
         else:
             #test_dec is whatever you input, presumably a matrix... probably should check
             test_dec = test_current_dec
-            if np.prod(test_dec.shape)!=(self.PCA_comps*2)
+            if np.prod(test_dec.shape)!=(self.PCA_comps*2):
+                raise ValueError(f"Unexpected size of test_current_dec: {np.prod(test_dec.shape)} vs {self.PCA_comps*2} expected")
         
         # This sets FVD using the full client dataset
         # Since we aren't doing any optimization then it shouldn't matter if we use updates or not...
@@ -716,7 +727,7 @@ class Client(ModelBase, TrainingMethods):
 
 
 # Add this as a static method?
-def condensed_external_plotting(input_data, version, exclusion_ID_lst=[], dim_reduc_factor=10, plot_gradient=False, global_error=True, local_error=True, pers_error=False, different_local_round_thresh_per_client=False, legend_on=False, plot_performance=False, plot_Dnorm=False, plot_Fnorm=False, num_participants=14, show_update_change=False, custom_title="", ylim=-1):
+def condensed_external_plotting(input_data, version, exclusion_ID_lst=[], dim_reduc_factor=10, plot_gradient=False, plot_pers_gradient=False, plot_global_gradient=False, global_error=True, local_error=True, pers_error=False, different_local_round_thresh_per_client=False, legend_on=False, plot_performance=False, plot_Dnorm=False, plot_Fnorm=False, num_participants=14, show_update_change=False, custom_title="", ylim=-1):
     id2color = {0:'lightcoral', 1:'maroon', 2:'chocolate', 3:'darkorange', 4:'gold', 5:'olive', 6:'olivedrab', 
             7:'lawngreen', 8:'aquamarine', 9:'deepskyblue', 10:'steelblue', 11:'violet', 12:'darkorchid', 13:'deeppink'}
     
@@ -802,7 +813,17 @@ def condensed_external_plotting(input_data, version, exclusion_ID_lst=[], dim_re
                     df = pd.DataFrame(user_database[i].gradient_log)
                     df.reset_index(inplace=True)
                     df10 = df.groupby(df.index//dim_reduc_factor, axis=0).mean()
-                    plt.plot(df10.values[1:, 0], df10.values[1:, 1], color=id2color[user_database[i].ID], linewidth=2, label=f"User{user_database[i].ID} Gradient")
+                    plt.plot(df10.values[1:, 0], df10.values[1:, 1], color=id2color[user_database[i].ID], linewidth=2, label=f"User{user_database[i].ID} Local Gradient")
+                if plot_pers_gradient:
+                    df = pd.DataFrame(user_database[i].pers_gradient_log)
+                    df.reset_index(inplace=True)
+                    df10 = df.groupby(df.index//dim_reduc_factor, axis=0).mean()
+                    plt.plot(df10.values[1:, 0], df10.values[1:, 1], color=id2color[user_database[i].ID], linewidth=2, label=f"User{user_database[i].ID} Pers Gradient")
+                if plot_global_gradient:
+                    df = pd.DataFrame(user_database[i].global_gradient_log)
+                    df.reset_index(inplace=True)
+                    df10 = df.groupby(df.index//dim_reduc_factor, axis=0).mean()
+                    plt.plot(df10.values[1:, 0], df10.values[1:, 1], color=id2color[user_database[i].ID], linewidth=2, label=f"User{user_database[i].ID} Global Gradient")
                 #if different_local_round_thresh_per_client:
                 #    print("DIFFERENT LOCAL THRESH FOR EACH CLIENT")
                 #    if user_lst[i].data_stream == 'streaming':
@@ -862,7 +883,7 @@ def condensed_external_plotting(input_data, version, exclusion_ID_lst=[], dim_re
         plt.legend()
     plt.show()
     
-        
+    
 # Code for saving data needed for running sims
 #cond0_dict_list = [0]*num_participants
 #for idx in range(num_participants):
