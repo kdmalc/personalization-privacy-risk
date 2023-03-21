@@ -167,7 +167,7 @@ class Server(ModelBase):
         # Reset all clients so no one is chosen for the next round
         for my_client in self.all_clients:  # Would it be better to use just the chosen_clients or do all_clients?
             if type(my_client)==int:
-                raise("All my clients are all integers...")
+                raise TypeError("All my clients are all integers...")
             my_client.chosen_status = 0
         
     # 1.1
@@ -179,7 +179,6 @@ class Server(ModelBase):
                 self.available_clients_lst[idx] = my_client
                 self.num_avail_clients += 1
                 if init:
-                    #if self.method != 'NoFL':
                     # Pass down the global METHOD (NOT THE WEIGHTS!!)
                     my_client.global_method = self.method
     
@@ -191,7 +190,7 @@ class Server(ModelBase):
         if self.num_avail_clients > 0:
             self.num_chosen_clients = int(np.ceil(self.num_avail_clients*self.C))
             if self.num_chosen_clients<1:
-                raise(f"ERROR: Chose {self.num_chosen_clients} clients for some reason, must choose more than 1")
+                raise ValueError(f"ERROR: Chose {self.num_chosen_clients} clients for some reason, must choose more than 1")
             # Right now it chooses 2 at random: 14*.1=1.4 --> 2
             self.chosen_clients_lst = random.sample(self.available_clients_lst, len(self.available_clients_lst))[:self.num_chosen_clients]
             for my_client in self.chosen_clients_lst:
@@ -242,7 +241,7 @@ class Server(ModelBase):
         # Append (ID, COST) to SERVER'S error log.  
         #  Note that round is implicit, it is just the index of the error log
         if self.local_error_log==self.init_lst:
-            # Overwrite the [(0,0)] hold
+            # Overwrite the [(0,0)] hold... why not just init to this then...
             self.local_error_log = []
             self.local_error_log.append(current_local_lst)
         else:
@@ -335,7 +334,6 @@ class Client(ModelBase, TrainingMethods):
         # Number of gradient steps to take when training (eg amount of local computation)
         self.num_steps = num_steps
         # GLOBAL STUFF
-        self.global_w = None
         self.global_method = global_method
         # UPDATE STUFF
         if self.global_method=='NoFL':
@@ -368,7 +366,7 @@ class Client(ModelBase, TrainingMethods):
             self.alphaD = 1e-3
         else:
             print("That condition number is not yet supported")
-        if smoothbatch=='off':
+        if type(smoothbatch)==str and smoothbatch.upper()=='OFF':
             self.smoothbatch = 1  # AKA Use only the new dec, no mixing
         # PLOTTING
         # ^Eg the local round is implicit, it can't have a skip in round
@@ -420,7 +418,7 @@ class Client(ModelBase, TrainingMethods):
         # Append (ROUND, COST) to the CLIENT error log
         local_loss = self.eval_model(which='local')
         self.local_error_log.append(local_loss)  # ((self.current_round, local_loss))
-        # Yes these should both be ifs, they may both need to run
+        # Yes these should both be ifs not elif, they may both need to run
         if self.global_method!="NoFL":
             global_loss = self.eval_model(which='global')
             self.global_error_log.append(global_loss)  # ((self.current_round, global_loss))
@@ -450,23 +448,20 @@ class Client(ModelBase, TrainingMethods):
         self.current_round += 1
         if self.current_update==16:  #17: previously 17 but the last update is super short so I cut it out
             #print("Maxxed out your update (you are on update 18), continuing training on last update only")
-            # Probably ought to track that we maxed out
-            #lower_bound = update_ix[-2]  
-            # ^Used to be 0 (e.g. full dataset instead of last update), saw bad behaviour...
+            # Probably ought to track that we maxed out --> LOG SYSTEM
             # We are stopping an update early, so use -3/-2 and not -2/-1 (the last update)
             lower_bound = (update_ix[-3] + update_ix[-2])//2  #Use only the second half of each update
             upper_bound = update_ix[-2]
             self.learning_batch = upper_bound - lower_bound
         elif streaming_method=='full_data':
-            #print("FULL")
             lower_bound = update_ix[0]  # Starts at 0 and not update 10, for now
             upper_bound = update_ix[-1]
             self.learning_batch = upper_bound - lower_bound
         elif streaming_method=='streaming':
-            #print("STREAMING")
+            # If we pass threshold, move on to the next update
+            # Why don't I just use modulus here?
             if self.current_round >= self.current_threshold:
                 self.current_threshold += self.local_round_threshold
-                #self.current_threshold += self.current_threshold  # This is the "wrong" doubling version
                 
                 ####################################################
                 self.prev_update = self.current_update
@@ -481,19 +476,18 @@ class Client(ModelBase, TrainingMethods):
                 lower_bound = (update_ix[self.current_update] + update_ix[self.current_update+1])//2  
                 upper_bound = update_ix[self.current_update+1]
                 self.learning_batch = upper_bound - lower_bound
-            elif self.current_round>2:  # Allow the init condition to still run
+            elif self.current_round>2:
+                # This is the base case
                 # The update number didn't change so we don't need to overwrite everything with the same data
                 need_to_advance = False
             else:
-                # Using only the second half of each update for co-adaptivity reasons
+                # This is for the init case (current round is 0 or 1)
+                # need_to_advance is true, so we overwrite s and such... this is fine 
                 lower_bound = (update_ix[self.current_update] + update_ix[self.current_update+1])//2  
                 upper_bound = update_ix[self.current_update+1]
                 self.learning_batch = upper_bound - lower_bound
         elif streaming_method=='advance_each_iter':
-            #print("ADVANCE")
-            #lower_bound = update_ix[self.current_update]
             lower_bound = (update_ix[self.current_update] + update_ix[self.current_update+1])//2  
-            #^Use only the second half of each update
             upper_bound = update_ix[self.current_update+1]
             self.learning_batch = upper_bound - lower_bound
             
@@ -501,12 +495,13 @@ class Client(ModelBase, TrainingMethods):
             self.prev_update = self.current_update
             self.current_update = self.prev_update + 1
         else:
-            raise ValueError('This data streaming functionality is not supported')
+            raise ValueError(f'streaming_method ("{streaming_method}") not recognized: this data streaming functionality is not supported')
             
         if need_to_advance:
             s_temp = self.training_data[lower_bound:upper_bound,:]
             # First, normalize the entire s matrix
             # Hope is that this will prevent FF.T from being massive in APFL
+            # Well, did it work? _____
             if self.normalize_EMG:
                 s_normed = s_temp/np.amax(s_temp)
             else:
@@ -522,11 +517,10 @@ class Client(ModelBase, TrainingMethods):
             p_reference = np.transpose(self.labels[lower_bound:upper_bound,:])
             # Now set the values used in the cost function
             self.F = s[:,:-1] # note: truncate F for estimate_decoder
-            #self.V = (np.transpose(self.labels[lower_bound:upper_bound,:]) - np.cumsum(self.w@s, axis=1)*self.dt)*self.dt
             self.V = (p_reference - p_actual)*self.dt
             if self.global_method=='APFL':
-                self.Vglobal = (np.transpose(self.labels[lower_bound:upper_bound,:]) - np.cumsum(self.global_w@s, axis=1)*self.dt)*self.dt
-                self.Vlocal = (np.transpose(self.labels[lower_bound:upper_bound,:]) - np.cumsum(self.local_w@s, axis=1)*self.dt)*self.dt
+                self.Vglobal = (p_reference - np.cumsum(self.global_w@s, axis=1)*self.dt)*self.dt
+                self.Vlocal = (p_reference - np.cumsum(self.local_w@s, axis=1)*self.dt)*self.dt
                 #^ Should this be local or mixed? I think local... even though it is evaluated at the mixed dec... not sure
             self.D = copy.copy(self.w)
     
@@ -565,14 +559,11 @@ class Client(ModelBase, TrainingMethods):
             self.w = self.smoothbatch*self.w + ((1 - self.smoothbatch)*self.w_prev)
         elif self.global_method=='APFL': 
             t = self.current_global_round  # Should this be global or local? Global based on how they wrote it...
-            # Is it just F or did Cesar forget/ignore the other smaller terms?
             # F.T@F is not symmetric, so use eig not eigh
             # eig returns (UNORDERED) eigvals, eigvecs
             if self.use_real_hess:
-                # Need to be more clever here... for the first update it will not fire 
-                # Need a way to prevent recalculation for multisteps... 
-                #^ APFL is based on multi-iters, so rn we do 10 iters in a row before changing client
                 # May be better to check to see if the update is in the update_transition_log...
+                # Should also just be able to use self.current_update%self.local_round_threshold or something
                 if self.prev_update == self.current_update:  # When is this condition ever true......
                     # Note that this changes if you want to do SGD instead of GD
                     eigvals = self.prev_eigvals
@@ -583,21 +574,18 @@ class Client(ModelBase, TrainingMethods):
                     # Coping mechanism
                     self.prev_update = self.current_update
             else:
+                # I think this is permaneantly wrong... just remove?
                 eigvals, _ = np.linalg.eig(self.F.T@self.F)
             mu = np.amin(eigvals)  # Mu is the minimum eigvalue
             if mu.imag < self.tol and mu.real < self.tol:
-                #mu = 0
-                # Implies it is not mu-strongly convex
-                #print(f"mu ({mu}) is effectively 0... resetting to self.alphaD: {self.alphaD}")
-                #raise ValueError("mu is 0")
-                
+                raise ValueError("mu is ~0, thus implying func is not mu-SC")
                 # Fudge factor... based off my closed form solution...
                 # Really ought to create a log file/system
                 mu = self.alphaD
             elif mu.imag < self.tol:
                 mu = mu.real
             elif mu.real < self.tol:
-                print("Setting to imaginary only")
+                print("Setting to imaginary only")  # This is an issue if this runs
                 mu = mu.imag
             L = np.amax(eigvals)  # L is the maximum eigvalue
             if L.imag < self.tol and L.real < self.tol:
@@ -605,10 +593,11 @@ class Client(ModelBase, TrainingMethods):
             elif mu.imag < self.tol:
                 L = L.real
             elif L.real < self.tol:
-                print("Setting to imaginary only")
+                print("Setting to imaginary only")  # This is an issue if this runs
                 L = L.imag
-            if self.verbose:
-                print(f"ID: {self.ID}, L: {L}, mu: {mu}")
+            if self.verbose: 
+                # Find a better way to print this out without spamming the console...
+                print(f"Client{self.ID}: L: {L}, mu: {mu}")
             kappa = L/mu
             a = np.max([128*kappa, self.tau])
             eta_t = 16 / (mu*(t+a))
@@ -617,18 +606,20 @@ class Client(ModelBase, TrainingMethods):
                     raise ValueError("Cannot input eta AND use safe learning rate (they overwrite each other)")
                 eta_t = self.eta
             elif self.safe_lr!=False:
+                # Really ought to change safe_lr to input/manual_safe_lr...
+                print("Forcing eta_t to be based on the input safe lr factor")
+                # This is only subtly different from just inputting eta... a little more dynamic ig
                 eta_t = 1/(self.safe_lr*L)
             elif eta_t >= 1/(2*L):
                 # Note that we only check when automatically setting
                 # ie if you manually input it will do whatever you tell it to do
                 raise ValueError("Learning rate is too large according to constaints on GD")
             if self.verbose:
-                print(f"ID: {self.ID}, eta_t: {eta_t}")
-                print()
+                print(f"Client{self.ID}: eta_t: {eta_t}")
             self.p.append((t+a)**2)
             
             if self.adaptive:
-                self.adap_alpha.append(self.adap_alpha[-1] - eta_t*np.inner(np.reshape((self.local_w-self.global_w), (self.PCA_comps*2)), np.reshape(gradient_cost_l2(self.F, self.mixed_w, self.H, self.V, self.learning_batch, self.alphaF, self.alphaD, Ne=self.PCA_comps), (2*self.PCA_comps,))))
+                self.adap_alpha.append(self.adap_alpha[-1] - eta_t*np.inner(np.reshape((self.local_w-self.global_w), (self.PCA_comps*2)), np.reshape(gradient_cost_l2(self.F, self.mixed_w, self.H, self.V, self.learning_batch, self.alphaF, self.alphaD, Ne=self.PCA_comps), (2*self.PCA_comps))))
                 # This is theoretically the same but I'm not sure what grad_alpha means
                 #self.sus_adap_alpha.append() ... didn't write yet
 
@@ -671,14 +662,12 @@ class Client(ModelBase, TrainingMethods):
     def eval_model(self, which):
         if which=='local':
             my_dec = self.w
-            #my_error_log = self.local_error_log
         elif which=='global':
             my_dec = self.global_w
-            #my_error_log = self.global_error_log
         elif which=='pers' and self.global_method=='APFL':
             my_dec = self.mixed_w
         else:
-            print("Please set <which> to either local or global")
+            raise ValueError("Please set <which> to either local or global")
         # Just did this so we wouldn't have the 14 decimals points it always tries to give
         if self.round2int:
             temp = np.ceil(cost_l2(self.F, my_dec, self.H, self.V, self.learning_batch, self.alphaF, self.alphaD))
@@ -693,8 +682,10 @@ class Client(ModelBase, TrainingMethods):
     def test_inference(self, test_dec=True):
         ''' No training / optimization, this just tests the fed in dec '''
         
-        if test_dec:
+        if test_dec==True:
             test_dec = self.w
+        # else test_dec is whatever you input, presumably a matrix... probably should check
+        
         # This sets FVD using the full client dataset
         # Since we aren't doing any optimization then it shouldn't matter if we use updates or not...
         simulate_data_stream(streaming_method='full_data')
