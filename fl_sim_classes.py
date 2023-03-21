@@ -369,7 +369,8 @@ class Client(ModelBase, TrainingMethods):
         if type(smoothbatch)==str and smoothbatch.upper()=='OFF':
             self.smoothbatch = 1  # AKA Use only the new dec, no mixing
         # PLOTTING
-        # ^Eg the local round is implicit, it can't have a skip in round
+        self.pers_dec_log = []
+        self.global_dec_log = []
         # Overwrite the logs since global and local track in slightly different ways
         self.local_error_log = [0]
         self.global_error_log = [0]
@@ -386,7 +387,7 @@ class Client(ModelBase, TrainingMethods):
         self.running_pers_term = 0
         self.running_global_term = 0
         self.global_w = copy.copy(self.w)
-        self.local_w = copy.copy(self.w)
+        #self.local_w = copy.copy(self.w)
         self.mixed_w = copy.copy(self.w)
         self.adaptive = adaptive
         #They observed best results with 0.25, but initialized adap_alpha to 0.01 for the adaptive case
@@ -394,14 +395,12 @@ class Client(ModelBase, TrainingMethods):
             self.adap_alpha = [0.01]  
         else:
             self.adap_alpha = [0.25] 
-        self.final_personalized_w = None
-        self.final_global_w = None
         self.tau = self.num_steps
         self.p = [0]
         self.safe_lr = safe_lr
         self.gradient_clipping = gradient_clipping
         self.clipping_threshold = clipping_threshold
-        self.Vlocal = None
+        self.Vmixed = None
         self.Vglobal = None
         #if self.global_method=='APFL':
         #    self.w = None  # This is a massive issue....
@@ -417,22 +416,29 @@ class Client(ModelBase, TrainingMethods):
         
         # Append (ROUND, COST) to the CLIENT error log
         local_loss = self.eval_model(which='local')
-        self.local_error_log.append(local_loss)  # ((self.current_round, local_loss))
+        self.local_error_log.append(local_loss)
         # Yes these should both be ifs not elif, they may both need to run
         if self.global_method!="NoFL":
             global_loss = self.eval_model(which='global')
-            self.global_error_log.append(global_loss)  # ((self.current_round, global_loss))
+            self.global_error_log.append(global_loss)
         if self.global_method=="APFL":
             pers_loss = self.eval_model(which='pers')
-            self.personalized_error_log.append(pers_loss)  # ((self.current_round, pers_loss))
-        D = self.mixed_w if self.global_method=='APFL' else self.w
+            self.personalized_error_log.append(pers_loss)
+        D = self.w
+        Dmixed = self.mixed_w
         if self.track_cost_components:
             self.performance_log.append(self.alphaE*(np.linalg.norm((D@self.F + self.H@self.V[:,:-1] - self.V[:,1:]))**2))
             self.Dnorm_log.append(self.alphaD*(np.linalg.norm(D)**2))
             self.Fnorm_log.append(self.alphaF*(np.linalg.norm(self.F)**2))
+            if self.global_method=='APFL':
+                self.performance_log.append(self.alphaE*(np.linalg.norm((Dmixed@self.F + self.H@self.V[:,:-1] - self.V[:,1:]))**2))
+                self.Dnorm_log.append(self.alphaD*(np.linalg.norm(Dmixed)**2))
+                self.Fnorm_log.append(self.alphaF*(np.linalg.norm(self.F)**2))
         if self.track_gradient:
             # The gradient is a vector... So let's just save the L2 norm?
             self.gradient_log.append(np.linalg.norm(gradient_cost_l2(self.F, D, self.H, self.V, self.learning_batch, self.alphaF, self.alphaD, Ne=self.PCA_comps)))
+            if self.global_method=='APFL':
+                self.gradient_log.append(np.linalg.norm(gradient_cost_l2(self.F, Dmixed, self.H, self.Vmixed, self.learning_batch, self.alphaF, self.alphaD, Ne=self.PCA_comps)))
 
         
     def simulate_delay(self, incoming):
@@ -520,8 +526,10 @@ class Client(ModelBase, TrainingMethods):
             self.V = (p_reference - p_actual)*self.dt
             if self.global_method=='APFL':
                 self.Vglobal = (p_reference - np.cumsum(self.global_w@s, axis=1)*self.dt)*self.dt
-                self.Vlocal = (p_reference - np.cumsum(self.local_w@s, axis=1)*self.dt)*self.dt
+                #self.Vlocal = (p_reference - np.cumsum(self.w@s, axis=1)*self.dt)*self.dt  # Here, Vlocal is just self.V! Same eqn
                 #^ Should this be local or mixed? I think local... even though it is evaluated at the mixed dec... not sure
+                # For V that is used with mixed I think it should actually be mixed.  Makes more sense
+                self.Vmixed = (p_reference - np.cumsum(self.mixed_w@s, axis=1)*self.dt)*self.dt
             self.D = copy.copy(self.w)
     
     def train_model(self):
@@ -619,7 +627,7 @@ class Client(ModelBase, TrainingMethods):
             self.p.append((t+a)**2)
             
             if self.adaptive:
-                self.adap_alpha.append(self.adap_alpha[-1] - eta_t*np.inner(np.reshape((self.local_w-self.global_w), (self.PCA_comps*2)), np.reshape(gradient_cost_l2(self.F, self.mixed_w, self.H, self.V, self.learning_batch, self.alphaF, self.alphaD, Ne=self.PCA_comps), (2*self.PCA_comps))))
+                self.adap_alpha.append(self.adap_alpha[-1] - eta_t*np.inner(np.reshape((self.w-self.global_w), (self.PCA_comps*2)), np.reshape(gradient_cost_l2(self.F, self.mixed_w, self.H, self.Vmixed, self.learning_batch, self.alphaF, self.alphaD, Ne=self.PCA_comps), (2*self.PCA_comps))))
                 # This is theoretically the same but I'm not sure what grad_alpha means
                 #self.sus_adap_alpha.append() ... didn't write yet
 
@@ -628,7 +636,7 @@ class Client(ModelBase, TrainingMethods):
             # I think the grads really ought to be reshaping this automatically, not sure why it's not
             
             global_gradient = np.reshape(gradient_cost_l2(self.F, self.global_w, self.H, self.Vglobal, self.learning_batch, self.alphaF, self.alphaD, Ne=self.PCA_comps), (2, self.PCA_comps))
-            local_gradient = np.reshape(gradient_cost_l2(self.F, self.mixed_w, self.H, self.Vlocal, self.learning_batch, self.alphaF, self.alphaD, Ne=self.PCA_comps), (2, self.PCA_comps))
+            local_gradient = np.reshape(gradient_cost_l2(self.F, self.mixed_w, self.H, self.Vmixed, self.learning_batch, self.alphaF, self.alphaD, Ne=self.PCA_comps), (2, self.PCA_comps))
             # Gradient clipping
             if self.gradient_clipping:
                 if np.linalg.norm(global_gradient) > self.clipping_threshold:
@@ -640,51 +648,59 @@ class Client(ModelBase, TrainingMethods):
             # Or should I normalize the dec here?  I'll also turn this on since idc about computational speed rn
             if self.normalize_dec:
                 self.global_w /= np.amax(self.global_w)
-                self.local_w /= np.amax(self.local_w)
+                self.w /= np.amax(self.w)
                 self.mixed_w /= np.amax(self.mixed_w)
             ########################################
             
             # PSEUDOCODE: my_client.global_w -= my_client.eta * grad(f_i(my_client.global_w; my_client.smallChi))
             self.global_w -= eta_t * global_gradient
             # PSEUDOCODE: my_client.local_w -= my_client.eta * grad_v(f_i(my_client.v_bar; my_client.smallChi))
-            self.local_w -= eta_t * local_gradient
-            self.mixed_w = self.adap_alpha[-1]*self.local_w - (1 - self.adap_alpha[-1])*self.global_w
+            self.w -= eta_t * local_gradient
+            self.mixed_w = self.adap_alpha[-1]*self.w - (1 - self.adap_alpha[-1])*self.global_w
             ########################################
             # Or should I normalize the dec here?  I'll also turn this on since idc about computational speed rn
             if self.normalize_dec:
                 self.global_w /= np.amax(self.global_w)
-                self.local_w /= np.amax(self.local_w)
+                self.w /= np.amax(self.w)
                 self.mixed_w /= np.amax(self.mixed_w)
             ########################################
         # Save the new decoder to the log
-        self.dec_log.append(self.mixed_w)
+        #self.dec_log.append(self.w)
+        #self.pers_dec_log.append(self.mixed_w)
+        #self.global_dec_log.append(self.global_w)
         
     def eval_model(self, which):
         if which=='local':
             my_dec = self.w
+            my_V = self.V
         elif which=='global':
             my_dec = self.global_w
+            my_V = self.Vglobal
         elif which=='pers' and self.global_method=='APFL':
             my_dec = self.mixed_w
+            my_V = self.Vmixed
         else:
             raise ValueError("Please set <which> to either local or global")
         # Just did this so we wouldn't have the 14 decimals points it always tries to give
         if self.round2int:
-            temp = np.ceil(cost_l2(self.F, my_dec, self.H, self.V, self.learning_batch, self.alphaF, self.alphaD))
+            temp = np.ceil(cost_l2(self.F, my_dec, self.H, my_V, self.learning_batch, self.alphaF, self.alphaD))
             # Setting to int is just to catch overflow errors
             # For RT considerations, ints are also generally ints cheaper than floats...
             out = int(temp)
         else:
-            temp = cost_l2(self.F, my_dec, self.H, self.V, self.learning_batch, self.alphaF, self.alphaD, Ne=self.PCA_comps)
+            temp = cost_l2(self.F, my_dec, self.H, my_V, self.learning_batch, self.alphaF, self.alphaD, Ne=self.PCA_comps)
             out = round(temp, 3)
         return out
         
-    def test_inference(self, test_dec=True):
+    def test_inference(self, test_current_dec=True):
         ''' No training / optimization, this just tests the fed in dec '''
         
-        if test_dec==True:
+        if test_current_dec==True:
             test_dec = self.w
-        # else test_dec is whatever you input, presumably a matrix... probably should check
+        else:
+            #test_dec is whatever you input, presumably a matrix... probably should check
+            test_dec = test_current_dec
+            if np.prod(test_dec.shape)!=(self.PCA_comps*2)
         
         # This sets FVD using the full client dataset
         # Since we aren't doing any optimization then it shouldn't matter if we use updates or not...
