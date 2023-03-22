@@ -1,7 +1,6 @@
 .ipynb_checkpoints
 __pycache__
-000_cphs2022.ipynb
-001_Simulations.ipynb
+00*.ipynb
 Data
 *.csv
 *.pkl
