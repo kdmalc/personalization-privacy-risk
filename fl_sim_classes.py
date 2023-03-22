@@ -771,6 +771,9 @@ def condensed_external_plotting(input_data, version, exclusion_ID_lst=[], dim_re
         # Skip over users that distort the scale
         if user_database[i].ID in exclusion_ID_lst:
             continue 
+        elif len(user_database[i].local_error_log)<2:
+            # This node never trained so just skip it so it doesn't break the plotting
+            continue 
         else: 
             # This is used for plotting later
             if len(user_database[i].local_error_log) > running_max:
