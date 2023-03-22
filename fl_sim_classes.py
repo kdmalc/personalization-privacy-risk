@@ -433,12 +433,13 @@ class Client(ModelBase, TrainingMethods):
         D = self.w
         Dmixed = self.mixed_w
         if self.track_cost_components:
-            self.performance_log.append(self.alphaE*(np.linalg.norm((D@self.F + self.H@self.V[:,:-1] - self.V[:,1:]))**2))
-            self.Dnorm_log.append(self.alphaD*(np.linalg.norm(D)**2))
-            self.Fnorm_log.append(self.alphaF*(np.linalg.norm(self.F)**2))
             if self.global_method=='APFL':
                 self.performance_log.append(self.alphaE*(np.linalg.norm((Dmixed@self.F + self.H@self.V[:,:-1] - self.V[:,1:]))**2))
                 self.Dnorm_log.append(self.alphaD*(np.linalg.norm(Dmixed)**2))
+                self.Fnorm_log.append(self.alphaF*(np.linalg.norm(self.F)**2))
+            else:
+                self.performance_log.append(self.alphaE*(np.linalg.norm((D@self.F + self.H@self.V[:,:-1] - self.V[:,1:]))**2))
+                self.Dnorm_log.append(self.alphaD*(np.linalg.norm(D)**2))
                 self.Fnorm_log.append(self.alphaF*(np.linalg.norm(self.F)**2))
         if self.track_gradient==True and self.global_method!="APFL":
             # The gradient is a vector... So let's just save the L2 norm?
