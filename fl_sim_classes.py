@@ -299,7 +299,7 @@ class Server(ModelBase):
                                                                
 
 class Client(ModelBase, TrainingMethods):
-    def __init__(self, ID, w, method, local_data, data_stream, smoothbatch=1, current_round=0, PCA_comps=7, availability=1, global_method='FedAvg', normalize_dec=False, normalize_EMG=True, track_cost_components=True, track_lr_comps=True, use_real_hess=False, gradient_clipping=False, clipping_threshold=100, tol=1e-10, adaptive=True, eta=1, track_gradient=True, num_steps=1, input_eta=False, safe_lr_factor=False, delay_scaling=5, random_delays=False, download_delay=1, upload_delay=1, local_round_threshold=50, condition_number=0, verbose=False):
+    def __init__(self, ID, w, method, local_data, data_stream, smoothbatch=1, current_round=0, PCA_comps=7, availability=1, global_method='FedAvg', normalize_dec=False, normalize_EMG=True, track_cost_components=True, track_lr_comps=True, use_real_hess=True, gradient_clipping=False, clipping_threshold=100, tol=1e-10, adaptive=True, eta=1, track_gradient=True, num_steps=1, input_eta=False, safe_lr_factor=False, delay_scaling=5, random_delays=False, download_delay=1, upload_delay=1, local_round_threshold=50, condition_number=0, verbose=False):
         super().__init__(ID, w, method, smoothbatch=smoothbatch, current_round=current_round, PCA_comps=PCA_comps, verbose=verbose, num_participants=14, log_init=0)
         '''
         Note self.smoothbatch gets overwritten according to the condition number!  
@@ -587,15 +587,9 @@ class Client(ModelBase, TrainingMethods):
                     self.prev_eigvals = eigvals
                     # Coping mechanism
                     self.prev_update = self.current_update
-            else:
-                # I think this is permaneantly wrong... just remove?
-                eigvals, _ = np.linalg.eig(self.F.T@self.F)
             mu = np.amin(eigvals)  # Mu is the minimum eigvalue
             if mu.imag < self.tol and mu.real < self.tol:
                 raise ValueError("mu is ~0, thus implying func is not mu-SC")
-                # Fudge factor... based off my closed form solution...
-                # Really ought to create a log file/system
-                mu = self.alphaD
             elif mu.imag < self.tol:
                 mu = mu.real
             elif mu.real < self.tol:
@@ -610,7 +604,7 @@ class Client(ModelBase, TrainingMethods):
                 print("Setting to imaginary only")  # This is an issue if this runs
                 L = L.imag
             if self.verbose: 
-                # Find a better way to print this out without spamming the console...
+                # Find a better way to print this out without spamming the console... eg log file...
                 print(f"Client{self.ID}: L: {L}, mu: {mu}")
             kappa = L/mu
             a = np.max([128*kappa, self.tau])
@@ -787,48 +781,48 @@ def condensed_external_plotting(input_data, version, exclusion_ID_lst=[], dim_re
                     df = pd.DataFrame(user_database[i].global_error_log)
                     df.reset_index(inplace=True)
                     df10 = df.groupby(df.index//dim_reduc_factor, axis=0).mean()
-                    plt.plot(df10.values[1:, 0], df10.values[1:, 1], color=id2color[user_database[i].ID], linewidth=global_linewidth, alpha=global_alpha)
+                    plt.plot(df10.values[:, 0], df10.values[:, 1], color=id2color[user_database[i].ID], linewidth=global_linewidth, alpha=global_alpha)
                 if local_error:
                     df = pd.DataFrame(user_database[i].local_error_log)
                     df.reset_index(inplace=True)
                     df10 = df.groupby(df.index//dim_reduc_factor, axis=0).mean()
-                    plt.plot(df10.values[1:, 0], df10.values[1:, 1], color=id2color[user_database[i].ID], linewidth=local_linewidth)
+                    plt.plot(df10.values[:, 0], df10.values[:, 1], color=id2color[user_database[i].ID], linewidth=local_linewidth)
                 if pers_error:
                     df = pd.DataFrame(user_database[i].personalized_error_log)
                     df.reset_index(inplace=True)
                     df10 = df.groupby(df.index//dim_reduc_factor, axis=0).mean()
-                    plt.plot(df10.values[1:, 0], df10.values[1:, 1], color=id2color[user_database[i].ID], linewidth=pers_linewidth, linestyle="--")
+                    plt.plot(df10.values[:, 0], df10.values[:, 1], color=id2color[user_database[i].ID], linewidth=pers_linewidth, linestyle="--")
                 # NOT THE COST FUNC, THESE ARE THE INDIVIDUAL COMPONENTS OF IT
                 if plot_performance:
                     df = pd.DataFrame(user_database[i].performance_log)
                     df.reset_index(inplace=True)
                     df10 = df.groupby(df.index//dim_reduc_factor, axis=0).mean()
-                    plt.plot(df10.values[1:, 0], df10.values[1:, 1], color=id2color[user_database[i].ID], linewidth=pers_linewidth, label=f"User{user_database[i].ID} Performance")
+                    plt.plot(df10.values[:, 0], df10.values[:, 1], color=id2color[user_database[i].ID], linewidth=pers_linewidth, label=f"User{user_database[i].ID} Performance")
                 if plot_Dnorm:
                     df = pd.DataFrame(user_database[i].Dnorm_log)
                     df.reset_index(inplace=True)
                     df10 = df.groupby(df.index//dim_reduc_factor, axis=0).mean()
-                    plt.plot(df10.values[1:, 0], df10.values[1:, 1], color=id2color[user_database[i].ID], linewidth=pers_linewidth, linestyle="--", label=f"User{user_database[i].ID} Dnorm")
+                    plt.plot(df10.values[:, 0], df10.values[:, 1], color=id2color[user_database[i].ID], linewidth=pers_linewidth, linestyle="--", label=f"User{user_database[i].ID} Dnorm")
                 if plot_Fnorm:
                     df = pd.DataFrame(user_database[i].Fnorm_log)
                     df.reset_index(inplace=True)
                     df10 = df.groupby(df.index//dim_reduc_factor, axis=0).mean()
-                    plt.plot(df10.values[1:, 0], df10.values[1:, 1], color=id2color[user_database[i].ID], linewidth=pers_linewidth, linestyle=":", label=f"User{user_database[i].ID} Fnorm")
+                    plt.plot(df10.values[:, 0], df10.values[:, 1], color=id2color[user_database[i].ID], linewidth=pers_linewidth, linestyle=":", label=f"User{user_database[i].ID} Fnorm")
                 if plot_gradient:
                     df = pd.DataFrame(user_database[i].gradient_log)
                     df.reset_index(inplace=True)
                     df10 = df.groupby(df.index//dim_reduc_factor, axis=0).mean()
-                    plt.plot(df10.values[1:, 0], df10.values[1:, 1], color=id2color[user_database[i].ID], linewidth=2, label=f"User{user_database[i].ID} Local Gradient")
+                    plt.plot(df10.values[:, 0], df10.values[:, 1], color=id2color[user_database[i].ID], linewidth=2, label=f"User{user_database[i].ID} Local Gradient")
                 if plot_pers_gradient:
                     df = pd.DataFrame(user_database[i].pers_gradient_log)
                     df.reset_index(inplace=True)
                     df10 = df.groupby(df.index//dim_reduc_factor, axis=0).mean()
-                    plt.plot(df10.values[1:, 0], df10.values[1:, 1], color=id2color[user_database[i].ID], linewidth=2, label=f"User{user_database[i].ID} Pers Gradient")
+                    plt.plot(df10.values[:, 0], df10.values[:, 1], color=id2color[user_database[i].ID], linewidth=2, label=f"User{user_database[i].ID} Pers Gradient")
                 if plot_global_gradient:
                     df = pd.DataFrame(user_database[i].global_gradient_log)
                     df.reset_index(inplace=True)
                     df10 = df.groupby(df.index//dim_reduc_factor, axis=0).mean()
-                    plt.plot(df10.values[1:, 0], df10.values[1:, 1], color=id2color[user_database[i].ID], linewidth=2, label=f"User{user_database[i].ID} Global Gradient")
+                    plt.plot(df10.values[:, 0], df10.values[:, 1], color=id2color[user_database[i].ID], linewidth=2, label=f"User{user_database[i].ID} Global Gradient")
                 #if different_local_round_thresh_per_client:
                 #    print("DIFFERENT LOCAL THRESH FOR EACH CLIENT")
                 #    if user_lst[i].data_stream == 'streaming':
