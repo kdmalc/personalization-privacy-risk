@@ -299,7 +299,7 @@ class Server(ModelBase):
                                                                
 
 class Client(ModelBase, TrainingMethods):
-    def __init__(self, ID, w, method, local_data, data_stream, smoothbatch=1, current_round=0, PCA_comps=7, availability=1, global_method='FedAvg', normalize_dec=False, normalize_EMG=True, track_cost_components=True, use_real_hess=False, gradient_clipping=False, clipping_threshold=100, tol=1e-10, adaptive=True, eta=1, track_gradient=True, num_steps=1, input_eta=False, safe_lr=False, delay_scaling=5, random_delays=False, download_delay=1, upload_delay=1, local_round_threshold=50, condition_number=0, verbose=False):
+    def __init__(self, ID, w, method, local_data, data_stream, smoothbatch=1, current_round=0, PCA_comps=7, availability=1, global_method='FedAvg', normalize_dec=False, normalize_EMG=True, track_cost_components=True, track_lr_comps=True, use_real_hess=False, gradient_clipping=False, clipping_threshold=100, tol=1e-10, adaptive=True, eta=1, track_gradient=True, num_steps=1, input_eta=False, safe_lr_factor=False, delay_scaling=5, random_delays=False, download_delay=1, upload_delay=1, local_round_threshold=50, condition_number=0, verbose=False):
         super().__init__(ID, w, method, smoothbatch=smoothbatch, current_round=current_round, PCA_comps=PCA_comps, verbose=verbose, num_participants=14, log_init=0)
         '''
         Note self.smoothbatch gets overwritten according to the condition number!  
@@ -372,24 +372,27 @@ class Client(ModelBase, TrainingMethods):
         self.pers_dec_log = []
         self.global_dec_log = []
         # Overwrite the logs since global and local track in slightly different ways
-        self.local_error_log = [0]
-        self.global_error_log = [0]
-        self.personalized_error_log = [0]
-        self.performance_log = [0]
-        self.Dnorm_log = [0]
-        self.Fnorm_log = [0]
-        self.gradient_log = [0]
-        self.pers_gradient_log = [0]
-        self.global_gradient_log = [0]
+        self.local_error_log = []
+        self.global_error_log = []
+        self.personalized_error_log = []
+        self.track_lr_comps = track_lr_comps
+        self.L_log = []
+        self.mu_log = []
+        self.eta_t_log = []
         self.track_cost_components = track_cost_components
+        self.performance_log = []
+        self.Dnorm_log = []
+        self.Fnorm_log = []
         self.track_gradient = track_gradient
+        self.gradient_log = []
+        self.pers_gradient_log = []
+        self.global_gradient_log = []
         # APFL Stuff
         self.tol = tol
         self.input_eta = input_eta
         self.running_pers_term = 0
         self.running_global_term = 0
         self.global_w = copy.copy(self.w)
-        #self.local_w = copy.copy(self.w)
         self.mixed_w = copy.copy(self.w)
         self.adaptive = adaptive
         #They observed best results with 0.25, but initialized adap_alpha to 0.01 for the adaptive case
@@ -399,7 +402,7 @@ class Client(ModelBase, TrainingMethods):
             self.adap_alpha = [0.25] 
         self.tau = self.num_steps
         self.p = [0]
-        self.safe_lr = safe_lr
+        self.safe_lr_factor = safe_lr_factor
         self.gradient_clipping = gradient_clipping
         self.clipping_threshold = clipping_threshold
         self.Vmixed = None
@@ -613,14 +616,13 @@ class Client(ModelBase, TrainingMethods):
             a = np.max([128*kappa, self.tau])
             eta_t = 16 / (mu*(t+a))
             if self.input_eta:
-                if self.safe_lr!=False:
+                if self.safe_lr_factor!=False:
                     raise ValueError("Cannot input eta AND use safe learning rate (they overwrite each other)")
                 eta_t = self.eta
-            elif self.safe_lr!=False:
-                # Really ought to change safe_lr to input/manual_safe_lr...
+            elif self.safe_lr_factor!=False:
                 print("Forcing eta_t to be based on the input safe lr factor")
                 # This is only subtly different from just inputting eta... a little more dynamic ig
-                eta_t = 1/(self.safe_lr*L)
+                eta_t = 1/(self.safe_lr_factor*L)
             elif eta_t >= 1/(2*L):
                 # Note that we only check when automatically setting
                 # ie if you manually input it will do whatever you tell it to do
@@ -628,6 +630,10 @@ class Client(ModelBase, TrainingMethods):
             if self.verbose:
                 print(f"Client{self.ID}: eta_t: {eta_t}")
             self.p.append((t+a)**2)
+            if self.track_lr_comps:
+                self.L_log.append(L)
+                self.mu_log.append(mu)
+                self.eta_t_log.append(eta_t)
             
             if self.adaptive:
                 self.adap_alpha.append(self.adap_alpha[-1] - eta_t*np.inner(np.reshape((self.w-self.global_w), (self.PCA_comps*2)), np.reshape(gradient_cost_l2(self.F, self.mixed_w, self.H, self.Vmixed, self.learning_batch, self.alphaF, self.alphaD, Ne=self.PCA_comps), (2*self.PCA_comps))))
@@ -636,7 +642,7 @@ class Client(ModelBase, TrainingMethods):
 
             # GRADIENT DESCENT BASED MODEL UPDATE
             # NOTE: eta_t IS DIFFERENT FROM CLIENT'S ETA (WHICH IS NOT USED)
-            # I think the grads really ought to be reshaping this automatically, not sure why it's not
+            # Why do I flatten the grads...
             
             global_gradient = np.reshape(gradient_cost_l2(self.F, self.global_w, self.H, self.Vglobal, self.learning_batch, self.alphaF, self.alphaD, Ne=self.PCA_comps), (2, self.PCA_comps))
             local_gradient = np.reshape(gradient_cost_l2(self.F, self.mixed_w, self.H, self.Vmixed, self.learning_batch, self.alphaF, self.alphaD, Ne=self.PCA_comps), (2, self.PCA_comps))
@@ -779,7 +785,6 @@ def condensed_external_plotting(input_data, version, exclusion_ID_lst=[], dim_re
             if version.upper()=='LOCAL':
                 if global_error:
                     df = pd.DataFrame(user_database[i].global_error_log)
-                    # Need to append a col of indices for the dim reduc... just reset index?
                     df.reset_index(inplace=True)
                     df10 = df.groupby(df.index//dim_reduc_factor, axis=0).mean()
                     plt.plot(df10.values[1:, 0], df10.values[1:, 1], color=id2color[user_database[i].ID], linewidth=global_linewidth, alpha=global_alpha)
