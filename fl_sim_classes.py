@@ -407,10 +407,7 @@ class Client(ModelBase, TrainingMethods):
         self.clipping_threshold = clipping_threshold
         self.Vmixed = None
         self.Vglobal = None
-        #if self.global_method=='APFL':
-        #    self.w = None  # This is a massive issue....
         self.use_real_hess = use_real_hess
-        #
         self.prev_update = None
         self.prev_eigvals = None
             
@@ -512,8 +509,6 @@ class Client(ModelBase, TrainingMethods):
         if need_to_advance:
             s_temp = self.training_data[lower_bound:upper_bound,:]
             # First, normalize the entire s matrix
-            # Hope is that this will prevent FF.T from being massive in APFL
-            # Well, did it work? _____
             if self.normalize_EMG:
                 s_normed = s_temp/np.amax(s_temp)
             else:
@@ -588,6 +583,9 @@ class Client(ModelBase, TrainingMethods):
                     self.prev_eigvals = eigvals
                     # Coping mechanism
                     self.prev_update = self.current_update
+            else:
+                # Can try and add faster versions in the future
+                raise ValueError("Currently, the only option is to use the Real Hessian")
             mu = np.amin(eigvals)  # Mu is the minimum eigvalue
             if mu.imag < self.tol and mu.real < self.tol:
                 raise ValueError("mu is ~0, thus implying func is not mu-SC")
@@ -636,9 +634,7 @@ class Client(ModelBase, TrainingMethods):
                 #self.sus_adap_alpha.append() ... didn't write yet
 
             # GRADIENT DESCENT BASED MODEL UPDATE
-            # NOTE: eta_t IS DIFFERENT FROM CLIENT'S ETA (WHICH IS NOT USED)
-            # Why do I flatten the grads...
-            
+            # NOTE: eta_t IS DIFFERENT FROM CLIENT'S ETA (WHICH IS NOT USED)            
             global_gradient = np.reshape(gradient_cost_l2(self.F, self.global_w, self.H, self.Vglobal, self.learning_batch, self.alphaF, self.alphaD, Ne=self.PCA_comps), (2, self.PCA_comps))
             local_gradient = np.reshape(gradient_cost_l2(self.F, self.mixed_w, self.H, self.Vmixed, self.learning_batch, self.alphaF, self.alphaD, Ne=self.PCA_comps), (2, self.PCA_comps))
             # Gradient clipping
