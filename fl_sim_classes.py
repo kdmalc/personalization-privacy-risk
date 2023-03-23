@@ -97,7 +97,7 @@ class Server(ModelBase):
         self.current_round += 1
         
         #if self.method in ['FedAvg', 'FedAvgSB']:
-        if 'FedAvg'self.method in self.method:
+        if 'FedAvg' in self.method:
             # Choose fraction C of available clients
             self.set_available_clients_list()
             self.choose_clients()
