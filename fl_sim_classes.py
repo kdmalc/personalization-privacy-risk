@@ -733,7 +733,7 @@ class Client(ModelBase, TrainingMethods):
 
 
 # Add this as a static method?
-def condensed_external_plotting(input_data, version, exclusion_ID_lst=[], dim_reduc_factor=10, plot_gradient=False, plot_pers_gradient=False, plot_global_gradient=False, global_error=True, local_error=True, pers_error=False, different_local_round_thresh_per_client=False, legend_on=False, plot_performance=False, plot_Dnorm=False, plot_Fnorm=False, num_participants=14, show_update_change=False, custom_title="", ylim=-1):
+def condensed_external_plotting(input_data, version, exclusion_ID_lst=[], dim_reduc_factor=10, plot_gradient=False, plot_pers_gradient=False, plot_global_gradient=False, global_error=True, local_error=True, pers_error=False, different_local_round_thresh_per_client=False, legend_on=False, plot_performance=False, plot_Dnorm=False, plot_Fnorm=False, num_participants=14, show_update_change=False, custom_title="", ylim_max=-1):
     id2color = {0:'lightcoral', 1:'maroon', 2:'chocolate', 3:'darkorange', 4:'gold', 5:'olive', 6:'olivedrab', 
             7:'lawngreen', 8:'aquamarine', 9:'deepskyblue', 10:'steelblue', 11:'violet', 12:'darkorchid', 13:'deeppink'}
     
@@ -885,8 +885,8 @@ def condensed_external_plotting(input_data, version, exclusion_ID_lst=[], dim_re
     num_ticks = 5
     plt.xticks(ticks=np.linspace(0,running_max,num_ticks,dtype=int))
     plt.xlim((0,running_max+1))
-    if ylim!=-1:
-        plt.ylim((0,ylim))
+    if ylim_max!=-1:
+        plt.ylim((0,ylim_max))
     if legend_on:
         plt.legend()
     plt.show()
