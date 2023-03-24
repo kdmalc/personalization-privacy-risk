@@ -101,9 +101,6 @@ class Server(ModelBase):
             # Choose fraction C of available clients
             self.set_available_clients_list()
             self.choose_clients()
-            # Send those clients the current global model
-            for my_client in self.chosen_clients_lst:
-                my_client.global_w = self.w
             # Let those clients train (this autoselects the chosen_client_lst to use)
             self.train_client_and_log(client_set=self.chosen_clients_lst)
             # AGGREGATION
@@ -114,7 +111,7 @@ class Server(ModelBase):
             #^ Note when self.smoothbatch=1 (default), we just keep the new self.w (no mixing)
             if self.method=='FedAvg':
                 self.w = self.smoothbatch*self.w + ((1 - self.smoothbatch)*self.w_prev)
-            # Eg don't do a global-global smoothbatch for the other cases
+                # Eg don't do a global-global smoothbatch for the other cases
         elif self.method=='NoFL':
             self.train_client_and_log(client_set=self.all_clients)
         elif self.method=='APFL':
@@ -209,16 +206,20 @@ class Server(ModelBase):
                 local_init_carry_val = self.local_error_log[-1][my_client.ID][2]#[0]
                 if self.method != 'NoFL':
                     global_init_carry_val = self.global_error_log[-1][my_client.ID][2]#[0]
-                if self.method == 'APFL':
+                if self.method in ['APFL', 'FedAvgSB']:
                     pers_init_carry_val = self.personalized_error_log[-1][my_client.ID][2]#[0]
+                    
             if my_client in client_set:
+                # Send those clients the current global model
+                my_client.global_w = self.w
+                
                 my_client.execute_training_loop()
                 current_local_lst.append((my_client.ID, self.current_round, 
                                           my_client.eval_model(which='local')))
                 if self.method != 'NoFL':
                     current_global_lst.append((my_client.ID, self.current_round, 
                                                my_client.eval_model(which='global')))
-                if self.method == 'APFL':
+                if self.method in ['FedAvgSB', 'APFL']:
                     current_pers_lst.append((my_client.ID, self.current_round, 
                                                my_client.eval_model(which='pers')))
             else:
@@ -227,7 +228,7 @@ class Server(ModelBase):
                 if self.method != 'NoFL':
                     current_global_lst.append((my_client.ID, self.current_round,
                                                global_init_carry_val))
-                if self.method == 'APFL':
+                if self.method in ['FedAvgSB', 'APFL']:
                     current_pers_lst.append((my_client.ID, self.current_round,
                                                pers_init_carry_val))
         # Append (ID, COST) to SERVER'S error log.  
@@ -245,7 +246,7 @@ class Server(ModelBase):
                 self.global_error_log.append(current_global_lst)
             else:
                 self.global_error_log.append(current_global_lst)
-        if self.method == 'APFL':
+        if self.method in ['FedAvgSB', 'APFL']:
             if self.personalized_error_log==self.init_lst:
                 self.personalized_error_log = []
                 self.personalized_error_log.append(current_pers_lst)
@@ -291,7 +292,7 @@ class Server(ModelBase):
                                                                
 
 class Client(ModelBase, TrainingMethods):
-    def __init__(self, ID, w, method, local_data, data_stream, smoothbatch=1, current_round=0, PCA_comps=7, availability=1, global_method='FedAvg', normalize_dec=False, normalize_EMG=True, track_cost_components=True, track_lr_comps=True, use_real_hess=True, gradient_clipping=False, clipping_threshold=100, tol=1e-10, adaptive=True, eta=1, track_gradient=True, num_steps=1, input_eta=False, safe_lr_factor=False, delay_scaling=5, random_delays=False, download_delay=1, upload_delay=1, local_round_threshold=50, condition_number=0, verbose=False):
+    def __init__(self, ID, w, method, local_data, data_stream, smoothbatch=1, current_round=0, PCA_comps=7, availability=1, global_method='FedAvg', normalize_dec=False, normalize_EMG=True, track_cost_components=True, track_lr_comps=True, use_real_hess=True, gradient_clipping=False, clipping_threshold=100, tol=1e-10, adaptive=True, eta=1, track_gradient=True, num_steps=1, input_eta=False, safe_lr_factor=False, mix_in_num_steps=False, mix_mixed_SB=False, delay_scaling=5, random_delays=False, download_delay=1, upload_delay=1, local_round_threshold=50, condition_number=0, verbose=False):
         super().__init__(ID, w, method, smoothbatch=smoothbatch, current_round=current_round, PCA_comps=PCA_comps, verbose=verbose, num_participants=14, log_init=0)
         '''
         Note self.smoothbatch gets overwritten according to the condition number!  
@@ -350,16 +351,26 @@ class Client(ModelBase, TrainingMethods):
             self.upload_delay = upload_delay
         #
         # ML Parameters / Conditions
+        toggle_smoothbatch = False
+        if type(smoothbatch)==str and smoothbatch.upper()=='OFF':
+            self.smoothbatch = 1  # AKA Use only the new dec, no mixing
+        elif smoothbatch==1:  # This is the default
+            # If it is default, then let the condition number set smoothbatch
+            toggle_smoothbatch=True
+        else:
+            # I think smoothbatch should be set if you enter it manually already
+            #self.smoothbatch=smoothbatch
+            pass
         self.alphaE = 1e-6
         # This should probably be a dictionary at some point
         if condition_number==0:
-            self.smoothbatch = 0.25
+            if toggle_smoothbatch:
+                self.smoothbatch = 0.25
             self.alphaF = 1e-7
             self.alphaD = 1e-3
         else:
             print("That condition number is not yet supported")
-        if type(smoothbatch)==str and smoothbatch.upper()=='OFF':
-            self.smoothbatch = 1  # AKA Use only the new dec, no mixing
+        #
         self.gradient_clipping = gradient_clipping
         self.clipping_threshold = clipping_threshold
         # PLOTTING
@@ -377,6 +388,9 @@ class Client(ModelBase, TrainingMethods):
         self.gradient_log = []
         self.pers_gradient_log = []
         self.global_gradient_log = []
+        # FedAvgSB Stuff
+        self.mix_in_num_steps=mix_in_num_steps
+        self.mix_mixed_SB=mix_mixed_SB, 
         # APFL Stuff
         self.tol = tol
         self.track_lr_comps = track_lr_comps
@@ -531,7 +545,7 @@ class Client(ModelBase, TrainingMethods):
         D_0 = self.w_prev
         # Set the w_prev equal to the current w:
         self.w_prev = self.w
-        if self.global_method in ["FedAvg", "NoFL", "FedAvgSB1", "FedAvgSB2", "FedAvgSB3"]:
+        if self.global_method in ["FedAvg", "NoFL", "FedAvgSB"]:
             # Overwrite local model with the new global model
             self.w = self.global_w
             
@@ -550,10 +564,8 @@ class Client(ModelBase, TrainingMethods):
                     self.w = self.train_eta_scipyminstep(self.w, self.eta, self.F, self.D, self.H, self.V, self.learning_batch, self.alphaF, self.alphaD, D_0, self.verbose, PCA_comps=self.PCA_comps, full=True)
                 else:
                     raise ValueError("Unrecognized method")
-                # Mixing option 1
-                if self.global_method=="FedAvgSB1":
-                    # FIX
-                    self.mixed_w = self.smoothbatch*self.mixed_w + ((1 - self.smoothbatch)*self.w)
+                if self.mix_in_num_steps:
+                    self.mixed_w = self.smoothbatch*self.w + ((1 - self.smoothbatch)*self.mixed_w)
             ########################################
             # Or should I normalize the dec here?  I'll also turn this on since idc about computational speed rn
             if self.normalize_dec:
@@ -565,9 +577,12 @@ class Client(ModelBase, TrainingMethods):
             #W_new = alpha*D[-1] + ((1 - alpha) * W_hat)
             if self.global_method in ["FedAvg", "NoFL"]:
                 self.w = self.smoothbatch*self.w + ((1 - self.smoothbatch)*self.w_prev)
-            elif self.global_method=="FedAvgSB2":
-                # FIX
-                self.mixed_w = self.smoothbatch*self.w + ((1 - self.smoothbatch)*self.w_prev)
+            elif self.global_method=="FedAvgSB":
+                global_local_SB = self.smoothbatch*self.w + ((1 - self.smoothbatch)*self.global_w)
+                if self.mix_mixed_SB:
+                    self.mixed_w = self.smoothbatch*self.mixed_w + ((1 - self.smoothbatch)*global_local_SB)
+                else:
+                    self.mixed_w = global_local_SB
         elif self.global_method=='APFL': 
             t = self.current_global_round  # Should this be global or local? Global based on how they wrote it...
             # F.T@F is not symmetric, so use eig not eigh
@@ -681,7 +696,7 @@ class Client(ModelBase, TrainingMethods):
                 self.global_gradient_log.append(np.linalg.norm(gradient_cost_l2(self.F, self.global_w, self.H, self.V, self.learning_batch, self.alphaF, self.alphaD, Ne=self.PCA_comps)))
                 if "SB" in self.global_method:
                     # Also not sure about V here...
-                    self.pers_gradient_log.append(np.linalg.norm(gradient_cost_l2(self.F, self.pers_w, self.H, self.V, self.learning_batch, self.alphaF, self.alphaD, Ne=self.PCA_comps)))
+                    self.pers_gradient_log.append(np.linalg.norm(gradient_cost_l2(self.F, self.mixed_w, self.H, self.V, self.learning_batch, self.alphaF, self.alphaD, Ne=self.PCA_comps)))
         
         
     def eval_model(self, which):
@@ -692,9 +707,10 @@ class Client(ModelBase, TrainingMethods):
             my_dec = self.global_w
             # self.V for non APFL case, only APFL defines Vglobal, as of 3/21
             my_V = self.Vglobal if self.global_method=='APFL' else self.V
-        elif which=='pers' and self.global_method=='APFL':
+        elif which=='pers' and self.global_method in ['APFL', 'FedAvgSB']:
             my_dec = self.mixed_w
-            my_V = self.Vmixed
+            # self.V for non APFL case, only APFL defines Vmixed, as of 3/24
+            my_V = self.Vmixed if self.global_method=='APFL' else self.V
         else:
             raise ValueError("Please set <which> to either local or global")
         # Just did this so we wouldn't have the 14 decimals points it always tries to give
