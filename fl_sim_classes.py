@@ -292,7 +292,7 @@ class Server(ModelBase):
                                                                
 
 class Client(ModelBase, TrainingMethods):
-    def __init__(self, ID, w, method, local_data, data_stream, smoothbatch=1, current_round=0, PCA_comps=7, availability=1, global_method='FedAvg', normalize_dec=False, normalize_EMG=True, track_cost_components=True, track_lr_comps=True, use_real_hess=True, gradient_clipping=False, clipping_threshold=100, tol=1e-10, adaptive=True, eta=1, track_gradient=True, num_steps=1, input_eta=False, safe_lr_factor=False, mix_in_num_steps=False, mix_mixed_SB=False, delay_scaling=5, random_delays=False, download_delay=1, upload_delay=1, local_round_threshold=50, condition_number=0, verbose=False):
+    def __init__(self, ID, w, method, local_data, data_stream, smoothbatch=1, current_round=0, PCA_comps=7, availability=1, global_method='FedAvg', normalize_dec=False, normalize_EMG=True, track_cost_components=True, track_lr_comps=True, use_real_hess=True, gradient_clipping=False, log_decs=True, clipping_threshold=100, tol=1e-10, adaptive=True, eta=1, track_gradient=True, num_steps=1, input_eta=False, safe_lr_factor=False, mix_in_num_steps=False, mix_mixed_SB=False, delay_scaling=5, random_delays=False, download_delay=1, upload_delay=1, local_round_threshold=50, condition_number=0, verbose=False):
         super().__init__(ID, w, method, smoothbatch=smoothbatch, current_round=current_round, PCA_comps=PCA_comps, verbose=verbose, num_participants=14, log_init=0)
         '''
         Note self.smoothbatch gets overwritten according to the condition number!  
@@ -374,6 +374,7 @@ class Client(ModelBase, TrainingMethods):
         self.gradient_clipping = gradient_clipping
         self.clipping_threshold = clipping_threshold
         # PLOTTING
+        self.log_decs = log_decs
         self.pers_dec_log = []
         self.global_dec_log = []
         # Overwrite the logs since global and local track in slightly different ways
@@ -422,8 +423,15 @@ class Client(ModelBase, TrainingMethods):
     def execute_training_loop(self):
         self.simulate_data_stream()
         self.train_model()
-        
-        # Append (ROUND, COST) to the CLIENT error log
+        # Log decs
+        if self.log_decs:
+            self.dec_log.append(self.w)
+            if self.global_method=="FedAvg":
+                self.global_dec_log.append(self.global_w)
+            elif self.global_method=="APFL" or "SB" in self.global_method:
+                self.global_dec_log.append(self.global_w)
+                self.pers_dec_log.append(self.mixed_w)
+        # Log Error
         self.local_error_log.append(self.eval_model(which='local'))
         # Yes these should both be ifs not elif, they may both need to run
         if self.global_method!="NoFL":
@@ -432,6 +440,7 @@ class Client(ModelBase, TrainingMethods):
             self.personalized_error_log.append(self.eval_model(which='pers'))
         D = self.w
         Dmixed = self.mixed_w
+        # Log Cost Comp
         if self.track_cost_components:
             if self.global_method=='APFL':
                 # It is using self.V here for vplus, Vminus... not sure if that is correct
@@ -442,6 +451,7 @@ class Client(ModelBase, TrainingMethods):
                 self.performance_log.append(self.alphaE*(np.linalg.norm((D@self.F + self.H@self.V[:,:-1] - self.V[:,1:]))**2))
                 self.Dnorm_log.append(self.alphaD*(np.linalg.norm(D)**2))
                 self.Fnorm_log.append(self.alphaF*(np.linalg.norm(self.F)**2))
+        # Log Gradient
         if self.track_gradient==True and self.global_method!="APFL":
             # The gradient is a vector... So let's just save the L2 norm?
             self.gradient_log.append(np.linalg.norm(gradient_cost_l2(self.F, D, self.H, self.V, self.learning_batch, self.alphaF, self.alphaD, Ne=self.PCA_comps)))
@@ -749,7 +759,7 @@ class Client(ModelBase, TrainingMethods):
 
 
 # Add this as a static method?
-def condensed_external_plotting(input_data, version, exclusion_ID_lst=[], dim_reduc_factor=10, plot_gradient=False, plot_pers_gradient=False, plot_global_gradient=False, global_error=True, local_error=True, pers_error=False, different_local_round_thresh_per_client=False, legend_on=False, plot_performance=False, plot_Dnorm=False, plot_Fnorm=False, num_participants=14, show_update_change=False, custom_title="", ylim_max=-1):
+def condensed_external_plotting(input_data, version, exclusion_ID_lst=[], dim_reduc_factor=10, plot_gradient=False, plot_pers_gradient=False, plot_global_gradient=False, global_error=True, local_error=True, pers_error=False, different_local_round_thresh_per_client=False, legend_on=False, plot_performance=False, plot_Dnorm=False, plot_Fnorm=False, num_participants=14, show_update_change=True, custom_title="", ylim_max=-1):
     id2color = {0:'lightcoral', 1:'maroon', 2:'chocolate', 3:'darkorange', 4:'gold', 5:'olive', 6:'olivedrab', 
             7:'lawngreen', 8:'aquamarine', 9:'deepskyblue', 10:'steelblue', 11:'violet', 12:'darkorchid', 13:'deeppink'}
     
@@ -788,7 +798,8 @@ def condensed_external_plotting(input_data, version, exclusion_ID_lst=[], dim_re
     else:
         raise ValueError("log_type must be either global or local, please retry")
         
-    running_max = 0
+    max_local_iters = 0
+
     for i in range(len(user_database)):
         # Skip over users that distort the scale
         if user_database[i].ID in exclusion_ID_lst:
@@ -798,8 +809,8 @@ def condensed_external_plotting(input_data, version, exclusion_ID_lst=[], dim_re
             continue 
         else: 
             # This is used for plotting later
-            if len(user_database[i].local_error_log) > running_max:
-                running_max = len(user_database[i].local_error_log)
+            if len(user_database[i].local_error_log) > max_local_iters:
+                max_local_iters = len(user_database[i].local_error_log)
 
             if version.upper()=='LOCAL':
                 if global_error:
@@ -848,16 +859,6 @@ def condensed_external_plotting(input_data, version, exclusion_ID_lst=[], dim_re
                     df.reset_index(inplace=True)
                     df10 = df.groupby(df.index//dim_reduc_factor, axis=0).mean()
                     plt.plot(df10.values[:, 0], df10.values[:, 1], color=id2color[user_database[i].ID], linewidth=2, label=f"User{user_database[i].ID} Global Gradient")
-                #if different_local_round_thresh_per_client:
-                #    print("DIFFERENT LOCAL THRESH FOR EACH CLIENT")
-                #    if user_lst[i].data_stream == 'streaming':
-                #        for my_update_transition in user_lst[i].update_transition_log:
-                #            plt.scatter(my_update_transition+1, user_lst[i].local_error_log[my_update_transition]
-                #                        [1], color=id2color[i], marker='*')
-                #elif user_lst[i].ID==0 and show_update_change:  # Proxy for just printing it once...
-                #    for thresh_idx in range(user_lst[i].current_threshold // user_lst[i].local_round_threshold):
-                #        plt.axvline(x=(thresh_idx+1)*user_lst[i].local_round_threshold, color="k", linewidth=1, 
-                #                    linestyle=':')
             elif version.upper()=='GLOBAL':
                 if plot_Fnorm or plot_Dnorm or plot_performance:
                     print("Fnorm, Dnorm, and performance are currently not supported for version==GLOBAL")
@@ -893,14 +894,20 @@ def condensed_external_plotting(input_data, version, exclusion_ID_lst=[], dim_re
                     for update_round in user_database[i].update_transition_log:
                         plt.axvline(x=(update_round), color=id2color[user_database[i].ID], linewidth=0.5, alpha=0.6)  
 
+    if version.upper()=='LOCAL' and show_update_change==True:
+        for i in range(max_local_iters):
+            if i%user_database[0].local_round_threshold==0:
+                plt.axvline(x=i, color="k", linewidth=1, linestyle=':')
+              
     plt.ylabel('Cost L2')
     plt.xlabel('Iteration Number')
     plt.title(my_title)
     if version.upper()=='GLOBAL':
-        running_max = input_data.current_round
-    num_ticks = 5
-    plt.xticks(ticks=np.linspace(0,running_max,num_ticks,dtype=int))
-    plt.xlim((0,running_max+1))
+        max_local_iters = input_data.current_round
+    else:
+        num_ticks = 5
+        plt.xticks(ticks=np.linspace(0,max_local_iters,num_ticks,dtype=int))
+        plt.xlim((0,max_local_iters+1))
     if ylim_max!=-1:
         plt.ylim((0,ylim_max))
     if legend_on:
