@@ -1,4 +1,3 @@
-# I never went through and double checked which of these I'm actually using
 import numpy as np
 import pandas as pd
 import random
@@ -15,6 +14,7 @@ from sklearn.decomposition import PCA
 
 class ModelBase:
     # Hard coded attributes --> SHARED FOR THE ENTIRE CLASS
+    # ^Are they? I'm not actually sure.  You can't access them obviously
     num_updates = 19
     cphs_starting_update = 10
     update_ix = [0,  1200,  2402,  3604,  4806,  6008,  7210,  8412,  9614, 10816, 12018, 13220, 14422, 15624, 16826, 18028, 19230, 20432, 20769]
@@ -22,7 +22,7 @@ class ModelBase:
             7:'lawngreen', 8:'aquamarine', 9:'deepskyblue', 10:'steelblue', 11:'violet', 12:'darkorchid', 13:'deeppink'}
     
     def __init__(self, ID, w, method, smoothbatch=1, verbose=False, PCA_comps=7, current_round=0, num_participants=14, log_init=0):
-        self.type = 'Base'  # This gets overwritten but is required for __repr__ below
+        self.type = 'BaseClass'
         self.ID = ID
         self.w = w  # Linear regression weights AKA the decoder
         self.w_prev = copy.copy(w)
@@ -292,7 +292,7 @@ class Server(ModelBase):
                                                                
 
 class Client(ModelBase, TrainingMethods):
-    def __init__(self, ID, w, method, local_data, data_stream, smoothbatch=1, current_round=0, PCA_comps=7, availability=1, global_method='FedAvg', normalize_dec=False, normalize_EMG=True, track_cost_components=True, track_lr_comps=True, use_real_hess=True, gradient_clipping=False, log_decs=True, clipping_threshold=100, tol=1e-10, adaptive=True, eta=1, track_gradient=True, num_steps=1, input_eta=False, safe_lr_factor=False, mix_in_num_steps=False, mix_mixed_SB=False, delay_scaling=5, random_delays=False, download_delay=1, upload_delay=1, local_round_threshold=50, condition_number=0, verbose=False):
+    def __init__(self, ID, w, method, local_data, data_stream, smoothbatch=1, current_round=0, PCA_comps=7, availability=1, global_method='FedAvg', normalize_dec=False, normalize_EMG=True, track_cost_components=True, track_lr_comps=True, use_real_hess=True, gradient_clipping=False, log_decs=True, clipping_threshold=100, tol=1e-10, adaptive=True, eta=1, track_gradient=True, num_steps=1, input_eta=False, safe_lr_factor=False, mix_in_num_steps=False, mix_mixed_SB=False, delay_scaling=5, random_delays=False, download_delay=1, upload_delay=1, local_round_threshold=50, condition_number=1, verbose=False):
         super().__init__(ID, w, method, smoothbatch=smoothbatch, current_round=current_round, PCA_comps=PCA_comps, verbose=verbose, num_participants=14, log_init=0)
         '''
         Note self.smoothbatch gets overwritten according to the condition number!  
@@ -350,26 +350,20 @@ class Client(ModelBase, TrainingMethods):
             self.download_delay = download_delay
             self.upload_delay = upload_delay
         #
-        # ML Parameters / Conditions
-        toggle_smoothbatch = False
+        # ML Parameters / Conditions        
+        cond_dict = {1:(0.25, 1e-3, 1), 2:(0.25, 1e-4, 1), 3:(0.75, 1e-3, 1), 4:(0.75, 1e-4, 1), 5:(0.25, 1e-4, -1), 6:(0.25, 1e-4, -1), 7:(0.75, 1e-3, -1), 8:(0.75, 1e-4, -1)}
+        cond_smoothbatch, self.alphaD, self.init_dec_sign = cond_dict[condition_number]
         if type(smoothbatch)==str and smoothbatch.upper()=='OFF':
             self.smoothbatch = 1  # AKA Use only the new dec, no mixing
         elif smoothbatch==1:  # This is the default
             # If it is default, then let the condition number set smoothbatch
-            toggle_smoothbatch=True
+            self.smoothbatch = cond_smoothbatch
         else:
-            # I think smoothbatch should be set if you enter it manually already
-            #self.smoothbatch=smoothbatch
-            pass
+            # Set smoothbatch to whatever you manually entered
+            self.smoothbatch=smoothbatch
+            print()
         self.alphaE = 1e-6
-        # This should probably be a dictionary at some point
-        if condition_number==0:
-            if toggle_smoothbatch:
-                self.smoothbatch = 0.25
-            self.alphaF = 1e-7
-            self.alphaD = 1e-3
-        else:
-            print("That condition number is not yet supported")
+        self.alphaF = 1e-7
         #
         self.gradient_clipping = gradient_clipping
         self.clipping_threshold = clipping_threshold
@@ -913,16 +907,3 @@ def condensed_external_plotting(input_data, version, exclusion_ID_lst=[], dim_re
     if legend_on:
         plt.legend()
     plt.show()
-    
-    
-# Code for saving data needed for running sims
-#cond0_dict_list = [0]*num_participants
-#for idx in range(num_participants):
-#    cond0_dict_list[idx] = {'training':emgs_block1[keys[idx]][0,:,:], 'labels':refs_block1[keys[idx]][0,:,:]}
-#
-#with open(path+cond0_filename, 'wb') as fp:
-#    pickle.dump(cond0_dict_list, fp, protocol=pickle.HIGHEST_PROTOCOL)
-#    
-#init_decoders = [Ws_block1[keys[i]][:, 0, :, :] for i in range(num_participants)]
-#with open(path+all_decs_init_filename, 'wb') as fp:
-#    pickle.dump(init_decoders, fp, protocol=pickle.HIGHEST_PROTOCOL)
