@@ -688,7 +688,8 @@ class Client(ModelBase, TrainingMethods):
             
         # Save the new decoder to the log
         #self.dec_log.append(self.w)
-        #self.pers_dec_log.append(self.mixed_w)
+        #if self.global_method=="APFL" or "SB" in self.global_method:
+        #    self.pers_dec_log.append(self.mixed_w)
         #self.global_dec_log.append(self.global_w)
         if self.track_gradient:
             self.gradient_log.append(np.linalg.norm(gradient_cost_l2(self.F, self.w, self.H, self.V, self.learning_batch, self.alphaF, self.alphaD, Ne=self.PCA_comps)))
