@@ -70,7 +70,7 @@ class TrainingMethods:
         
         
 class Server(ModelBase):
-    def __init__(self, ID, D0, method, all_clients, smoothbatch=1, C=0.1, normalize_dec=True, current_round=0, PCA_comps=7, verbose=False, num_steps=10):
+    def __init__(self, ID, D0, method, all_clients, smoothbatch=1, C=0.1, normalize_dec=True, current_round=0, PCA_comps=7, verbose=False, APFL_Tau=10):
         super().__init__(ID, D0, method, smoothbatch=smoothbatch, current_round=current_round, PCA_comps=PCA_comps, verbose=verbose, num_participants=14, log_init=0)
         self.type = 'Server'
         self.num_avail_clients = 0
@@ -87,8 +87,7 @@ class Server(ModelBase):
             self.set_available_clients_list()
             self.choose_clients()
             self.K = len(self.chosen_clients_lst)
-            # NOTE: TAU IS USED OVER CLIENT'S NUM_STEPS FOR APFL
-            self.tau = num_steps
+            self.tau = APFL_Tau
 
                 
     # 0: Main Loop
@@ -262,11 +261,13 @@ class Server(ModelBase):
         # Aggregate local model weights, weighted by normalized local learning rate
         aggr_w = 0
         for my_client in self.chosen_clients_lst:
+            # Normalize models between clients...
             if self.normalize_dec:
                 normalization_term = np.amax(my_client.w)
             else:
                 normalization_term = 1
             aggr_w += (my_client.learning_batch/summed_num_datapoints) * my_client.w / normalization_term
+        # Normalize the resulting global model
         if self.normalize_dec:
             aggr_w /= np.amax(aggr_w)
         self.w = aggr_w
@@ -292,7 +293,7 @@ class Server(ModelBase):
                                                                
 
 class Client(ModelBase, TrainingMethods):
-    def __init__(self, ID, w, method, local_data, data_stream, smoothbatch=1, current_round=0, PCA_comps=7, availability=1, global_method='FedAvg', normalize_dec=False, normalize_EMG=True, track_cost_components=True, track_lr_comps=True, use_real_hess=True, gradient_clipping=False, log_decs=True, clipping_threshold=100, tol=1e-10, adaptive=True, eta=1, track_gradient=True, num_steps=1, input_eta=False, safe_lr_factor=False, mix_in_num_steps=False, mix_mixed_SB=False, delay_scaling=5, random_delays=False, download_delay=1, upload_delay=1, local_round_threshold=50, condition_number=1, verbose=False):
+    def __init__(self, ID, w, method, local_data, data_stream, smoothbatch=1, current_round=0, PCA_comps=7, availability=1, global_method='FedAvg', normalize_dec=False, normalize_EMG=True, track_cost_components=True, track_lr_comps=True, use_real_hess=True, gradient_clipping=False, log_decs=True, clipping_threshold=100, tol=1e-10, adaptive=True, eta=1, track_gradient=True, num_steps=1, input_eta=False, safe_lr_factor=False, mix_in_each_steps=False, mix_mixed_SB=False, delay_scaling=5, random_delays=False, download_delay=1, upload_delay=1, local_round_threshold=25, condition_number=1, verbose=False):
         super().__init__(ID, w, method, smoothbatch=smoothbatch, current_round=current_round, PCA_comps=PCA_comps, verbose=verbose, num_participants=14, log_init=0)
         '''
         Note self.smoothbatch gets overwritten according to the condition number!  
@@ -384,26 +385,27 @@ class Client(ModelBase, TrainingMethods):
         self.pers_gradient_log = []
         self.global_gradient_log = []
         # FedAvgSB Stuff
-        self.mix_in_num_steps=mix_in_num_steps
-        self.mix_mixed_SB=mix_mixed_SB, 
-        # APFL Stuff
-        self.tol = tol
-        self.track_lr_comps = track_lr_comps
-        self.L_log = []
-        self.mu_log = []
-        self.eta_t_log = []
+        self.mix_in_each_steps = mix_in_each_steps
+        self.mix_mixed_SB = mix_mixed_SB
         self.input_eta = input_eta  # Is this really an APFL thing only?
+        # These are general personalization things
         self.running_pers_term = 0
         self.running_global_term = 0
         self.global_w = copy.copy(self.w)
         self.mixed_w = copy.copy(self.w)
+        # APFL Stuff
+        self.tol = tol 
+        self.track_lr_comps = track_lr_comps
+        self.L_log = []
+        self.mu_log = []
+        self.eta_t_log = []
         self.adaptive = adaptive
         #They observed best results with 0.25, but initialized adap_alpha to 0.01 for the adaptive case
         if self.adaptive:
             self.adap_alpha = [0.01]  
         else:
             self.adap_alpha = [0.25] 
-        self.tau = self.num_steps
+        self.tau = self.num_steps # This is just an init... it really ought to pull it from global...
         self.p = [0]
         self.safe_lr_factor = safe_lr_factor
         self.Vmixed = None
@@ -568,7 +570,7 @@ class Client(ModelBase, TrainingMethods):
                     self.w = self.train_eta_scipyminstep(self.w, self.eta, self.F, self.D, self.H, self.V, self.learning_batch, self.alphaF, self.alphaD, D_0, self.verbose, PCA_comps=self.PCA_comps, full=True)
                 else:
                     raise ValueError("Unrecognized method")
-                if self.mix_in_num_steps:
+                if self.mix_in_each_steps:
                     self.mixed_w = self.smoothbatch*self.w + ((1 - self.smoothbatch)*self.mixed_w)
             ########################################
             # Or should I normalize the dec here?  I'll also turn this on since idc about computational speed rn
@@ -589,8 +591,7 @@ class Client(ModelBase, TrainingMethods):
                     self.mixed_w = global_local_SB
         elif self.global_method=='APFL': 
             t = self.current_global_round  # Should this be global or local? Global based on how they wrote it...
-            # F.T@F is not symmetric, so use eig not eigh
-            # eig returns (UNORDERED) eigvals, eigvecs
+            # eig is for unsymmetric matrices, and returns (UNORDERED) eigvals, eigvecs
             if self.use_real_hess:
                 # May be better to check to see if the update is in the update_transition_log...
                 # Should also just be able to use self.current_update%self.local_round_threshold or something
