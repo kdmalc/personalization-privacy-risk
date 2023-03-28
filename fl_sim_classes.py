@@ -532,10 +532,16 @@ class Client(ModelBase, TrainingMethods):
             s = np.transpose(s_normed)
             v_actual = self.w@s
             p_actual = np.cumsum(v_actual, axis=1)*self.dt  # Numerical integration of v_actual to get p_actual
+            
+            # Add the boundary conditions code here
+            
             p_reference = np.transpose(self.labels[lower_bound:upper_bound,:])
             # Now set the values used in the cost function
             self.F = s[:,:-1] # note: truncate F for estimate_decoder
             self.V = (p_reference - p_actual)*self.dt
+            # self.V = the intended velocity function
+            
+            
             if self.global_method=='APFL':
                 self.Vglobal = (p_reference - np.cumsum(self.global_w@s, axis=1)*self.dt)*self.dt
                 #self.Vlocal = (p_reference - np.cumsum(self.w@s, axis=1)*self.dt)*self.dt  
