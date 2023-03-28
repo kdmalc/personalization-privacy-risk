@@ -753,7 +753,7 @@ class Client(ModelBase, TrainingMethods):
 
 
 # Add this as a static method?
-def condensed_external_plotting(input_data, version, exclusion_ID_lst=[], dim_reduc_factor=10, plot_gradient=False, plot_pers_gradient=False, plot_global_gradient=False, global_error=True, local_error=True, pers_error=False, different_local_round_thresh_per_client=False, legend_on=False, plot_performance=False, plot_Dnorm=False, plot_Fnorm=False, num_participants=14, show_update_change=True, custom_title="", ylim_max=-1):
+def condensed_external_plotting(input_data, version, exclusion_ID_lst=[], dim_reduc_factor=10, plot_gradient=False, plot_pers_gradient=False, plot_this_ID_only=-1, plot_global_gradient=False, global_error=True, local_error=True, pers_error=False, different_local_round_thresh_per_client=False, legend_on=False, plot_performance=False, plot_Dnorm=False, plot_Fnorm=False, num_participants=14, show_update_change=True, custom_title="", ylim_max=-1):
     id2color = {0:'lightcoral', 1:'maroon', 2:'chocolate', 3:'darkorange', 4:'gold', 5:'olive', 6:'olivedrab', 
             7:'lawngreen', 8:'aquamarine', 9:'deepskyblue', 10:'steelblue', 11:'violet', 12:'darkorchid', 13:'deeppink'}
     
@@ -798,6 +798,8 @@ def condensed_external_plotting(input_data, version, exclusion_ID_lst=[], dim_re
         # Skip over users that distort the scale
         if user_database[i].ID in exclusion_ID_lst:
             continue 
+        elif plot_this_ID_only!=-1 and i!=plot_this_ID_only:
+            continue
         elif len(user_database[i].local_error_log)<2:
             # This node never trained so just skip it so it doesn't break the plotting
             continue 
