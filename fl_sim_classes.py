@@ -302,13 +302,12 @@ class Client(ModelBase, TrainingMethods):
         # NOT INPUT
         self.type = 'Client'
         self.chosen_status = 0
-        self.current_global_round = 0
+        self.latest_global_round = 0
         self.update_transition_log = []
         self.normalize_EMG = normalize_EMG
         # Sentinel Values
         self.F = None
         self.V = None
-        self.D = None
         self.H = np.zeros((2,2))
         self.learning_batch = None
         self.dt = 1.0/60.0
@@ -336,7 +335,6 @@ class Client(ModelBase, TrainingMethods):
             starting_update = self.cphs_starting_update
         self.current_update = starting_update
         self.local_round_threshold = local_round_threshold
-        self.current_threshold = local_round_threshold
         #
         # Not even using the delay stuff right now
         # Boolean setting whether or not up/download delays should be random or predefined
@@ -411,7 +409,6 @@ class Client(ModelBase, TrainingMethods):
         self.Vmixed = None
         self.Vglobal = None
         self.use_real_hess = use_real_hess
-        self.prev_update = None
         self.prev_eigvals = None
             
             
@@ -478,18 +475,12 @@ class Client(ModelBase, TrainingMethods):
             self.learning_batch = upper_bound - lower_bound
         elif streaming_method=='streaming':
             # If we pass threshold, move on to the next update
-            # Why don't I just use modulus here?
-            if self.current_round >= self.current_threshold:
-                self.current_threshold += self.local_round_threshold
+            if self.current_round%self.local_round_threshold==0:
+                self.current_update += 1
                 
-                ####################################################
-                # This is such a janky solution lol
-                self.prev_update = self.current_update
-                self.current_update = self.prev_update + 1
-                
-                self.update_transition_log.append(self.current_global_round)
+                self.update_transition_log.append(self.latest_global_round)
                 if self.verbose==True and self.ID==1:
-                    print(f"Client {self.ID}: New update after lrt passed: (new update, current global round, current local round): {self.current_update, self.current_global_round, self.current_round}")
+                    print(f"Client {self.ID}: New update after lrt passed: (new update, current global round, current local round): {self.current_update, self.latest_global_round, self.current_round}")
                     print()
                     
                 # Using only the second half of each update for co-adaptivity reasons
@@ -511,9 +502,7 @@ class Client(ModelBase, TrainingMethods):
             upper_bound = update_ix[self.current_update+1]
             self.learning_batch = upper_bound - lower_bound
             
-            ####################################################
-            self.prev_update = self.current_update
-            self.current_update = self.prev_update + 1
+            self.current_update += 1
         else:
             raise ValueError(f'streaming_method ("{streaming_method}") not recognized: this data streaming functionality is not supported')
             
@@ -550,11 +539,10 @@ class Client(ModelBase, TrainingMethods):
                 # ^Even though it is evaluated at the mixed dec... not sure
                 # For V that is used with mixed I think it should actually be mixed.  Makes more sense
                 self.Vmixed = (p_reference - np.cumsum(self.mixed_w@s, axis=1)*self.dt)*self.dt
-            self.D = copy.copy(self.w)
     
     
     def train_model(self):
-        D_0 = self.w_prev
+        D_0 = copy.copy(self.w_prev)
         # Set the w_prev equal to the current w:
         self.w_prev = self.w
         if self.global_method in ["FedAvg", "NoFL", "FedAvgSB"]:
@@ -569,11 +557,11 @@ class Client(ModelBase, TrainingMethods):
                     self.w /= np.amax(self.w)
                 ########################################
                 if self.method=='EtaGradStep':
-                    self.w = self.train_eta_gradstep(self.w, self.eta, self.F, self.D, self.H, self.V, self.learning_batch, self.alphaF, self.alphaD, PCA_comps=self.PCA_comps)
+                    self.w = self.train_eta_gradstep(self.w, self.eta, self.F, self.w, self.H, self.V, self.learning_batch, self.alphaF, self.alphaD, PCA_comps=self.PCA_comps)
                 elif self.method=='EtaScipyMinStep':
-                    self.w = self.train_eta_scipyminstep(self.w, self.eta, self.F, self.D, self.H, self.V, self.learning_batch, self.alphaF, self.alphaD, D_0, self.verbose, PCA_comps=self.PCA_comps)
+                    self.w = self.train_eta_scipyminstep(self.w, self.eta, self.F, self.w, self.H, self.V, self.learning_batch, self.alphaF, self.alphaD, D_0, self.verbose, PCA_comps=self.PCA_comps)
                 elif self.method=='FullScipyMinStep':
-                    self.w = self.train_eta_scipyminstep(self.w, self.eta, self.F, self.D, self.H, self.V, self.learning_batch, self.alphaF, self.alphaD, D_0, self.verbose, PCA_comps=self.PCA_comps, full=True)
+                    self.w = self.train_eta_scipyminstep(self.w, self.eta, self.F, self.w, self.H, self.V, self.learning_batch, self.alphaF, self.alphaD, D_0, self.verbose, PCA_comps=self.PCA_comps, full=True)
                 else:
                     raise ValueError("Unrecognized method")
                 if self.mix_in_each_steps:
@@ -596,20 +584,17 @@ class Client(ModelBase, TrainingMethods):
                 else:
                     self.mixed_w = global_local_SB
         elif self.global_method=='APFL': 
-            t = self.current_global_round  # Should this be global or local? Global based on how they wrote it...
+            t = self.latest_global_round  # Should this be global or local? Global based on how they wrote it...
             # eig is for unsymmetric matrices, and returns (UNORDERED) eigvals, eigvecs
             if self.use_real_hess:
-                # May be better to check to see if the update is in the update_transition_log...
-                # Should also just be able to use self.current_update%self.local_round_threshold or something
-                if self.prev_update == self.current_update:  # When is this condition ever true......
-                    # Note that this changes if you want to do SGD instead of GD
+                if self.latest_global_round in self.update_transition_log:
+                    # Note that this should not be run if you want to do SGD instead of GD
+                    # Eg probably need to change the logic structure
                     eigvals = self.prev_eigvals
                 else:
                     print(f"Client{self.ID}: Recalculating the Hessian for new update {self.current_update}!")
                     eigvals, _ = np.linalg.eig(hessian_cost_l2(self.F, self.alphaD))
                     self.prev_eigvals = eigvals
-                    # Coping mechanism
-                    self.prev_update = self.current_update
             else:
                 # Can try and add faster versions in the future
                 raise ValueError("Currently, the only option is to use the Real Hessian")
