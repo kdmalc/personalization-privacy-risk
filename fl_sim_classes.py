@@ -293,7 +293,7 @@ class Server(ModelBase):
                                                                
 
 class Client(ModelBase, TrainingMethods):
-    def __init__(self, ID, w, method, local_data, data_stream, smoothbatch=1, current_round=0, PCA_comps=7, availability=1, global_method='FedAvg', normalize_dec=False, normalize_EMG=True, track_cost_components=True, track_lr_comps=True, use_real_hess=True, gradient_clipping=False, log_decs=True, clipping_threshold=100, tol=1e-10, adaptive=True, eta=1, track_gradient=True, num_steps=1, input_eta=False, safe_lr_factor=False, mix_in_each_steps=False, mix_mixed_SB=False, delay_scaling=5, random_delays=False, download_delay=1, upload_delay=1, local_round_threshold=25, condition_number=1, verbose=False):
+    def __init__(self, ID, w, method, local_data, data_stream, smoothbatch=1, current_round=0, PCA_comps=7, availability=1, global_method='FedAvg', normalize_dec=False, normalize_EMG=True, track_cost_components=True, track_lr_comps=True, use_real_hess=True, gradient_clipping=False, log_decs=True, clipping_threshold=100, tol=1e-10, adaptive=True, eta=1, track_gradient=True, num_steps=1, APFL_input_eta=False, safe_lr_factor=False, mix_in_each_steps=False, mix_mixed_SB=False, delay_scaling=5, random_delays=False, download_delay=1, upload_delay=1, local_round_threshold=25, condition_number=1, verbose=False):
         super().__init__(ID, w, method, smoothbatch=smoothbatch, current_round=current_round, PCA_comps=PCA_comps, verbose=verbose, num_participants=14, log_init=0)
         '''
         Note self.smoothbatch gets overwritten according to the condition number!  
@@ -385,7 +385,7 @@ class Client(ModelBase, TrainingMethods):
         # FedAvgSB Stuff
         self.mix_in_each_steps = mix_in_each_steps
         self.mix_mixed_SB = mix_mixed_SB
-        self.input_eta = input_eta  # Is this really an APFL thing only?
+        self.APFL_input_eta = APFL_input_eta  # Is this really an APFL thing only?
         # These are general personalization things
         self.running_pers_term = 0
         self.running_global_term = 0
@@ -620,9 +620,9 @@ class Client(ModelBase, TrainingMethods):
             kappa = L/mu
             a = np.max([128*kappa, self.tau])
             eta_t = 16 / (mu*(t+a))
-            if self.input_eta:
+            if self.APFL_input_eta:
                 if self.safe_lr_factor!=False:
-                    raise ValueError("Cannot input eta AND use safe learning rate (they overwrite each other)")
+                    raise ValueError("Cannot use APFL_input_eta AND safe_lr_factor (they overwrite each other)")
                 eta_t = self.eta
             elif self.safe_lr_factor!=False:
                 print("Forcing eta_t to be based on the input safe lr factor")
