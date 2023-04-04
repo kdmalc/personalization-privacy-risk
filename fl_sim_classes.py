@@ -293,7 +293,7 @@ class Server(ModelBase):
                                                                
 
 class Client(ModelBase, TrainingMethods):
-    def __init__(self, ID, w, method, local_data, data_stream, smoothbatch=1, current_round=0, PCA_comps=7, availability=1, global_method='FedAvg', normalize_dec=False, normalize_EMG=True, track_cost_components=True, track_lr_comps=True, use_real_hess=True, gradient_clipping=False, log_decs=True, clipping_threshold=100, tol=1e-10, adaptive=True, eta=1, track_gradient=True, num_steps=1, APFL_input_eta=False, safe_lr_factor=False, mix_in_each_steps=False, mix_mixed_SB=False, delay_scaling=5, random_delays=False, download_delay=1, upload_delay=1, local_round_threshold=25, condition_number=1, verbose=False):
+    def __init__(self, ID, w, method, local_data, data_stream, smoothbatch=1, current_round=0, PCA_comps=7, availability=1, global_method='FedAvg', normalize_dec=False, normalize_EMG=True, track_cost_components=True, track_lr_comps=True, use_real_hess=True, gradient_clipping=False, log_decs=True, clipping_threshold=100, tol=1e-10, adaptive=True, eta=1, track_gradient=True, num_steps=1, use_zvel=False, reuse_prior_est_as_init=False, APFL_input_eta=False, safe_lr_factor=False, mix_in_each_steps=False, mix_mixed_SB=False, delay_scaling=5, random_delays=False, download_delay=1, upload_delay=1, local_round_threshold=25, condition_number=1, verbose=False):
         super().__init__(ID, w, method, smoothbatch=smoothbatch, current_round=current_round, PCA_comps=PCA_comps, verbose=verbose, num_participants=14, log_init=0)
         '''
         Note self.smoothbatch gets overwritten according to the condition number!  
@@ -311,12 +311,22 @@ class Client(ModelBase, TrainingMethods):
         self.H = np.zeros((2,2))
         self.learning_batch = None
         self.dt = 1.0/60.0
-        self.eta = eta
+        self.eta = eta  # Learning rate
         self.training_data = local_data['training']
         self.labels = local_data['labels']
         # Round minimization output to the nearest int or keep as a float?  Don't need arbitrary precision
         self.round2int = False
         self.normalize_dec = normalize_dec
+        ####################################################################
+        # Maneeshika Code:
+        self.use_zvel = use_zvel
+        self.reuse_prior_est_as_init = reuse_prior_est_as_init
+        if reuse_prior_est_as_init:
+            self.vel_est = np.zeros_like((self.labels))
+            self.pos_est = np.zeros_like((self.labels))
+            self.int_vel_est = np.zeros_like((self.labels))
+        self.hit_bound = 0
+        ####################################################################
         # FL CLASS STUFF
         # Availability for training
         self.availability = availability
@@ -442,8 +452,8 @@ class Client(ModelBase, TrainingMethods):
                 self.performance_log.append(self.alphaE*(np.linalg.norm((self.w@self.F + self.H@self.V[:,:-1] - self.V[:,1:]))**2))
                 self.Dnorm_log.append(self.alphaD*(np.linalg.norm(self.w)**2))
                 self.Fnorm_log.append(self.alphaF*(np.linalg.norm(self.F)**2))
-        # Log Gradient
-        # So.... don't I track it twice then?
+        # Log For APFL Gradient... why have this be separate from the rest...
+        # Wouldn't I also want to try and log the global and pers gradients?
         if self.track_gradient==True and self.global_method!="APFL":
             # The gradient is a vector... So let's just save the L2 norm?
             self.gradient_log.append(np.linalg.norm(gradient_cost_l2(self.F, self.w, self.H, self.V, self.learning_batch, self.alphaF, self.alphaD, Ne=self.PCA_comps)))
@@ -518,21 +528,73 @@ class Client(ModelBase, TrainingMethods):
                 pca = PCA(n_components=self.PCA_comps)
                 s_normed = pca.fit_transform(s_normed)
             s = np.transpose(s_normed)
+            self.F = s[:,:-1] # note: truncate F for estimate_decoder
             v_actual = self.w@s
             p_actual = np.cumsum(v_actual, axis=1)*self.dt  # Numerical integration of v_actual to get p_actual
-            
-            # Add the boundary conditions code here
-            
             p_reference = np.transpose(self.labels[lower_bound:upper_bound,:])
-            # Now set the values used in the cost function
-            self.F = s[:,:-1] # note: truncate F for estimate_decoder
-            self.V = (p_reference - p_actual)*self.dt
-            # self.V = the intended velocity function
             
+            #####################################################################
+            # Add the boundary conditions code here
+            if self.use_zvel:
+                # Maneeshika code
+                p_ref_lim = self.labels[lower_bound:upper_bound,:]
+                
+                # Idk if hit_bound ought to reset every update... that doesn't make that much sense to me
+                #self.hit_bound = 0  # THIS GETS SET IN INIT
+                if self.reuse_prior_est_as_init==True and self.current_round>2:
+                    prev_vel_est = self.vel_est[-1]
+                    prev_pos_est = self.pos_est[-1]
+                    
+                    self.vel_est = np.zeros_like((p_ref_lim))
+                    self.pos_est = np.zeros_like((p_ref_lim))
+                    self.int_vel_est = np.zeros_like((p_ref_lim))
+                    
+                    self.vel_est[0] = prev_vel_est
+                    self.pos_est[0] = prev_pos_est
+                else:
+                    self.vel_est = np.zeros_like((p_ref_lim))
+                    self.pos_est = np.zeros_like((p_ref_lim))
+                    self.int_vel_est = np.zeros_like((p_ref_lim))
+                    self.vel_est[0] = self.w@s[:,0]  # Translated from: Ds_fixed@emg_tr[0]
+                    self.pos_est[0] = [0, 0]
+                for tt in range(1, s.shape[1]):
+                    # Note this does not keep track of actual updates, only the range of 1 to s.shape[1] (1202ish)
+                    # I think maybe we do need to keep track of what the last was when we switch updates and go back to starting at tt=1...
+
+                    vel_plus = self.w@s[:,tt]  # Translated from: Ds_fixed@emg_tr[tt]
+                    p_plus = self.pos_est[tt-1, :] + (self.vel_est[tt-1, :]*self.dt)
+                    # These are just correctives, such that vel_plus can get bounded
+                    # x-coordinate
+                    if abs(p_plus[0]) > 36:  # 36 hardcoded from earlier works
+                        p_plus[0] = self.pos_est[tt-1, 0]
+                        vel_plus[0] = 0
+                        self.hit_bound += 1 # update hit_bound counter
+                    if abs(p_plus[1]) > 24:  # 24 hardcoded from earlier works
+                        p_plus[1] = self.pos_est[tt-1, 1]
+                        vel_plus[1] = 0
+                        self.hit_bound += 1 # update hit_bound counter
+                    if self.hit_bound > 200:  # 200 hardcoded from earlier works
+                        p_plus[0] = 0
+                        vel_plus[0] = 0
+                        p_plus[1] = 0
+                        vel_plus[1] = 0
+                        self.hit_bound = 0
+                    # now update velocity and position
+                    self.vel_est[tt] = vel_plus
+                    self.pos_est[tt] = p_plus
+                    # calculate intended velocity
+                    #self.int_vel_est[tt] = calculate_intended_vels(self.labels[tt], p_plus, 1/self.dt)
+                    self.int_vel_est[tt] = calculate_intended_vels(p_ref_lim[tt], p_plus, 1/self.dt)
+
+                self.V = np.transpose(self.int_vel_est[:tt+1])
+                #print(f"V.shape: {self.V.shape}")
+            else:
+                # Original code
+                self.V = (p_reference - p_actual)*self.dt
             
             if self.global_method=='APFL':
                 self.Vglobal = (p_reference - np.cumsum(self.global_w@s, axis=1)*self.dt)*self.dt
-                #self.Vlocal = (p_reference - np.cumsum(self.w@s, axis=1)*self.dt)*self.dt  
+                #self.Vlocal = (p_reference - np.cumsum(self.w@s, axis=1)*self.dt)*self.dt 
                 # ^Here, Vlocal is just self.V! Same eqn
                 # ^Should this be local or mixed? I think local... 
                 # ^Even though it is evaluated at the mixed dec... not sure
@@ -543,11 +605,11 @@ class Client(ModelBase, TrainingMethods):
     def train_model(self):
         D_0 = copy.copy(self.w_prev)
         # Set the w_prev equal to the current w:
-        self.w_prev = self.w
+        self.w_prev = copy.copy(self.w)
         if self.global_method in ["FedAvg", "NoFL", "FedAvgSB"]:
             if self.global_method=="NoFL":
                 # Overwrite local model with the new global model
-                self.w = self.global_w
+                self.w = copy.copy(self.global_w)
             
             for i in range(self.num_steps):
                 ########################################
@@ -905,3 +967,57 @@ def condensed_external_plotting(input_data, version, exclusion_ID_lst=[], dim_re
     if legend_on:
         plt.legend()
     plt.show()
+    
+
+# Zero vel boundary code:
+def reconstruct_trial_fixed_decoder(ref_tr, emg_tr, Ds_fixed, time_x, fs = 60):
+    time_x = time_x
+    vel_est = np.zeros_like((ref_tr))
+    pos_est = np.zeros_like((ref_tr))
+    int_vel_est = np.zeros_like((ref_tr))
+
+    hit_bound = 0
+    vel_est[0] = Ds_fixed@emg_tr[0]  # D@s --> Kai's v_actual
+    pos_est[0] = [0, 0]
+    for tt in range(1, time_x):
+        vel_plus = Ds_fixed@emg_tr[tt] # at time tt --> also Kai's v_actual...
+        p_plus = pos_est[tt-1, :] + (vel_est[tt-1, :]/fs)
+        # These are just correctives, such that vel_plus can get bounded
+        # x-coordinate
+        if abs(p_plus[0]) > 36:
+            p_plus[0] = pos_est[tt-1, 0]
+            vel_plus[0] = 0
+            hit_bound = hit_bound + 1 # update hit_bound counter
+        if abs(p_plus[1]) > 24:
+            p_plus[1] = pos_est[tt-1, 1]
+            vel_plus[1] = 0
+            hit_bound = hit_bound + 1 # update hit_bound counter
+        if hit_bound > 200:
+            p_plus[0] = 0
+            vel_plus[0] = 0
+            p_plus[1] = 0
+            vel_plus[1] = 0
+            hit_bound = 0
+        # now update velocity and position
+        vel_est[tt] = vel_plus
+        pos_est[tt] = p_plus
+        # calculate intended velocity
+        int_vel_est[tt] = calculate_intended_vels(ref_tr[tt], p_plus, 60)
+    return vel_est, pos_est, int_vel_est
+
+
+def calculate_intended_vels(ref, pos, fs):
+    '''
+    ref = 1 x 2
+    pos = 1 x 2
+    fs = scalar
+    '''
+    
+    gain = 120
+    ALMOST_ZERO_TOL = 0.01
+    intended_vector = (ref - pos)/fs
+    if np.linalg.norm(intended_vector) <= ALMOST_ZERO_TOL:
+        intended_norm = np.zeros((2,))
+    else:
+        intended_norm = intended_vector * gain
+    return intended_norm
