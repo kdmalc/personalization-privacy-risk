@@ -293,7 +293,7 @@ class Server(ModelBase):
                                                                
 
 class Client(ModelBase, TrainingMethods):
-    def __init__(self, ID, w, method, local_data, data_stream, smoothbatch=1, current_round=0, PCA_comps=7, availability=1, global_method='FedAvg', normalize_dec=False, normalize_EMG=True, track_cost_components=True, track_lr_comps=True, use_real_hess=True, gradient_clipping=False, log_decs=True, clipping_threshold=100, tol=1e-10, adaptive=True, eta=1, track_gradient=True, num_steps=1, use_zvel=False, reuse_prior_est_as_init=False, APFL_input_eta=False, safe_lr_factor=False, mix_in_each_steps=False, mix_mixed_SB=False, delay_scaling=5, random_delays=False, download_delay=1, upload_delay=1, local_round_threshold=25, condition_number=1, verbose=False):
+    def __init__(self, ID, w, method, local_data, data_stream, smoothbatch=1, current_round=0, PCA_comps=7, availability=1, global_method='FedAvg', normalize_dec=False, normalize_EMG=True, track_cost_components=True, track_lr_comps=True, use_real_hess=True, gradient_clipping=False, log_decs=True, clipping_threshold=100, tol=1e-10, adaptive=True, eta=1, track_gradient=True, num_steps=1, use_zvel=False, APFL_input_eta=False, safe_lr_factor=False, mix_in_each_steps=False, mix_mixed_SB=False, delay_scaling=5, random_delays=False, download_delay=1, upload_delay=1, local_round_threshold=25, condition_number=1, verbose=False):
         super().__init__(ID, w, method, smoothbatch=smoothbatch, current_round=current_round, PCA_comps=PCA_comps, verbose=verbose, num_participants=14, log_init=0)
         '''
         Note self.smoothbatch gets overwritten according to the condition number!  
@@ -320,11 +320,6 @@ class Client(ModelBase, TrainingMethods):
         ####################################################################
         # Maneeshika Code:
         self.use_zvel = use_zvel
-        self.reuse_prior_est_as_init = reuse_prior_est_as_init
-        if reuse_prior_est_as_init:
-            self.vel_est = np.zeros_like((self.labels))
-            self.pos_est = np.zeros_like((self.labels))
-            self.int_vel_est = np.zeros_like((self.labels))
         self.hit_bound = 0
         ####################################################################
         # FL CLASS STUFF
@@ -540,10 +535,13 @@ class Client(ModelBase, TrainingMethods):
             if self.use_zvel:
                 # Maneeshika code
                 p_ref_lim = self.labels[lower_bound:upper_bound,:]
-                
-                # Idk if hit_bound ought to reset every update... that doesn't make that much sense to me
-                #self.hit_bound = 0  # THIS GETS SET IN INIT
-                if self.reuse_prior_est_as_init==True and self.current_round>2:
+                if self.current_round<2:
+                    self.vel_est = np.zeros_like((p_ref_lim))
+                    self.pos_est = np.zeros_like((p_ref_lim))
+                    self.int_vel_est = np.zeros_like((p_ref_lim))
+                    self.vel_est[0] = self.w@s[:,0]  # Translated from: Ds_fixed@emg_tr[0]
+                    self.pos_est[0] = [0, 0]
+                else:
                     prev_vel_est = self.vel_est[-1]
                     prev_pos_est = self.pos_est[-1]
                     
@@ -553,16 +551,8 @@ class Client(ModelBase, TrainingMethods):
                     
                     self.vel_est[0] = prev_vel_est
                     self.pos_est[0] = prev_pos_est
-                else:
-                    self.vel_est = np.zeros_like((p_ref_lim))
-                    self.pos_est = np.zeros_like((p_ref_lim))
-                    self.int_vel_est = np.zeros_like((p_ref_lim))
-                    self.vel_est[0] = self.w@s[:,0]  # Translated from: Ds_fixed@emg_tr[0]
-                    self.pos_est[0] = [0, 0]
                 for tt in range(1, s.shape[1]):
                     # Note this does not keep track of actual updates, only the range of 1 to s.shape[1] (1202ish)
-                    # I think maybe we do need to keep track of what the last was when we switch updates and go back to starting at tt=1...
-
                     vel_plus = self.w@s[:,tt]  # Translated from: Ds_fixed@emg_tr[tt]
                     p_plus = self.pos_est[tt-1, :] + (self.vel_est[tt-1, :]*self.dt)
                     # These are just correctives, such that vel_plus can get bounded
@@ -585,7 +575,6 @@ class Client(ModelBase, TrainingMethods):
                     self.vel_est[tt] = vel_plus
                     self.pos_est[tt] = p_plus
                     # calculate intended velocity
-                    #self.int_vel_est[tt] = calculate_intended_vels(self.labels[tt], p_plus, 1/self.dt)
                     self.int_vel_est[tt] = calculate_intended_vels(p_ref_lim[tt], p_plus, 1/self.dt)
 
                 self.V = np.transpose(self.int_vel_est[:tt+1])

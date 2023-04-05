@@ -93,7 +93,10 @@ def train_model(my_model, X_train, y_train, cv, res_df, verbose=False, dec_num='
     
 
 def test_model(model_name, X_train, y_train, X_test, y_test, test_df, cv, num_decimals=3, verbose=False, my_cols=['Algorithm', 'CV Acc', 'Test Acc', 'K Folds', 'N'], dec_num='NA'):
-    ''''''
+    '''
+    Inputs
+    Accepts a model NAME (not object), training and test data (eg post split) and trains a model then tests it
+    '''
     
     _, _, acc_cv, trained_model = fit_ml_algo(model_name, X_train, y_train, cv, testing=True)
     y_pred = trained_model.predict(X_test)
@@ -133,10 +136,8 @@ def nth_decoder_model(flat_dec_expanded_df, n, my_models, key_to_num_dict=key_to
     X_train, y_train, X_test, y_test, X_val, y_val = train_test_val_split(dec_df, dec_labels_df)
     y_train = np.ravel(y_train)
     
-    print("X_train")
-    display(X_train.head(10))
-    print("y_train")
-    print(y_train)
+    print(f"X_train shape: {X_train.shape}")
+    print(f"y_train {y_train.shape}\n")
 
     dec_res_df = pd.DataFrame(columns=my_metrics_cols)
     #print("TRAINING")
