@@ -111,7 +111,17 @@ def test_model(model_name, X_train, y_train, X_test, y_test, test_df, cv, num_de
 
 
 def nth_decoder_model(flat_dec_expanded_df, n, my_models, key_to_num_dict=key_to_num, my_metrics_cols=['Algorithm', 'One Off Acc', 'CV Acc', 'K Folds', 'N'], cv=5, test=False):
-    ''''''
+    '''
+    INPUTS
+    flat_dec_expanded_df: Dataframe containing all input decoder data in the form of [Subject, Update Number, Flattened Dec]
+        - Flattened Dec needs to be the decoder in array form (eg use np.ravel() on the dec)
+    n: The update number we are interested in.  Presumably 1-19
+    my_models: List of different model objects (NOT NAMES) to test
+    
+    OUTPUTS
+    dec_res_df:
+    test_df:
+    '''
     
     # Look at just update number n
     non_nth_update_idxs = flat_dec_expanded_df[~(flat_dec_expanded_df['Update Number'] == n)].index
@@ -122,6 +132,11 @@ def nth_decoder_model(flat_dec_expanded_df, n, my_models, key_to_num_dict=key_to
     
     X_train, y_train, X_test, y_test, X_val, y_val = train_test_val_split(dec_df, dec_labels_df)
     y_train = np.ravel(y_train)
+    
+    print("X_train")
+    display(X_train.head(10))
+    print("y_train")
+    print(y_train)
 
     dec_res_df = pd.DataFrame(columns=my_metrics_cols)
     #print("TRAINING")

@@ -426,6 +426,8 @@ class Client(ModelBase, TrainingMethods):
     def execute_training_loop(self):
         self.simulate_data_stream()
         self.train_model()
+        
+        # LOG EVERYTHING
         # Log decs
         if self.log_decs:
             self.dec_log.append(self.w)
