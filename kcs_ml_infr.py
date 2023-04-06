@@ -51,7 +51,7 @@ def fit_ml_algo(algo, X_train, y_train, cv, verbose=False, num_decimals=3, testi
     return train_pred, acc, acc_cv
     
     
-def train_test_val_split(input_df, label_df, rng_seed=2, validation=False, test_percent=0.3, val_percent=0.3):
+def train_test_val_split(input_df, label_df, rng_seed=2, stratification=False, validation=False, test_percent=0.3, val_percent=0.3):
     '''
     I don't think I need a validation set if I'm just doing cross_validation since that should take care of it for me
     '''
@@ -61,7 +61,8 @@ def train_test_val_split(input_df, label_df, rng_seed=2, validation=False, test_
 
     ## TRAIN / TEST
     # Stratify might be good to ensure that all classes are represented, I'm not sure if it'll do that by default
-    X_train, X_test, y_train, y_test = train_test_split(x_train, y_train_reg, test_size=test_percent, random_state=rng_seed, shuffle=True)
+    my_strat = y_train_reg if stratification else None
+    X_train, X_test, y_train, y_test = train_test_split(x_train, y_train_reg, stratify=my_strat, test_size=test_percent, random_state=rng_seed, shuffle=True)
     # Not sure how shuffle and random state interact...
 
     # Should just use cross val instead of manually making val split
@@ -113,7 +114,7 @@ def test_model(model_name, X_train, y_train, X_test, y_test, test_df, cv, num_de
     return test_df
 
 
-def nth_decoder_model(flat_dec_expanded_df, n, my_models, key_to_num_dict=key_to_num, my_metrics_cols=['Algorithm', 'One Off Acc', 'CV Acc', 'K Folds', 'N'], cv=5, test=False):
+def nth_decoder_model(flat_dec_expanded_df, n, my_models, stratification=my_strat, key_to_num_dict=key_to_num, my_metrics_cols=['Algorithm', 'One Off Acc', 'CV Acc', 'K Folds', 'N'], cv=5, test=False):
     '''
     INPUTS
     flat_dec_expanded_df: Dataframe containing all input decoder data in the form of [Subject, Update Number, Flattened Dec]
@@ -133,7 +134,7 @@ def nth_decoder_model(flat_dec_expanded_df, n, my_models, key_to_num_dict=key_to
     dec_labels_df = pd.DataFrame(dec_df['Subject'].map(key_to_num_dict))
     dec_df.drop(['Subject', 'Update Number'], axis=1, inplace=True)
     
-    X_train, y_train, X_test, y_test, X_val, y_val = train_test_val_split(dec_df, dec_labels_df)
+    X_train, y_train, X_test, y_test, X_val, y_val = train_test_val_split(dec_df, dec_labels_df, stratification=my_strat)
     y_train = np.ravel(y_train)
     
     print(f"X_train shape: {X_train.shape}")
