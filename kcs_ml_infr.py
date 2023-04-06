@@ -114,7 +114,7 @@ def test_model(model_name, X_train, y_train, X_test, y_test, test_df, cv, num_de
     return test_df
 
 
-def nth_decoder_model(flat_dec_expanded_df, n, my_models, stratification=my_strat, key_to_num_dict=key_to_num, my_metrics_cols=['Algorithm', 'One Off Acc', 'CV Acc', 'K Folds', 'N'], cv=5, test=False):
+def nth_decoder_model(flat_dec_expanded_df, n, my_models, stratification=False, key_to_num_dict=key_to_num, my_metrics_cols=['Algorithm', 'One Off Acc', 'CV Acc', 'K Folds', 'N'], cv=5, test=False):
     '''
     INPUTS
     flat_dec_expanded_df: Dataframe containing all input decoder data in the form of [Subject, Update Number, Flattened Dec]
@@ -134,7 +134,7 @@ def nth_decoder_model(flat_dec_expanded_df, n, my_models, stratification=my_stra
     dec_labels_df = pd.DataFrame(dec_df['Subject'].map(key_to_num_dict))
     dec_df.drop(['Subject', 'Update Number'], axis=1, inplace=True)
     
-    X_train, y_train, X_test, y_test, X_val, y_val = train_test_val_split(dec_df, dec_labels_df, stratification=my_strat)
+    X_train, y_train, X_test, y_test, X_val, y_val = train_test_val_split(dec_df, dec_labels_df, stratification=stratification)
     y_train = np.ravel(y_train)
     
     print(f"X_train shape: {X_train.shape}")
