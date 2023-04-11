@@ -959,7 +959,323 @@ def condensed_external_plotting(input_data, version, exclusion_ID_lst=[], dim_re
         plt.legend()
     plt.show()
     
+    
+def central_tendency_plotting(input_data, plot_mean=True, plot_median=False, exclusion_ID_lst=[], dim_reduc_factor=1, plot_gradient=False, plot_pers_gradient=False, plot_this_ID_only=-1, plot_global_gradient=False, global_error=True, local_error=True, pers_error=False, different_local_round_thresh_per_client=False, legend_on=True, plot_performance=False, plot_Dnorm=False, plot_Fnorm=False, num_participants=14, show_update_change=True, custom_title="", ylim_max=-1):
+    id2color = {0:'lightcoral', 1:'maroon', 2:'chocolate', 3:'darkorange', 4:'gold', 5:'olive', 6:'olivedrab', 
+            7:'lawngreen', 8:'aquamarine', 9:'deepskyblue', 10:'steelblue', 11:'violet', 12:'darkorchid', 13:'deeppink'}
+    
+    num_central_tendencies = 2  # Mean and median... idk, maybe use flags or something...
+    
+    if dim_reduc_factor!=1:
+        raise("dim_reduc_factor MUST EQUAL 1!")
+        
+    global_df = pd.DataFrame()
+    local_df = pd.DataFrame()
+    pers_df = pd.DataFrame()
+    perf_df = pd.DataFrame()
+    dnorm_df = pd.DataFrame()
+    fnorm_df = pd.DataFrame()
+    grad_df = pd.DataFrame()
+    pers_grad_df = pd.DataFrame()
+    global_grad_df = pd.DataFrame()
+    
+    param_list = [plot_gradient, plot_pers_gradient, plot_global_gradient, global_error, local_error, pers_error, plot_performance, plot_Dnorm, plot_Fnorm]
+    all_vecs_dict = dict()
+    all_vecX_dict = dict()
+    for param_idx, param in enumerate(param_list):
+        all_vecs_dict[param_idx] = [[] for _ in range(num_central_tendencies)]
+        all_vecX_dict[param_idx] = [[] for _ in range(num_central_tendencies)]
+    param_label_dict = {0:'Gradient', 1:'Personalized Gradient', 2:'Global Gradient', 3:'Global Error', 4:'Local Error', 5:'Personalized Error', 6:'Performance', 7:'DNorm', 8:'FNorm'}
+    tendency_label_dict = {0:'Mean', 1:'Pseudo-Median'}
+    
+    global_alpha = 0.25
+    global_linewidth = 3.5
+    local_linewidth = 0.5
+    pers_linewidth = 1
+    
+    def moving_average(numbers, window_size):
+        i = 0
+        moving_averages = []
+        while i < len(numbers) - window_size + 1:
+            this_window = numbers[i : i + window_size]
 
+            window_average = sum(this_window) / window_size
+            moving_averages.append(window_average)
+            i += window_size
+        return moving_averages
+    
+    if custom_title:
+        my_title = custom_title
+    elif global_error and local_error:
+        my_title = f'Global and Local Costs Per Local Iter'
+    elif global_error:
+        my_title = f'Global Cost Per Local Iter'
+    elif local_error:
+        my_title = f'Local Costs Per Local Iter'
+    else:
+        raise ValueError("You set both global and local to False.  At least one must be true in order to plot something.")
+
+    user_database = input_data
+
+        
+    max_local_iters = 0
+
+    for i in range(len(user_database)):
+        # Skip over users that distort the scale
+        if user_database[i].ID in exclusion_ID_lst:
+            continue 
+        elif len(user_database[i].local_error_log)<2:
+            # This node never trained so just skip it so it doesn't break the plotting
+            continue 
+        else: 
+            # This is used for plotting later
+            if len(user_database[i].local_error_log) > max_local_iters:
+                max_local_iters = len(user_database[i].local_error_log)
+
+            # This is how it would be supposed to work
+            # Append needs to change to concat
+            # ISSUE: I loop through the iters and so the dfs aren't actually built yet
+            # So I would have to build each df (do concat and have some base init...)
+            #for flag_idx, plotting_flag in enumerate(param_list):
+            #    if plotting_flag:
+            #        df = pd.DataFrame(user_database[i].global_error_log)
+            #         df.reset_index(inplace=True)
+            #        global_df.append(df.groupby(df.index//dim_reduc_factor, axis=0).mean())
+            #        all_dfs_dict[flag_idx]
+            #        for column in my_df:
+            #            if 'MEAN' in central_tendency.upper():
+                #            all_vecs_dict[flag_idx].append(pd.DataFrame(my_df[column].tolist().mean().tolist()))
+            #            if 'MEDIAN' in central_tendency.upper():
+            #                all_vecs_dict[flag_idx].append(pd.DataFrame(my_df.median(axis=0)))
+            if global_error:
+                df = pd.DataFrame(user_database[i].global_error_log)
+                global_df = pd.concat([global_df, (df.groupby(df.index//dim_reduc_factor, axis=0).mean()).T])
+            if local_error:
+                df = pd.DataFrame(user_database[i].local_error_log)
+                local_df = pd.concat([local_df, (df.groupby(df.index//dim_reduc_factor, axis=0).mean()).T])
+            if pers_error:
+                df = pd.DataFrame(user_database[i].personalized_error_log)
+                pers_df = pd.concat([pers_df, (df.groupby(df.index//dim_reduc_factor, axis=0).mean()).T])
+            if plot_performance:
+                df = pd.DataFrame(user_database[i].performance_log)
+                perf_df = pd.concat([perf_df, (df.groupby(df.index//dim_reduc_factor, axis=0).mean()).T])
+            if plot_Dnorm:
+                df = pd.DataFrame(user_database[i].Dnorm_log)
+                dnorm_df = pd.concat([dnorm_df, (df.groupby(df.index//dim_reduc_factor, axis=0).mean()).T])
+            if plot_Fnorm:
+                df = pd.DataFrame(user_database[i].Fnorm_log)
+                fnorm_df = pd.concat([fnorm_df, (df.groupby(df.index//dim_reduc_factor, axis=0).mean()).T])
+            if plot_gradient:
+                df = pd.DataFrame(user_database[i].gradient_log)
+                grad_df = pd.concat([grad_df, (df.groupby(df.index//dim_reduc_factor, axis=0).mean()).T])
+            if plot_pers_gradient:
+                df = pd.DataFrame(user_database[i].pers_gradient_log)
+                pers_grad_df = pd.concat([pers_grad_df, (df.groupby(df.index//dim_reduc_factor, axis=0).mean()).T])
+            if plot_global_gradient:
+                df = pd.DataFrame(user_database[i].global_gradient_log)
+                global_grad_df = pd.concat([global_grad_df, (df.groupby(df.index//dim_reduc_factor, axis=0).mean()).T])
+
+    # Bad temporary soln for MVP
+    all_dfs_dict = {0:grad_df.reset_index(drop=True), 1:pers_grad_df.reset_index(drop=True), 2:global_grad_df.reset_index(drop=True), 3:global_df.reset_index(drop=True), 4:local_df.reset_index(drop=True), 5:pers_df.reset_index(drop=True), 6:perf_df.reset_index(drop=True), 7:dnorm_df.reset_index(drop=True), 8:fnorm_df.reset_index(drop=True)}
+     
+    for flag_idx, plotting_flag in enumerate(param_list):
+        if plotting_flag:
+            my_df = all_dfs_dict[flag_idx]
+            if plot_mean:
+                all_vecs_dict[flag_idx][0] = my_df.mean()
+            if plot_median:
+                all_vecs_dict[flag_idx][1] = my_df.median()
+            '''
+            for column in my_df:
+                # Using [0] and [1] are bad solns...
+                # How can I then plot median without mean?
+                if plot_mean:
+                    # This method may ignore the NANs?
+                    all_vecs_dict[flag_idx][0].extend(pd.DataFrame(my_df[column].tolist()).mean().tolist())
+                if plot_median:
+                    # Should this be my_df[column]? It says axis=0 so I guess not... idk where these 0s are coming from
+                    all_vecs_dict[flag_idx][1].extend(pd.DataFrame(my_df.median(axis=0)))
+            '''
+
+    if show_update_change==True:
+        for i in range(max_local_iters):
+            if i%user_database[0].local_round_threshold==0:
+                plt.axvline(x=i, color="k", linewidth=1, linestyle=':') 
+                  
+    for flag_idx, plotting_flag in enumerate(param_list):
+        if plotting_flag:
+            my_vec = all_vecs_dict[flag_idx]
+            for vec_idx, vec_vec in enumerate(my_vec):
+                if (plot_mean==True and vec_idx==0) or (plot_median==True and vec_idx==1):
+                    plt.plot(range(len(vec_vec)), vec_vec, label=f"{param_label_dict[flag_idx]} {tendency_label_dict[vec_idx]}")
+    
+    plt.ylabel('Cost L2')
+    plt.xlabel('Iteration Number')
+    plt.title(my_title)
+    num_ticks = 5
+    plt.xticks(ticks=np.linspace(0,max_local_iters,num_ticks,dtype=int))
+    plt.xlim((0,max_local_iters+1))
+    if ylim_max!=-1:
+        plt.ylim((0,ylim_max))
+    if legend_on:
+        plt.legend()
+    plt.show()
+    
+    return user_database, all_dfs_dict
+    
+
+def full_central_tendency_plotting(all_user_input, plot_mean=True, plot_median=False, exclusion_ID_lst=[], dim_reduc_factor=1, plot_gradient=False, plot_pers_gradient=False, plot_this_ID_only=-1, plot_global_gradient=False, global_error=True, local_error=True, pers_error=False, different_local_round_thresh_per_client=False, legend_on=True, plot_performance=False, plot_Dnorm=False, plot_Fnorm=False, num_participants=14, show_update_change=True, custom_title="", ylim_max=-1):
+    id2color = {0:'lightcoral', 1:'maroon', 2:'chocolate', 3:'darkorange', 4:'gold', 5:'olive', 6:'olivedrab', 
+            7:'lawngreen', 8:'aquamarine', 9:'deepskyblue', 10:'steelblue', 11:'violet', 12:'darkorchid', 13:'deeppink'}
+    
+    num_central_tendencies = 2  # Mean and median... idk, maybe use flags or something...
+    
+    if dim_reduc_factor!=1:
+        raise("dim_reduc_factor MUST EQUAL 1!")
+        
+    global_df = pd.DataFrame()
+    local_df = pd.DataFrame()
+    pers_df = pd.DataFrame()
+    perf_df = pd.DataFrame()
+    dnorm_df = pd.DataFrame()
+    fnorm_df = pd.DataFrame()
+    grad_df = pd.DataFrame()
+    pers_grad_df = pd.DataFrame()
+    global_grad_df = pd.DataFrame()
+    
+    param_list = [plot_gradient, plot_pers_gradient, plot_global_gradient, global_error, local_error, pers_error, plot_performance, plot_Dnorm, plot_Fnorm]
+    all_vecs_dict = dict()
+    all_vecX_dict = dict()
+    for param_idx, param in enumerate(param_list):
+        all_vecs_dict[param_idx] = [[] for _ in range(num_central_tendencies)]
+        all_vecX_dict[param_idx] = [[] for _ in range(num_central_tendencies)]
+    param_label_dict = {0:'Gradient', 1:'Personalized Gradient', 2:'Global Gradient', 3:'Global Error', 4:'Local Error', 5:'Personalized Error', 6:'Performance', 7:'DNorm', 8:'FNorm'}
+    tendency_label_dict = {0:'Mean', 1:'Pseudo-Median'}
+    
+    global_alpha = 0.25
+    global_linewidth = 3.5
+    local_linewidth = 0.5
+    pers_linewidth = 1
+    
+    def moving_average(numbers, window_size):
+        i = 0
+        moving_averages = []
+        while i < len(numbers) - window_size + 1:
+            this_window = numbers[i : i + window_size]
+
+            window_average = sum(this_window) / window_size
+            moving_averages.append(window_average)
+            i += window_size
+        return moving_averages
+    
+    if custom_title:
+        my_title = custom_title
+    elif global_error and local_error:
+        my_title = f'Global and Local Costs Per Local Iter'
+    elif global_error:
+        my_title = f'Global Cost Per Local Iter'
+    elif local_error:
+        my_title = f'Local Costs Per Local Iter'
+    else:
+        raise ValueError("You set both global and local to False.  At least one must be true in order to plot something.")
+
+    max_local_iters = 0
+    
+    for user_database in all_user_input:
+        for i in range(len(user_database)):
+            # Skip over users that distort the scale
+            if user_database[i].ID in exclusion_ID_lst:
+                continue 
+            elif len(user_database[i].local_error_log)<2:
+                # This node never trained so just skip it so it doesn't break the plotting
+                continue 
+            else: 
+                # This is used for plotting later
+                if len(user_database[i].local_error_log) > max_local_iters:
+                    max_local_iters = len(user_database[i].local_error_log)
+
+                # This is how it would be supposed to work
+                # Append needs to change to concat
+                # ISSUE: I loop through the iters and so the dfs aren't actually built yet
+                # So I would have to build each df (do concat and have some base init...)
+                #for flag_idx, plotting_flag in enumerate(param_list):
+                #    if plotting_flag:
+                #        df = pd.DataFrame(user_database[i].global_error_log)
+                #         df.reset_index(inplace=True)
+                #        global_df.append(df.groupby(df.index//dim_reduc_factor, axis=0).mean())
+                #        all_dfs_dict[flag_idx]
+                #        for column in my_df:
+                #            if 'MEAN' in central_tendency.upper():
+                    #            all_vecs_dict[flag_idx].append(pd.DataFrame(my_df[column].tolist().mean().tolist()))
+                #            if 'MEDIAN' in central_tendency.upper():
+                #                all_vecs_dict[flag_idx].append(pd.DataFrame(my_df.median(axis=0)))
+                if global_error:
+                    df = pd.DataFrame(user_database[i].global_error_log)
+                    global_df = pd.concat([global_df, (df.groupby(df.index//dim_reduc_factor, axis=0).mean()).T])
+                if local_error:
+                    df = pd.DataFrame(user_database[i].local_error_log)
+                    local_df = pd.concat([local_df, (df.groupby(df.index//dim_reduc_factor, axis=0).mean()).T])
+                if pers_error:
+                    df = pd.DataFrame(user_database[i].personalized_error_log)
+                    pers_df = pd.concat([pers_df, (df.groupby(df.index//dim_reduc_factor, axis=0).mean()).T])
+                if plot_performance:
+                    df = pd.DataFrame(user_database[i].performance_log)
+                    perf_df = pd.concat([perf_df, (df.groupby(df.index//dim_reduc_factor, axis=0).mean()).T])
+                if plot_Dnorm:
+                    df = pd.DataFrame(user_database[i].Dnorm_log)
+                    dnorm_df = pd.concat([dnorm_df, (df.groupby(df.index//dim_reduc_factor, axis=0).mean()).T])
+                if plot_Fnorm:
+                    df = pd.DataFrame(user_database[i].Fnorm_log)
+                    fnorm_df = pd.concat([fnorm_df, (df.groupby(df.index//dim_reduc_factor, axis=0).mean()).T])
+                if plot_gradient:
+                    df = pd.DataFrame(user_database[i].gradient_log)
+                    grad_df = pd.concat([grad_df, (df.groupby(df.index//dim_reduc_factor, axis=0).mean()).T])
+                if plot_pers_gradient:
+                    df = pd.DataFrame(user_database[i].pers_gradient_log)
+                    pers_grad_df = pd.concat([pers_grad_df, (df.groupby(df.index//dim_reduc_factor, axis=0).mean()).T])
+                if plot_global_gradient:
+                    df = pd.DataFrame(user_database[i].global_gradient_log)
+                    global_grad_df = pd.concat([global_grad_df, (df.groupby(df.index//dim_reduc_factor, axis=0).mean()).T])
+
+        # Bad temporary soln for MVP
+        all_dfs_dict = {0:grad_df.reset_index(drop=True), 1:pers_grad_df.reset_index(drop=True), 2:global_grad_df.reset_index(drop=True), 3:global_df.reset_index(drop=True), 4:local_df.reset_index(drop=True), 5:pers_df.reset_index(drop=True), 6:perf_df.reset_index(drop=True), 7:dnorm_df.reset_index(drop=True), 8:fnorm_df.reset_index(drop=True)}
+
+        for flag_idx, plotting_flag in enumerate(param_list):
+            if plotting_flag:
+                my_df = all_dfs_dict[flag_idx]
+                if plot_mean:
+                    all_vecs_dict[flag_idx][0] = my_df.mean()
+                if plot_median:
+                    all_vecs_dict[flag_idx][1] = my_df.median()
+
+        if show_update_change==True:
+            for i in range(max_local_iters):
+                if i%user_database[0].local_round_threshold==0:
+                    plt.axvline(x=i, color="k", linewidth=1, linestyle=':') 
+
+        for flag_idx, plotting_flag in enumerate(param_list):
+            if plotting_flag:
+                my_vec = all_vecs_dict[flag_idx]
+                for vec_idx, vec_vec in enumerate(my_vec):
+                    if (plot_mean==True and vec_idx==0) or (plot_median==True and vec_idx==1):
+                        plt.plot(range(len(vec_vec)), vec_vec, label=f"{param_label_dict[flag_idx]} {tendency_label_dict[vec_idx]}")
+    
+    plt.ylabel('Cost L2')
+    plt.xlabel('Iteration Number')
+    plt.title(my_title)
+    num_ticks = 5
+    plt.xticks(ticks=np.linspace(0,max_local_iters,num_ticks,dtype=int))
+    plt.xlim((0,max_local_iters+1))
+    if ylim_max!=-1:
+        plt.ylim((0,ylim_max))
+    if legend_on:
+        plt.legend()
+    plt.show()
+    
+    return user_database, all_dfs_dict
+    
+    
+##############################################################################
 # Zero vel boundary code:
 def reconstruct_trial_fixed_decoder(ref_tr, emg_tr, Ds_fixed, time_x, fs = 60):
     time_x = time_x
