@@ -128,19 +128,11 @@ def nth_decoder_model(flat_dec_expanded_df, n, my_models, stratification=False, 
     '''
     
     # Look at just update number n
-    #non_nth_update_idxs = flat_dec_expanded_df[~(flat_dec_expanded_df['Update Number'] == n)].index
-    #dec_df = flat_dec_expanded_df.drop(non_nth_update_idxs)
-    print(n)
-    #print(set(flat_dec_expanded_df['Update Number']))  # I have no idea why this is throwing an error...
-    print(set(flat_dec_expanded_df.loc[:, 'Update Number']))
-    print()
-    #dec_df = flat_dec_expanded_df[(flat_dec_expanded_df['Update Number'] == n)]
     dec_df = flat_dec_expanded_df[(flat_dec_expanded_df.loc[:, 'Update Number'] == n)]
-    
     dec_labels_df = pd.DataFrame(dec_df['Subject'].map(key_to_num_dict))
-    dec_df.drop(['Subject', 'Update Number'], axis=1, inplace=True)
+    numeric_df = dec_df.drop(['Subject', 'Update Number'], axis=1)
     
-    X_train, y_train, X_test, y_test, X_val, y_val = train_test_val_split(dec_df, dec_labels_df, stratification=stratification)
+    X_train, y_train, X_test, y_test, X_val, y_val = train_test_val_split(numeric_df, dec_labels_df, stratification=stratification)
     y_train = np.ravel(y_train)
     
     #print(f"X_train shape: {X_train.shape}")
