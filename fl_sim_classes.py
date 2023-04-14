@@ -599,8 +599,9 @@ class Client(ModelBase, TrainingMethods):
         D_0 = copy.copy(self.w_prev)
         # Set the w_prev equal to the current w:
         self.w_prev = copy.copy(self.w)
-        if self.global_method in ["FedAvg", "NoFL", "FedAvgSB"]:
-            if self.global_method=="NoFL":
+        if self.global_method in ["FedAvg", "NoFL", "FedAvgSB", "Per-FedAvg"]:
+            #if self.global_method=="NoFL":  # Unbelievable sad. This is supposed to be != I think...
+            if self.global_method!="NoFL":
                 # Overwrite local model with the new global model
                 self.w = copy.copy(self.global_w)
             
@@ -617,6 +618,17 @@ class Client(ModelBase, TrainingMethods):
                     self.w = self.train_eta_scipyminstep(self.w, self.eta, self.F, self.w, self.H, self.V, self.learning_batch, self.alphaF, self.alphaD, D_0, self.verbose, PCA_comps=self.PCA_comps)
                 elif self.method=='FullScipyMinStep':
                     self.w = self.train_eta_scipyminstep(self.w, self.eta, self.F, self.w, self.H, self.V, self.learning_batch, self.alphaF, self.alphaD, D_0, self.verbose, PCA_comps=self.PCA_comps, full=True)
+                elif self.method=='Per-FedAvg':
+                    self.w_tilde = self.w_prev - self.eta * gradient_cost_l2(self.F, self.w_prev, self.H, self.V, self.learning_batch, self.alphaF, self.alphaD, Ne=self.PCA_comps, flatten=False)
+                    self.w = self.w_prev - self.beta*(np.identity(1) - self.alpha*hessian_cost_l2(self.F, self.alphaD)) * gradient_cost_l2(self.F, self.w_prev, self.H, self.V, self.learning_batch, self.alphaF, self.alphaD, Ne=self.PCA_comps, flatten=False)
+                elif self.method=='Per-FedAvg FO':
+                    self.w_tilde = self.w_prev - self.eta * gradient_cost_l2(self.F, self.w_prev, self.H, self.V, self.learning_batch, self.alphaF, self.alphaD, Ne=self.PCA_comps, flatten=False)
+                    self.w = gradient_cost_l2(self.F, self.w_tilde, self.H, self.V, self.learning_batch, self.alphaF, self.alphaD, Ne=self.PCA_comps, flatten=False)
+                elif self.method=='Per-FedAvg HF':
+                    # Difference of gradients method
+                    self.w_tilde = self.w_prev - self.eta * gradient_cost_l2(self.F, self.w_prev, self.H, self.V, self.learning_batch, self.alphaF, self.alphaD, Ne=self.PCA_comps, flatten=False)
+                    d = (1/(2*self.delta)) * (gradient_cost_l2(self.F, (self.w_prev - gradient_cost_l2(self.F, self.w_prev, self.H, self.V, self.learning_batch, self.alphaF, self.alphaD, Ne=self.PCA_comps, flatten=False)), self.H, self.V, self.learning_batch, self.alphaF, self.alphaD, Ne=self.PCA_comps, flatten=False) + gradient_cost_l2(self.F, (self.w_prev + gradient_cost_l2(self.F, self.w_prev, self.H, self.V, self.learning_batch, self.alphaF, self.alphaD, Ne=self.PCA_comps, flatten=False)), self.H, self.V, self.learning_batch, self.alphaF, self.alphaD, Ne=self.PCA_comps, flatten=False))
+                    self.w = gradient_cost_l2(self.F, self.w_tilde, self.H, self.V, self.learning_batch, self.alphaF, self.alphaD, Ne=self.PCA_comps, flatten=False) - self.alpha*d
                 else:
                     raise ValueError("Unrecognized method")
                 if self.mix_in_each_steps:

@@ -10,7 +10,7 @@ def hessian_cost_l2(F, alphaD, alphaE=1e-6):
 
 # set up gradient of cost:
 # d(c_L2(D))/d(D) = 2*(DF + HV - V+)*F.T + 2*alphaD*D
-def gradient_cost_l2(F, D, H, V, learning_batch, alphaF, alphaD, alphaE=1e-6, Nd=2, Ne=64):
+def gradient_cost_l2(F, D, H, V, learning_batch, alphaF, alphaD, alphaE=1e-6, Nd=2, Ne=64, flatten=True):
     '''
     F: 64 channels x time EMG signals
     V: 2 x time target velocity
@@ -23,7 +23,10 @@ def gradient_cost_l2(F, D, H, V, learning_batch, alphaF, alphaD, alphaE=1e-6, Nd
     D = np.reshape(D,(Nd, Ne))
     Vplus = V[:,1:]
     Vminus = V[:,:-1]
-    return ((2*(D@F + H@Vminus - Vplus)@F.T*(alphaE) + 2*alphaD*D ).flatten())
+    if flatten:
+        return (2*(D@F + H@Vminus - Vplus)@F.T*(alphaE) + 2*alphaD*D ).flatten()
+    else:
+        return 2*(D@F + H@Vminus - Vplus)@F.T*(alphaE) + 2*alphaD*D 
 
 
 # set up the cost function: 
