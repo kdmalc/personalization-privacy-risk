@@ -974,7 +974,7 @@ def condensed_external_plotting(input_data, version, exclusion_ID_lst=[], dim_re
     plt.show()
     
 
-def central_tendency_plotting(all_user_input, plot_mean=True, plot_median=False, exclusion_ID_lst=[], dim_reduc_factor=1, plot_gradient=False, plot_pers_gradient=False, plot_this_ID_only=-1, plot_global_gradient=False, global_error=True, local_error=True, pers_error=False, different_local_round_thresh_per_client=False, legend_on=True, plot_performance=False, plot_Dnorm=False, plot_Fnorm=False, num_participants=14, show_update_change=True, custom_title="", ylim_max=-1, iterable_titles=[], iterable_colors=[]):
+def central_tendency_plotting(all_user_input, plot_mean=True, plot_median=False, exclusion_ID_lst=[], dim_reduc_factor=1, plot_gradient=False, plot_pers_gradient=False, plot_this_ID_only=-1, plot_global_gradient=False, global_error=True, local_error=True, pers_error=False, different_local_round_thresh_per_client=False, legend_on=True, plot_performance=False, plot_Dnorm=False, plot_Fnorm=False, num_participants=14, show_update_change=True, custom_title="", ylim_max=-1, iterable_labels=[], iterable_colors=[]):
     id2color = {0:'lightcoral', 1:'maroon', 2:'chocolate', 3:'darkorange', 4:'gold', 5:'olive', 6:'olivedrab', 
             7:'lawngreen', 8:'aquamarine', 9:'deepskyblue', 10:'steelblue', 11:'violet', 12:'darkorchid', 13:'deeppink'}
     
@@ -1108,8 +1108,8 @@ def central_tendency_plotting(all_user_input, plot_mean=True, plot_median=False,
                 my_vec = all_vecs_dict[flag_idx]
                 for vec_idx, vec_vec in enumerate(my_vec):
                     if (plot_mean==True and vec_idx==0) or (plot_median==True and vec_idx==1):
-                        if iterable_titles!=[]:
-                            my_label = iterable_titles[user_idx]
+                        if iterable_labels!=[]:
+                            my_label = iterable_labels[user_idx]
                         else:
                             my_label = f"{tendency_label_dict[vec_idx]} {param_label_dict[flag_idx]}"
                         plt.plot(range(len(vec_vec)), vec_vec, label=my_label)
