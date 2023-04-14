@@ -24,9 +24,17 @@ class ModelBase:
     def __init__(self, ID, w, method, smoothbatch=1, verbose=False, PCA_comps=7, current_round=0, num_participants=14, log_init=0):
         self.type = 'BaseClass'
         self.ID = ID
-        self.w = w  # Linear regression weights AKA the decoder
-        self.w_prev = copy.copy(w)
-        self.dec_log = [w]
+        self.PCA_comps = PCA_comps
+        self.pca_channel_default = 64  # When PCA_comps equals this, DONT DO PCA
+        if w.shape!=(2, self.PCA_comps):
+            print(f"Class BaseModel: Overwrote the provided init decoder: {w.shape} --> {(2, self.PCA_comps)}")
+            self.w = np.random.rand(2, self.PCA_comps)
+        else:
+            self.w = w
+        self.w_prev = copy.copy(self.w)
+        self.dec_log = [self.w]
+        self.w = self.w  # Linear regression weights AKA the decoder
+        self.w_prev = copy.copy(self.w)
         self.num_participants = num_participants
         self.log_init = log_init
         self.local_error_log = [log_init]*num_participants
@@ -36,12 +44,6 @@ class ModelBase:
         self.current_round = current_round
         self.verbose = verbose
         self.smoothbatch = smoothbatch
-        self.PCA_comps = PCA_comps
-        self.pca_channel_default = 64  # When PCA_comps equals this, DONT DO PCA
-        if self.w.shape!=(2, self.PCA_comps):
-            #print(f"Class BaseModel: Overwrote the provided init decoder: {self.w.shape} --> {(2, self.PCA_comps)}")
-            self.w = np.random.rand(2, self.PCA_comps)
-            self.w_prev = copy.copy(self.w)
         
     def __repr__(self): 
         return f"{self.type}{self.ID}"
@@ -373,8 +375,8 @@ class Client(ModelBase, TrainingMethods):
         self.clipping_threshold = clipping_threshold
         # PLOTTING
         self.log_decs = log_decs
-        self.pers_dec_log = []
-        self.global_dec_log = []
+        self.pers_dec_log = [np.zeros((2,self.PCA_comps))]
+        self.global_dec_log = [np.zeros((2,self.PCA_comps))]
         # Overwrite the logs since global and local track in slightly different ways
         self.local_error_log = []
         self.global_error_log = []
