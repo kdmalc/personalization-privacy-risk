@@ -39,11 +39,13 @@ class ModelBase:
         self.log_init = log_init
         self.local_error_log = [log_init]*num_participants
         self.global_error_log = [log_init]*num_participants
-        self.personalized_error_log = [log_init]*num_participants
+        self.pers_error_log = [log_init]*num_participants
         self.method = method
         self.current_round = current_round
         self.verbose = verbose
         self.smoothbatch = smoothbatch
+        self.pers_methods = ['FedAvgSB', 'APFL', 'Per-FedAvg FO', 'Per-FedAvg HF']
+
         
     def __repr__(self): 
         return f"{self.type}{self.ID}"
@@ -133,7 +135,7 @@ class Server(ModelBase):
                 #    # Do I need to go in and edit the current round or can I just leave it? I think just leave it
                 #    my_client.local_error_log.append(self.local_error_log[-1])
                 #    my_client.global_error_log.append(self.global_error_log[-1])
-                #    my_client.personalized_error_log.append(self.personalized_error_log[-1])
+                #    my_client.pers_error_log.append(self.pers_error_log[-1])
                 
                 # Aggregate global dec every tau iters
                 running_global_dec = 0
@@ -187,7 +189,7 @@ class Server(ModelBase):
                 my_client.chosen_status = 1
         else:
             raise(f"ERROR: Number of available clients must be greater than 0: {self.num_avail_clients}")
-        
+            
     # 2
     def train_client_and_log(self, client_set):
         current_local_lst = []
@@ -207,8 +209,8 @@ class Server(ModelBase):
                 local_init_carry_val = self.local_error_log[-1][my_client.ID][2]#[0]
                 if self.method != 'NoFL':
                     global_init_carry_val = self.global_error_log[-1][my_client.ID][2]#[0]
-                if self.method in ['APFL', 'FedAvgSB']:
-                    pers_init_carry_val = self.personalized_error_log[-1][my_client.ID][2]#[0]
+                if self.method in self.pers_methods:
+                    pers_init_carry_val = self.pers_error_log[-1][my_client.ID][2]#[0]
                     
             if my_client in client_set:
                 # Send those clients the current global model
@@ -220,7 +222,7 @@ class Server(ModelBase):
                 if self.method != 'NoFL':
                     current_global_lst.append((my_client.ID, self.current_round, 
                                                my_client.eval_model(which='global')))
-                if self.method in ['FedAvgSB', 'APFL']:
+                if self.method in self.pers_methods:
                     current_pers_lst.append((my_client.ID, self.current_round, 
                                                my_client.eval_model(which='pers')))
             else:
@@ -229,7 +231,7 @@ class Server(ModelBase):
                 if self.method != 'NoFL':
                     current_global_lst.append((my_client.ID, self.current_round,
                                                global_init_carry_val))
-                if self.method in ['FedAvgSB', 'APFL']:
+                if self.method in self.pers_methods:
                     current_pers_lst.append((my_client.ID, self.current_round,
                                                pers_init_carry_val))
         # Append (ID, COST) to SERVER'S error log.  
@@ -247,12 +249,12 @@ class Server(ModelBase):
                 self.global_error_log.append(current_global_lst)
             else:
                 self.global_error_log.append(current_global_lst)
-        if self.method in ['FedAvgSB', 'APFL']:
-            if self.personalized_error_log==self.init_lst:
-                self.personalized_error_log = []
-                self.personalized_error_log.append(current_pers_lst)
+        if self.method in self.pers_methods:
+            if self.pers_error_log==self.init_lst:
+                self.pers_error_log = []
+                self.pers_error_log.append(current_pers_lst)
             else:
-                self.personalized_error_log.append(current_pers_lst)
+                self.pers_error_log.append(current_pers_lst)
     
     # 3
     def agg_local_weights(self):
@@ -380,7 +382,7 @@ class Client(ModelBase, TrainingMethods):
         # Overwrite the logs since global and local track in slightly different ways
         self.local_error_log = []
         self.global_error_log = []
-        self.personalized_error_log = []
+        self.pers_error_log = []
         self.track_cost_components = track_cost_components
         self.performance_log = []
         self.Dnorm_log = []
@@ -430,7 +432,7 @@ class Client(ModelBase, TrainingMethods):
             self.dec_log.append(self.w)
             if self.global_method=="FedAvg":
                 self.global_dec_log.append(self.global_w)
-            elif self.global_method=="APFL" or "SB" in self.global_method:
+            elif self.global_method in self.pers_methods:
                 self.global_dec_log.append(self.global_w)
                 self.pers_dec_log.append(self.mixed_w)
         # Log Error
@@ -438,8 +440,8 @@ class Client(ModelBase, TrainingMethods):
         # Yes these should both be ifs not elif, they may both need to run
         if self.global_method!="NoFL":
             self.global_error_log.append(self.eval_model(which='global'))
-        if self.global_method=="APFL" or "SB" in self.global_method:
-            self.personalized_error_log.append(self.eval_model(which='pers'))
+        if self.global_method in self.pers_methods:
+            self.pers_error_log.append(self.eval_model(which='pers'))
         # Log Cost Comp
         if self.track_cost_components:
             if self.global_method=='APFL':
@@ -599,13 +601,16 @@ class Client(ModelBase, TrainingMethods):
         D_0 = copy.copy(self.w_prev)
         # Set the w_prev equal to the current w:
         self.w_prev = copy.copy(self.w)
-        if self.global_method in ["FedAvg", "NoFL", "FedAvgSB", "Per-FedAvg"]:
-            #if self.global_method=="NoFL":  # Unbelievable sad. This is supposed to be != I think...
+        if self.global_method in ["FedAvg", "NoFL", "FedAvgSB", "Per-FedAvg", "Per-FedAvg FO", "Per-FedAvg HF"]:
             if self.global_method!="NoFL":
                 # Overwrite local model with the new global model
                 self.w = copy.copy(self.global_w)
             
             for i in range(self.num_steps):
+                # I think this ought to be on but it makes the global model and gradient diverge...
+                #if 'Per-FedAvg' in self.method:
+                #    self.w_prev = copy.copy(self.global_w)
+                
                 ########################################
                 # Should I normalize the dec here?  
                 # I think this will prevent it from blowing up if I norm it every time
@@ -619,6 +624,7 @@ class Client(ModelBase, TrainingMethods):
                 elif self.method=='FullScipyMinStep':
                     self.w = self.train_eta_scipyminstep(self.w, self.eta, self.F, self.w, self.H, self.V, self.learning_batch, self.alphaF, self.alphaD, D_0, self.verbose, PCA_comps=self.PCA_comps, full=True)
                 elif self.method=='Per-FedAvg':
+                    raise("Per-FedAvg uses the Hessian which is sus, choose the <Per-FedAvg FO> or <Per-FedAvg HF> approximations")
                     self.w_tilde = self.w_prev - self.eta * gradient_cost_l2(self.F, self.w_prev, self.H, self.V, self.learning_batch, self.alphaF, self.alphaD, Ne=self.PCA_comps, flatten=False)
                     self.w = self.w_prev - self.beta*(np.identity(1) - self.alpha*hessian_cost_l2(self.F, self.alphaD)) * gradient_cost_l2(self.F, self.w_prev, self.H, self.V, self.learning_batch, self.alphaF, self.alphaD, Ne=self.PCA_comps, flatten=False)
                 elif self.method=='Per-FedAvg FO':
@@ -626,9 +632,18 @@ class Client(ModelBase, TrainingMethods):
                     self.w = gradient_cost_l2(self.F, self.w_tilde, self.H, self.V, self.learning_batch, self.alphaF, self.alphaD, Ne=self.PCA_comps, flatten=False)
                 elif self.method=='Per-FedAvg HF':
                     # Difference of gradients method
-                    self.w_tilde = self.w_prev - self.eta * gradient_cost_l2(self.F, self.w_prev, self.H, self.V, self.learning_batch, self.alphaF, self.alphaD, Ne=self.PCA_comps, flatten=False)
-                    d = (1/(2*self.delta)) * (gradient_cost_l2(self.F, (self.w_prev - gradient_cost_l2(self.F, self.w_prev, self.H, self.V, self.learning_batch, self.alphaF, self.alphaD, Ne=self.PCA_comps, flatten=False)), self.H, self.V, self.learning_batch, self.alphaF, self.alphaD, Ne=self.PCA_comps, flatten=False) + gradient_cost_l2(self.F, (self.w_prev + gradient_cost_l2(self.F, self.w_prev, self.H, self.V, self.learning_batch, self.alphaF, self.alphaD, Ne=self.PCA_comps, flatten=False)), self.H, self.V, self.learning_batch, self.alphaF, self.alphaD, Ne=self.PCA_comps, flatten=False))
-                    self.w = gradient_cost_l2(self.F, self.w_tilde, self.H, self.V, self.learning_batch, self.alphaF, self.alphaD, Ne=self.PCA_comps, flatten=False) - self.alpha*d
+                    alpha = self.eta  # Yes
+                    delta = self.eta  # Not sure... not listed in paper
+                    # w inside original gradient for MAML
+                    w_tilde = self.w_prev - alpha * gradient_cost_l2(self.F, self.w_prev, self.H, self.V, self.learning_batch, self.alphaF, self.alphaD, Ne=self.PCA_comps, flatten=False)
+                    # First gradient term (+)
+                    grad1 = gradient_cost_l2(self.F, (self.w_prev + delta*gradient_cost_l2(self.F, (self.w_prev - alpha*gradient_cost_l2(self.F, self.w_prev, self.H, self.V, self.learning_batch, self.alphaF, self.alphaD, Ne=self.PCA_comps, flatten=False)), self.H, self.V, self.learning_batch, self.alphaF, self.alphaD, Ne=self.PCA_comps, flatten=False)), self.H, self.V, self.learning_batch, self.alphaF, self.alphaD, Ne=self.PCA_comps, flatten=False)
+                    # Second gradient term (flipped to -)
+                    grad2 = gradient_cost_l2(self.F, (self.w_prev - delta*gradient_cost_l2(self.F, (self.w_prev - alpha*gradient_cost_l2(self.F, self.w_prev, self.H, self.V, self.learning_batch, self.alphaF, self.alphaD, Ne=self.PCA_comps, flatten=False)), self.H, self.V, self.learning_batch, self.alphaF, self.alphaD, Ne=self.PCA_comps, flatten=False)), self.H, self.V, self.learning_batch, self.alphaF, self.alphaD, Ne=self.PCA_comps, flatten=False)
+                    # Computing d_i(w)
+                    d = (grad1 - grad2)/(2*delta)
+                    # Set current weight based on the above
+                    self.w = gradient_cost_l2(self.F, w_tilde, self.H, self.V, self.learning_batch, self.alphaF, self.alphaD, Ne=self.PCA_comps, flatten=False) - alpha*d
                 else:
                     raise ValueError("Unrecognized method")
                 if self.mix_in_each_steps:
@@ -642,7 +657,7 @@ class Client(ModelBase, TrainingMethods):
             # Maybe move this to only happen after each update? Does it really need to happen every iter?
             # I'd have to add weird flags just for this in various places... put on hold for now
             #W_new = alpha*D[-1] + ((1 - alpha) * W_hat)
-            if self.global_method in ["FedAvg", "NoFL"]:
+            if self.global_method in ["FedAvg", "NoFL"]:  # Maybe should add Per-FedAvg here...
                 self.w = self.smoothbatch*self.w + ((1 - self.smoothbatch)*self.w_prev)
             elif self.global_method=="FedAvgSB":
                 global_local_SB = self.smoothbatch*self.w + ((1 - self.smoothbatch)*self.global_w)
@@ -746,11 +761,11 @@ class Client(ModelBase, TrainingMethods):
             
         # Save the new decoder to the log
         #self.dec_log.append(self.w)
-        #if self.global_method=="APFL" or "SB" in self.global_method:
+        #if self.global_method in self.pers_methods:
         #    self.pers_dec_log.append(self.mixed_w)
         #self.global_dec_log.append(self.global_w)
-        # Loggning the grad here and in exec was causing the muted gradient bumps
-        # No idea why that would happen, maybe it made the average lower somehow?
+        
+        # Logging the grad here and in exec was causing the muted gradient bumps
         if self.global_method=="APFL" and self.track_gradient==True:
             # FOR APFL ONLY
             self.gradient_log.append(np.linalg.norm(gradient_cost_l2(self.F, self.w, self.H, self.V, self.learning_batch, self.alphaF, self.alphaD, Ne=self.PCA_comps)))
@@ -774,8 +789,8 @@ class Client(ModelBase, TrainingMethods):
             my_dec = self.global_w
             # self.V for non APFL case, only APFL defines Vglobal, as of 3/21
             my_V = self.Vglobal if self.global_method=='APFL' else self.V
-        elif which=='pers' and self.global_method in ['APFL', 'FedAvgSB']:
-            my_dec = self.mixed_w
+        elif which=='pers' and self.global_method in self.pers_methods:
+            my_dec = self.w if 'Per-FedAvg' in self.global_method else self.mixed_w
             # self.V for non APFL case, only APFL defines Vmixed, as of 3/24
             my_V = self.Vmixed if self.global_method=='APFL' else self.V
         else:
@@ -883,7 +898,7 @@ def condensed_external_plotting(input_data, version, exclusion_ID_lst=[], dim_re
                     df10 = df.groupby(df.index//dim_reduc_factor, axis=0).mean()
                     plt.plot(df10.values[:, 0], df10.values[:, 1], color=id2color[user_database[i].ID], linewidth=local_linewidth)
                 if pers_error:
-                    df = pd.DataFrame(user_database[i].personalized_error_log)
+                    df = pd.DataFrame(user_database[i].pers_error_log)
                     df.reset_index(inplace=True)
                     df10 = df.groupby(df.index//dim_reduc_factor, axis=0).mean()
                     plt.plot(df10.values[:, 0], df10.values[:, 1], color=id2color[user_database[i].ID], linewidth=pers_linewidth, linestyle="--")
@@ -945,8 +960,8 @@ def condensed_external_plotting(input_data, version, exclusion_ID_lst=[], dim_re
                     client_loss = []
                     client_global_round = []
                     for j in range(input_data.current_round):
-                        client_loss.append(input_data.personalized_error_log[j][i][2])
-                        client_global_round.append(input_data.personalized_error_log[j][i][1])
+                        client_loss.append(input_data.pers_error_log[j][i][2])
+                        client_global_round.append(input_data.pers_error_log[j][i][1])
                     plt.plot(moving_average(client_global_round, dim_reduc_factor)[1:], moving_average(client_loss, dim_reduc_factor)[1:], color=id2color[user_database[i].ID], linewidth=pers_linewidth, linestyle="--")
 
                 if show_update_change:
@@ -1066,7 +1081,7 @@ def central_tendency_plotting(all_user_input, plot_mean=True, plot_median=False,
                     df = pd.DataFrame(user_database[i].local_error_log)
                     local_df = pd.concat([local_df, (df.groupby(df.index//dim_reduc_factor, axis=0).mean()).T])
                 if pers_error:
-                    df = pd.DataFrame(user_database[i].personalized_error_log)
+                    df = pd.DataFrame(user_database[i].pers_error_log)
                     pers_df = pd.concat([pers_df, (df.groupby(df.index//dim_reduc_factor, axis=0).mean()).T])
                 if plot_performance:
                     df = pd.DataFrame(user_database[i].performance_log)
