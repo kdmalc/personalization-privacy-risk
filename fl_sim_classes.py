@@ -297,7 +297,7 @@ class Server(ModelBase):
                                                                
 
 class Client(ModelBase, TrainingMethods):
-    def __init__(self, ID, w, method, local_data, data_stream, smoothbatch=1, current_round=0, PCA_comps=7, availability=1, global_method='FedAvg', normalize_dec=False, normalize_EMG=True, track_cost_components=True, track_lr_comps=True, use_real_hess=True, gradient_clipping=False, log_decs=True, clipping_threshold=100, tol=1e-10, adaptive=True, eta=1, track_gradient=True, num_steps=1, use_zvel=False, APFL_input_eta=False, safe_lr_factor=False, mix_in_each_steps=False, mix_mixed_SB=False, delay_scaling=5, random_delays=False, download_delay=1, upload_delay=1, local_round_threshold=25, condition_number=1, verbose=False):
+    def __init__(self, ID, w, method, local_data, data_stream, smoothbatch=1, current_round=0, PCA_comps=7, availability=1, global_method='FedAvg', normalize_dec=False, normalize_EMG=True, track_cost_components=True, track_lr_comps=True, use_real_hess=True, gradient_clipping=False, log_decs=True, clipping_threshold=100, tol=1e-10, adaptive=True, eta=1, track_gradient=True, wprev_global=False, num_steps=1, use_zvel=False, APFL_input_eta=False, safe_lr_factor=False, mix_in_each_steps=False, mix_mixed_SB=False, delay_scaling=5, random_delays=False, download_delay=1, upload_delay=1, local_round_threshold=25, condition_number=1, verbose=False):
         super().__init__(ID, w, method, smoothbatch=smoothbatch, current_round=current_round, PCA_comps=PCA_comps, verbose=verbose, num_participants=14, log_init=0)
         '''
         Note self.smoothbatch gets overwritten according to the condition number!  
@@ -335,6 +335,7 @@ class Client(ModelBase, TrainingMethods):
         self.data_stream = data_stream  # {'full_data', 'streaming', 'advance_each_iter'} 
         # Number of gradient steps to take when training (eg amount of local computation)
         self.num_steps = num_steps
+        self.wprev_global = wprev_global
         # GLOBAL STUFF
         self.global_method = global_method
         # UPDATE STUFF
@@ -608,8 +609,8 @@ class Client(ModelBase, TrainingMethods):
             
             for i in range(self.num_steps):
                 # I think this ought to be on but it makes the global model and gradient diverge...
-                #if 'Per-FedAvg' in self.method:
-                #    self.w_prev = copy.copy(self.global_w)
+                if self.wprev_global==True and i==0 and ('Per-FedAvg' in self.method):
+                    self.w_prev = copy.copy(self.global_w)
                 
                 ########################################
                 # Should I normalize the dec here?  
@@ -989,7 +990,7 @@ def condensed_external_plotting(input_data, version, exclusion_ID_lst=[], dim_re
     plt.show()
     
 
-def central_tendency_plotting(all_user_input, plot_mean=True, plot_median=False, exclusion_ID_lst=[], dim_reduc_factor=1, plot_gradient=False, plot_pers_gradient=False, plot_this_ID_only=-1, plot_global_gradient=False, global_error=True, local_error=True, pers_error=False, different_local_round_thresh_per_client=False, legend_on=True, plot_performance=False, plot_Dnorm=False, plot_Fnorm=False, num_participants=14, show_update_change=True, custom_title="", ylim_max=-1, iterable_labels=[], iterable_colors=[]):
+def central_tendency_plotting(all_user_input, highlight_default=False, plot_mean=True, plot_median=False, exclusion_ID_lst=[], dim_reduc_factor=1, plot_gradient=False, plot_pers_gradient=False, plot_this_ID_only=-1, plot_global_gradient=False, global_error=True, local_error=True, pers_error=False, different_local_round_thresh_per_client=False, legend_on=True, plot_performance=False, plot_Dnorm=False, plot_Fnorm=False, num_participants=14, show_update_change=True, custom_title="", ylim_max=-1, iterable_labels=[], iterable_colors=[]):
     id2color = {0:'lightcoral', 1:'maroon', 2:'chocolate', 3:'darkorange', 4:'gold', 5:'olive', 6:'olivedrab', 
             7:'lawngreen', 8:'aquamarine', 9:'deepskyblue', 10:'steelblue', 11:'violet', 12:'darkorchid', 13:'deeppink'}
     
@@ -1104,7 +1105,7 @@ def central_tendency_plotting(all_user_input, plot_mean=True, plot_median=False,
 
         # Bad temporary soln for MVP
         all_dfs_dict = {0:grad_df.reset_index(drop=True), 1:pers_grad_df.reset_index(drop=True), 2:global_grad_df.reset_index(drop=True), 3:global_df.reset_index(drop=True), 4:local_df.reset_index(drop=True), 5:pers_df.reset_index(drop=True), 6:perf_df.reset_index(drop=True), 7:dnorm_df.reset_index(drop=True), 8:fnorm_df.reset_index(drop=True)}
-
+   
         for flag_idx, plotting_flag in enumerate(param_list):
             if plotting_flag:
                 my_df = all_dfs_dict[flag_idx]
@@ -1127,7 +1128,9 @@ def central_tendency_plotting(all_user_input, plot_mean=True, plot_median=False,
                             my_label = iterable_labels[user_idx]
                         else:
                             my_label = f"{tendency_label_dict[vec_idx]} {param_label_dict[flag_idx]}"
-                        plt.plot(range(len(vec_vec)), vec_vec, label=my_label)
+                        my_alpha = 0.4 if (highlight_default and user_idx==0) else 1
+                        my_linewidth = 5 if (highlight_default and user_idx==0) else 1
+                        plt.plot(range(len(vec_vec)), vec_vec, label=my_label, alpha=my_alpha, linewidth=my_linewidth)
     
     plt.ylabel('Cost L2')
     plt.xlabel('Iteration Number')
