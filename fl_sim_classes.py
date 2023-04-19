@@ -832,14 +832,10 @@ class Client(ModelBase, TrainingMethods):
 
 
 # Add this as a static method?
-def condensed_external_plotting(input_data, version, exclusion_ID_lst=[], dim_reduc_factor=1, plot_gradient=False, plot_pers_gradient=False, plot_this_ID_only=-1, plot_global_gradient=False, global_error=True, local_error=True, pers_error=False, different_local_round_thresh_per_client=False, legend_on=False, plot_performance=False, plot_Dnorm=False, plot_Fnorm=False, num_participants=14, show_update_change=True, custom_title="", ylim_max=None, ylim_min=None):
+def condensed_external_plotting(input_data, version, exclusion_ID_lst=[], dim_reduc_factor=1, plot_gradient=False, plot_pers_gradient=False, plot_this_ID_only=-1, plot_global_gradient=False, global_error=True, local_error=True, pers_error=False, different_local_round_thresh_per_client=False, legend_on=False, plot_performance=False, plot_Dnorm=False, plot_Fnorm=False, num_participants=14, show_update_change=True, custom_title="", ylim_max=None, ylim_min=None, global_alpha=1, local_alpha=1, pers_alpha=1, global_linewidth=1, local_linewidth=1, pers_linewidth=1, global_linestyle='dashed', local_linestyle='solid', pers_linestyle='dotted'):
+    
     id2color = {0:'lightcoral', 1:'maroon', 2:'chocolate', 3:'darkorange', 4:'gold', 5:'olive', 6:'olivedrab', 
             7:'lawngreen', 8:'aquamarine', 9:'deepskyblue', 10:'steelblue', 11:'violet', 12:'darkorchid', 13:'deeppink'}
-    
-    global_alpha = 0.25
-    global_linewidth = 3.5
-    local_linewidth = 0.5
-    pers_linewidth = 1
     
     def moving_average(numbers, window_size):
         i = 0
@@ -892,17 +888,17 @@ def condensed_external_plotting(input_data, version, exclusion_ID_lst=[], dim_re
                     df = pd.DataFrame(user_database[i].global_error_log)
                     df.reset_index(inplace=True)
                     df10 = df.groupby(df.index//dim_reduc_factor, axis=0).mean()
-                    plt.plot(df10.values[:, 0], df10.values[:, 1], color=id2color[user_database[i].ID], linewidth=global_linewidth, alpha=global_alpha)
+                    plt.plot(df10.values[:, 0], df10.values[:, 1], color=id2color[user_database[i].ID], linewidth=global_linewidth, alpha=global_alpha, linestyle=global_linestyle)
                 if local_error:
                     df = pd.DataFrame(user_database[i].local_error_log)
                     df.reset_index(inplace=True)
                     df10 = df.groupby(df.index//dim_reduc_factor, axis=0).mean()
-                    plt.plot(df10.values[:, 0], df10.values[:, 1], color=id2color[user_database[i].ID], linewidth=local_linewidth)
+                    plt.plot(df10.values[:, 0], df10.values[:, 1], color=id2color[user_database[i].ID], linewidth=local_linewidth, alpha=local_alpha, linestyle=local_linestyle)
                 if pers_error:
                     df = pd.DataFrame(user_database[i].pers_error_log)
                     df.reset_index(inplace=True)
                     df10 = df.groupby(df.index//dim_reduc_factor, axis=0).mean()
-                    plt.plot(df10.values[:, 0], df10.values[:, 1], color=id2color[user_database[i].ID], linewidth=pers_linewidth, linestyle="--")
+                    plt.plot(df10.values[:, 0], df10.values[:, 1], color=id2color[user_database[i].ID], linewidth=pers_linewidth, alpha=pers_alpha, linestyle=pers_linestyle)
                 # NOT THE COST FUNC, THESE ARE THE INDIVIDUAL COMPONENTS OF IT
                 if plot_performance:
                     df = pd.DataFrame(user_database[i].performance_log)
@@ -947,7 +943,7 @@ def condensed_external_plotting(input_data, version, exclusion_ID_lst=[], dim_re
                         client_global_round.append(input_data.global_error_log[j][i][1])
                     # Why is the [1:] here?  What happens when dim_reduc=1? 
                     # Verify that this is the same as my envelope code...
-                    plt.plot(moving_average(client_global_round, dim_reduc_factor)[1:], moving_average(client_loss, dim_reduc_factor)[1:], color=id2color[user_database[i].ID], linewidth=global_linewidth, alpha=global_alpha)
+                    plt.plot(moving_average(client_global_round, dim_reduc_factor)[1:], moving_average(client_loss, dim_reduc_factor)[1:], color=id2color[user_database[i].ID], linewidth=global_linewidth, alpha=global_alpha, linestyle=global_linestyle)
 
                 if local_error:
                     client_loss = []
@@ -955,7 +951,7 @@ def condensed_external_plotting(input_data, version, exclusion_ID_lst=[], dim_re
                     for j in range(input_data.current_round):
                         client_loss.append(input_data.local_error_log[j][i][2])
                         client_global_round.append(input_data.local_error_log[j][i][1])
-                    plt.plot(moving_average(client_global_round, dim_reduc_factor)[1:], moving_average(client_loss, dim_reduc_factor)[1:], color=id2color[user_database[i].ID], linewidth=local_linewidth)
+                    plt.plot(moving_average(client_global_round, dim_reduc_factor)[1:], moving_average(client_loss, dim_reduc_factor)[1:], color=id2color[user_database[i].ID], linewidth=local_linewidth, alpha=local_alpha, linestyle=local_linestyle)
                
                 if pers_error:
                     client_loss = []
@@ -963,7 +959,7 @@ def condensed_external_plotting(input_data, version, exclusion_ID_lst=[], dim_re
                     for j in range(input_data.current_round):
                         client_loss.append(input_data.pers_error_log[j][i][2])
                         client_global_round.append(input_data.pers_error_log[j][i][1])
-                    plt.plot(moving_average(client_global_round, dim_reduc_factor)[1:], moving_average(client_loss, dim_reduc_factor)[1:], color=id2color[user_database[i].ID], linewidth=pers_linewidth, linestyle="--")
+                    plt.plot(moving_average(client_global_round, dim_reduc_factor)[1:], moving_average(client_loss, dim_reduc_factor)[1:], color=id2color[user_database[i].ID], linewidth=pers_linewidth, alpha=pers_alpha, linestyle=pers_linestyle)
 
                 if show_update_change:
                     for update_round in user_database[i].update_transition_log:
@@ -993,7 +989,8 @@ def condensed_external_plotting(input_data, version, exclusion_ID_lst=[], dim_re
     plt.show()
     
 
-def central_tendency_plotting(all_user_input, highlight_default=False, plot_mean=True, plot_median=False, exclusion_ID_lst=[], dim_reduc_factor=1, plot_gradient=False, plot_pers_gradient=False, plot_this_ID_only=-1, plot_global_gradient=False, global_error=True, local_error=True, pers_error=False, different_local_round_thresh_per_client=False, legend_on=True, plot_performance=False, plot_Dnorm=False, plot_Fnorm=False, num_participants=14, show_update_change=True, custom_title="", ylim_max=None, ylim_min=None, iterable_labels=[], iterable_colors=[]):
+def central_tendency_plotting(all_user_input, highlight_default=False, default_local=False, default_global=False, default_pers=False, plot_mean=True, plot_median=False, exclusion_ID_lst=[], dim_reduc_factor=1, plot_gradient=False, plot_pers_gradient=False, plot_this_ID_only=-1, plot_global_gradient=False, global_error=True, local_error=True, pers_error=False, different_local_round_thresh_per_client=False, legend_on=True, plot_performance=False, plot_Dnorm=False, plot_Fnorm=False, num_participants=14, show_update_change=True, custom_title="", ylim_max=None, ylim_min=None, iterable_labels=[], iterable_colors=[]):
+    
     id2color = {0:'lightcoral', 1:'maroon', 2:'chocolate', 3:'darkorange', 4:'gold', 5:'olive', 6:'olivedrab', 
             7:'lawngreen', 8:'aquamarine', 9:'deepskyblue', 10:'steelblue', 11:'violet', 12:'darkorchid', 13:'deeppink'}
     
@@ -1020,11 +1017,6 @@ def central_tendency_plotting(all_user_input, highlight_default=False, plot_mean
         all_vecX_dict[param_idx] = [[] for _ in range(num_central_tendencies)]
     param_label_dict = {0:'Gradient', 1:'Personalized Gradient', 2:'Global Gradient', 3:'Global Error', 4:'Local Error', 5:'Personalized Error', 6:'Performance', 7:'DNorm', 8:'FNorm'}
     tendency_label_dict = {0:'Mean', 1:'Pseudo-Median'}
-    
-    global_alpha = 0.25
-    global_linewidth = 3.5
-    local_linewidth = 0.5
-    pers_linewidth = 1
     
     def moving_average(numbers, window_size):
         i = 0
@@ -1078,13 +1070,13 @@ def central_tendency_plotting(all_user_input, highlight_default=False, plot_mean
                     #            all_vecs_dict[flag_idx].append(pd.DataFrame(my_df[column].tolist().mean().tolist()))
                 #            if 'MEDIAN' in central_tendency.upper():
                 #                all_vecs_dict[flag_idx].append(pd.DataFrame(my_df.median(axis=0)))
-                if global_error:
+                if global_error or (user_idx==0 and default_global==True):
                     df = pd.DataFrame(user_database[i].global_error_log)
                     global_df = pd.concat([global_df, (df.groupby(df.index//dim_reduc_factor, axis=0).mean()).T])
-                if local_error:
+                if local_error or (user_idx==0 and default_local==True):
                     df = pd.DataFrame(user_database[i].local_error_log)
                     local_df = pd.concat([local_df, (df.groupby(df.index//dim_reduc_factor, axis=0).mean()).T])
-                if pers_error:
+                if pers_error or (user_idx==0 and default_pers==True):
                     df = pd.DataFrame(user_database[i].pers_error_log)
                     pers_df = pd.concat([pers_df, (df.groupby(df.index//dim_reduc_factor, axis=0).mean()).T])
                 if plot_performance:
@@ -1108,7 +1100,7 @@ def central_tendency_plotting(all_user_input, highlight_default=False, plot_mean
 
         # Bad temporary soln for MVP
         all_dfs_dict = {0:grad_df.reset_index(drop=True), 1:pers_grad_df.reset_index(drop=True), 2:global_grad_df.reset_index(drop=True), 3:global_df.reset_index(drop=True), 4:local_df.reset_index(drop=True), 5:pers_df.reset_index(drop=True), 6:perf_df.reset_index(drop=True), 7:dnorm_df.reset_index(drop=True), 8:fnorm_df.reset_index(drop=True)}
-   
+        
         for flag_idx, plotting_flag in enumerate(param_list):
             if plotting_flag:
                 my_df = all_dfs_dict[flag_idx]
@@ -1131,6 +1123,52 @@ def central_tendency_plotting(all_user_input, highlight_default=False, plot_mean
                             my_label = iterable_labels[user_idx]
                         else:
                             my_label = f"{tendency_label_dict[vec_idx]} {param_label_dict[flag_idx]}"
+                        my_alpha = 0.4 if (highlight_default and user_idx==0) else 1
+                        my_linewidth = 5 if (highlight_default and user_idx==0) else 1
+                        plt.plot(range(len(vec_vec)), vec_vec, label=my_label, alpha=my_alpha, linewidth=my_linewidth)
+                        
+                        
+        #param_list FOR REFERENCE: [plot_gradient, plot_pers_gradient, plot_global_gradient, global_error, local_error, pers_error, plot_performance, plot_Dnorm, plot_Fnorm]         
+        if user_idx==0:
+            if default_global:  # 3 corresponds to global
+                global_idx = 3
+                all_vecs_dict[global_idx][0] = all_dfs_dict[global_idx]
+                all_vecs_dict[global_idx][0] = all_dfs_dict[global_idx]
+                my_vec = all_vecs_dict[global_idx]
+                for vec_idx, vec_vec in enumerate(my_vec):
+                    if (plot_mean==True and vec_idx==0) or (plot_median==True and vec_idx==1):
+                        if iterable_labels!=[]:
+                            my_label = iterable_labels[user_idx]
+                        else:
+                            my_label = f"{tendency_label_dict[vec_idx]} Global Error"
+                        my_alpha = 0.4 if (highlight_default and user_idx==0) else 1
+                        my_linewidth = 5 if (highlight_default and user_idx==0) else 1
+                        plt.plot(range(len(vec_vec)), vec_vec, label=my_label, alpha=my_alpha, linewidth=my_linewidth)
+            if default_local:  # 4 corresponds to local
+                local_idx = 4
+                all_vecs_dict[local_idx][0] = all_dfs_dict[local_idx]
+                all_vecs_dict[local_idx][0] = all_dfs_dict[local_idx]
+                my_vec = all_vecs_dict[local_idx]
+                for vec_idx, vec_vec in enumerate(my_vec):
+                    if (plot_mean==True and vec_idx==0) or (plot_median==True and vec_idx==1):
+                        if iterable_labels!=[]:
+                            my_label = iterable_labels[user_idx]
+                        else:
+                            my_label = f"{tendency_label_dict[vec_idx]} Local Error"
+                        my_alpha = 0.4 if (highlight_default and user_idx==0) else 1
+                        my_linewidth = 5 if (highlight_default and user_idx==0) else 1
+                        plt.plot(range(len(vec_vec)), vec_vec, label=my_label, alpha=my_alpha, linewidth=my_linewidth)
+            if default_pers:  # 5 corresponds to pers
+                pers_idx = 5
+                all_vecs_dict[pers_idx][0] = all_dfs_dict[pers_idx]
+                all_vecs_dict[pers_idx][0] = all_dfs_dict[pers_idx]
+                my_vec = all_vecs_dict[pers_idx]
+                for vec_idx, vec_vec in enumerate(my_vec):
+                    if (plot_mean==True and vec_idx==0) or (plot_median==True and vec_idx==1):
+                        if iterable_labels!=[]:
+                            my_label = iterable_labels[user_idx]
+                        else:
+                            my_label = f"{tendency_label_dict[vec_idx]} Personalized Error"
                         my_alpha = 0.4 if (highlight_default and user_idx==0) else 1
                         my_linewidth = 5 if (highlight_default and user_idx==0) else 1
                         plt.plot(range(len(vec_vec)), vec_vec, label=my_label, alpha=my_alpha, linewidth=my_linewidth)
