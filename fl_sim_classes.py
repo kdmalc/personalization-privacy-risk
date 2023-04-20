@@ -31,10 +31,9 @@ class ModelBase:
             self.w = np.random.rand(2, self.PCA_comps)
         else:
             self.w = w
-        self.w_prev = copy.copy(self.w)
-        self.dec_log = [self.w]
-        self.w = self.w  # Linear regression weights AKA the decoder
-        self.w_prev = copy.copy(self.w)
+        self.w_prev = copy.deepcopy(self.w)
+        self.dec_log = [copy.deepcopy(self.w)]
+        self.w_prev = copy.deepcopy(self.w)
         self.num_participants = num_participants
         self.log_init = log_init
         self.local_error_log = [log_init]*num_participants
@@ -107,7 +106,7 @@ class Server(ModelBase):
             # Let those clients train (this autoselects the chosen_client_lst to use)
             self.train_client_and_log(client_set=self.chosen_clients_lst)
             # AGGREGATION
-            self.w_prev = copy.copy(self.w)
+            self.w_prev = copy.deepcopy(self.w)
             self.agg_local_weights()  # This func sets self.w, eg the new decoder
             # GLOBAL SmoothBatch
             #W_new = alpha*D[-1] + ((1 - alpha) * W_hat)
@@ -119,7 +118,6 @@ class Server(ModelBase):
             self.train_client_and_log(client_set=self.all_clients)
         elif self.method=='APFL':
             t = self.current_round
-            running_dec_aggr = 0
             # They wrote: "if t not devices Tau then" but that seem like it would only run 1 update per t, 
             # AKA 50 t's to select new clients.  I'll write it like they did ig...
             if t%self.tau!=0:
@@ -138,24 +136,23 @@ class Server(ModelBase):
                 #    my_client.pers_error_log.append(self.pers_error_log[-1])
                 
                 # Aggregate global dec every tau iters
-                running_global_dec = 0
+                running_global_dec = np.zeros((2, self.PCA_comps))
                 for my_client in self.chosen_clients_lst:
                     running_global_dec += my_client.global_w
-                self.w = copy.copy(running_global_dec)
+                self.w = (1/self.K)*copy.deepcopy(running_global_dec)
                 self.set_available_clients_list()
                 self.choose_clients()
+                self.K = len(self.chosen_clients_lst)
                 # Presumably len(self.chosen_clients_lst) will always be the same (same C)... 
                 # otherwise would need to re-set K as so:
                 #self.K = len(self.chosen_clients_lst)
 
                 for my_client in self.chosen_clients_lst:
-                    my_client.global_w = copy.copy(self.w)  
-                    #^ Is copy necessary? Depends if updated or overwritten...
-            self.w = (1/self.K)*running_dec_aggr
+                    my_client.global_w = copy.deepcopy(self.w)  
         else:
             raise('Method not currently supported, please reset method to FedAvg')
         # Save the new decoder to the log
-        self.dec_log.append(self.w)
+        self.dec_log.append(copy.deepcopy(self.w))
         # Reset all clients so no one is chosen for the next round
         for my_client in self.all_clients:  # Would it be better to use just the chosen_clients or do all_clients?
             if type(my_client)==int:
@@ -399,8 +396,8 @@ class Client(ModelBase, TrainingMethods):
         # These are general personalization things
         self.running_pers_term = 0
         self.running_global_term = 0
-        self.global_w = copy.copy(self.w)
-        self.mixed_w = copy.copy(self.w)
+        self.global_w = copy.deepcopy(self.w)
+        self.mixed_w = copy.deepcopy(self.w)
         # APFL Stuff
         self.tol = tol 
         self.track_lr_comps = track_lr_comps
@@ -605,12 +602,13 @@ class Client(ModelBase, TrainingMethods):
         if self.global_method in ["FedAvg", "NoFL", "FedAvgSB", "Per-FedAvg", "Per-FedAvg FO", "Per-FedAvg HF"]:
             if self.global_method!="NoFL":
                 # Overwrite local model with the new global model
-                self.w = copy.copy(self.global_w)
+                self.w = copy.deepcopy(self.global_w)
             
             for i in range(self.num_steps):
                 # I think this ought to be on but it makes the global model and gradient diverge...
+                # Why can't i do this outside the loop
                 if self.wprev_global==True and i==0 and ('Per-FedAvg' in self.method):
-                    self.w_prev = copy.copy(self.global_w)
+                    self.w_prev = copy.deepcopy(self.global_w)
                 
                 ########################################
                 # Should I normalize the dec here?  
@@ -670,7 +668,10 @@ class Client(ModelBase, TrainingMethods):
             t = self.latest_global_round  # Should this be global or local? Global based on how they wrote it...
             # eig is for unsymmetric matrices, and returns (UNORDERED) eigvals, eigvecs
             if self.use_real_hess:
-                if self.latest_global_round in self.update_transition_log:
+                if t < 2:
+                    eigvals, _ = np.linalg.eig(hessian_cost_l2(self.F, self.alphaD))
+                    self.prev_eigvals = eigvals
+                elif self.latest_global_round not in self.update_transition_log:
                     # Note that this should not be run if you want to do SGD instead of GD
                     # Eg probably need to change the logic structure
                     eigvals = self.prev_eigvals
@@ -681,7 +682,12 @@ class Client(ModelBase, TrainingMethods):
             else:
                 # Can try and add faster versions in the future
                 raise ValueError("Currently, the only option is to use the Real Hessian")
+            
             mu = np.amin(eigvals)  # Mu is the minimum eigvalue
+            if mu==None:
+                print(f"mu: {mu}")
+                print(f"eigvals: {eigvals}")
+                raise ValueError("mu is None for some reason")
             if mu.imag < self.tol and mu.real < self.tol:
                 raise ValueError("mu is ~0, thus implying func is not mu-SC")
             elif mu.imag < self.tol:
@@ -689,7 +695,12 @@ class Client(ModelBase, TrainingMethods):
             elif mu.real < self.tol:
                 print("Setting to imaginary only")  # This is an issue if this runs
                 mu = mu.imag
+                
             L = np.amax(eigvals)  # L is the maximum eigvalue
+            if L==None:
+                print(f"L: {L}")
+                print(f"eigvals: {eigvals}")
+                raise ValueError("L is None for some reason")
             if L.imag < self.tol and L.real < self.tol:
                 raise ValueError("L is 0, thus implying func is not L-smooth")
             elif mu.imag < self.tol:
