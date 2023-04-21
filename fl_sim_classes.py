@@ -73,7 +73,7 @@ class TrainingMethods:
         
         
 class Server(ModelBase):
-    def __init__(self, ID, D0, method, all_clients, smoothbatch=1, C=0.1, normalize_dec=True, current_round=0, PCA_comps=7, verbose=False, APFL_Tau=10):
+    def __init__(self, ID, D0, method, all_clients, smoothbatch=1, C=0.1, normalize_dec=True, current_round=0, PCA_comps=7, verbose=False, APFL_Tau=10, copy_type='deep', validate_memory_IDs=True):
         super().__init__(ID, D0, method, smoothbatch=smoothbatch, current_round=current_round, PCA_comps=PCA_comps, verbose=verbose, num_participants=14, log_init=0)
         self.type = 'Server'
         self.num_avail_clients = 0
@@ -86,6 +86,8 @@ class Server(ModelBase):
         self.init_lst = [self.log_init]*self.num_participants
         self.normalize_dec = normalize_dec
         self.set_available_clients_list(init=True)
+        self.validate_memory_IDs = validate_memory_IDs
+        self.copy_type = copy_type
         if self.method=='APFL':
             self.set_available_clients_list()
             self.choose_clients()
@@ -139,7 +141,7 @@ class Server(ModelBase):
                 running_global_dec = np.zeros((2, self.PCA_comps))
                 for my_client in self.chosen_clients_lst:
                     running_global_dec += my_client.global_w
-                self.w = (1/self.K)*copy.deepcopy(running_global_dec)
+                self.w = (1/self.K)*running_global_dec
                 self.set_available_clients_list()
                 self.choose_clients()
                 self.K = len(self.chosen_clients_lst)
@@ -148,7 +150,14 @@ class Server(ModelBase):
                 #self.K = len(self.chosen_clients_lst)
 
                 for my_client in self.chosen_clients_lst:
-                    my_client.global_w = copy.deepcopy(self.w)  
+                    if self.copy_type == 'deep':
+                        self.global_w = copy.deepcopy(self.w)
+                    elif self.copy_type == 'shallow':
+                        self.global_w = copy.copy(self.w)
+                    elif self.copy_type == 'none':
+                        self.global_w = self.w
+                    else:
+                        raise ValueError("copy_type must be set to either deep, shallow, or none")
         else:
             raise('Method not currently supported, please reset method to FedAvg')
         # Save the new decoder to the log
@@ -193,7 +202,7 @@ class Server(ModelBase):
         current_global_lst = []
         current_pers_lst = []
         for my_client in self.available_clients_lst:  # Implications of using this instead of all_clients?
-            my_client.current_global_round = self.current_round
+            my_client.latest_global_round = self.current_round
             #^ Need to overwrite client with the curernt global round, for t later
             
             # This isn't great code because it checks the init every single time it runs
@@ -211,9 +220,21 @@ class Server(ModelBase):
                     
             if my_client in client_set:
                 # Send those clients the current global model
-                my_client.global_w = self.w
+                if self.copy_type == 'deep':
+                    my_client.global_w = copy.deepcopy(self.w)
+                elif self.copy_type == 'shallow':
+                    my_client.global_w = copy.copy(self.w)
+                elif self.copy_type == 'none':
+                    my_client.global_w = self.w
+                else:
+                    raise ValueError("copy_type must be set to either deep, shallow, or none")
                 
                 my_client.execute_training_loop()
+                
+                if self.validate_memory_IDs:
+                    assert(id(my_client.w)!=id(self.w))
+                    assert(id(my_client.w)!=id(my_client.global_w))
+                
                 current_local_lst.append((my_client.ID, self.current_round, 
                                           my_client.eval_model(which='local')))
                 if self.method != 'NoFL':
@@ -260,7 +281,7 @@ class Server(ModelBase):
         for my_client in self.chosen_clients_lst:
             summed_num_datapoints += my_client.learning_batch
         # Aggregate local model weights, weighted by normalized local learning rate
-        aggr_w = 0
+        aggr_w = np.zeros((2, self.PCA_comps))
         for my_client in self.chosen_clients_lst:
             # Normalize models between clients...
             if self.normalize_dec:
@@ -271,6 +292,12 @@ class Server(ModelBase):
         # Normalize the resulting global model
         if self.normalize_dec:
             aggr_w /= np.amax(aggr_w)
+        
+        # This would be the place to do smoothbatch if we wanted to do it on a global level
+        # Right now the global decoders are essentially independent
+        
+        #print(np.sum(self.w-aggr_w))
+        #assert(np.sum(self.w-aggr_w) != 0)
         self.w = aggr_w
         
     # Function for getting the finalized personalized and global model 
@@ -294,12 +321,14 @@ class Server(ModelBase):
                                                                
 
 class Client(ModelBase, TrainingMethods):
-    def __init__(self, ID, w, method, local_data, data_stream, smoothbatch=1, current_round=0, PCA_comps=7, availability=1, global_method='FedAvg', normalize_dec=False, normalize_EMG=True, track_cost_components=True, track_lr_comps=True, use_real_hess=True, gradient_clipping=False, log_decs=True, clipping_threshold=100, tol=1e-10, adaptive=True, eta=1, track_gradient=True, wprev_global=False, num_steps=1, use_zvel=False, APFL_input_eta=False, safe_lr_factor=False, mix_in_each_steps=False, mix_mixed_SB=False, delay_scaling=5, random_delays=False, download_delay=1, upload_delay=1, local_round_threshold=25, condition_number=1, verbose=False):
+    def __init__(self, ID, w, method, local_data, data_stream, smoothbatch=1, current_round=0, PCA_comps=7, availability=1, global_method='FedAvg', normalize_dec=False, normalize_EMG=True, track_cost_components=True, track_lr_comps=True, use_real_hess=True, gradient_clipping=False, log_decs=True, clipping_threshold=100, tol=1e-10, adaptive=True, eta=1, track_gradient=True, wprev_global=False, num_steps=1, use_zvel=False, APFL_input_eta=False, safe_lr_factor=False, mix_in_each_steps=False, mix_mixed_SB=False, delay_scaling=5, random_delays=False, download_delay=1, upload_delay=1, copy_type='deep', validate_memory_IDs=True, local_round_threshold=25, condition_number=1, verbose=False):
         super().__init__(ID, w, method, smoothbatch=smoothbatch, current_round=current_round, PCA_comps=PCA_comps, verbose=verbose, num_participants=14, log_init=0)
         '''
         Note self.smoothbatch gets overwritten according to the condition number!  
         If you want NO smoothbatch then set it to 'off'
         '''
+        self.validate_memory_IDs = validate_memory_IDs
+        self.copy_type = copy_type
         # NOT INPUT
         self.type = 'Client'
         self.chosen_status = 0
@@ -429,10 +458,10 @@ class Client(ModelBase, TrainingMethods):
         if self.log_decs:
             self.dec_log.append(self.w)
             if self.global_method=="FedAvg":
-                self.global_dec_log.append(self.global_w)
+                self.global_dec_log.append(copy.deepcopy(self.global_w))
             elif self.global_method in self.pers_methods:
-                self.global_dec_log.append(self.global_w)
-                self.pers_dec_log.append(self.mixed_w)
+                self.global_dec_log.append(copy.deepcopy(self.global_w))
+                self.pers_dec_log.append(copy.deepcopy(self.mixed_w))
         # Log Error
         self.local_error_log.append(self.eval_model(which='local'))
         # Yes these should both be ifs not elif, they may both need to run
@@ -595,21 +624,75 @@ class Client(ModelBase, TrainingMethods):
                 self.Vmixed = (p_reference - np.cumsum(self.mixed_w@s, axis=1)*self.dt)*self.dt
     
     
-    def train_model(self):
-        D_0 = copy.copy(self.w_prev)
+    def train_given_model_1_comm_round(self, model, which):
+        D_0 = copy.deepcopy(self.w_prev)
         # Set the w_prev equal to the current w:
-        self.w_prev = copy.copy(self.w)
+        self.w_prev = copy.deepcopy(model)
+        if self.global_method in ["FedAvg", "NoFL", "FedAvgSB", "Per-FedAvg", "Per-FedAvg FO", "Per-FedAvg HF"]:
+            for i in range(self.num_steps):
+                if self.normalize_dec:
+                    model /= np.amax(model)
+                    
+                if self.method=='EtaGradStep':
+                    model = self.train_eta_gradstep(model, self.eta, self.F, model, self.H, self.V, self.learning_batch, self.alphaF, self.alphaD, PCA_comps=self.PCA_comps)
+                elif self.method=='EtaScipyMinStep':
+                    model = self.train_eta_scipyminstep(self.w, self.eta, self.F, model, self.H, self.V, self.learning_batch, self.alphaF, self.alphaD, D_0, self.verbose, PCA_comps=self.PCA_comps)
+                elif self.method=='FullScipyMinStep':
+                    model = self.train_eta_scipyminstep(model, self.eta, self.F, model, self.H, self.V, self.learning_batch, self.alphaF, self.alphaD, D_0, self.verbose, PCA_comps=self.PCA_comps, full=True)
+                else:
+                    raise ValueError("Unsupported method")
+                    
+                #if self.mix_in_each_steps:
+                #    raise("mix_in_each_steps=True: Functionality not yet supported")
+                #    self.mixed_w = self.smoothbatch*self.w + ((1 - self.smoothbatch)*self.mixed_w)
+            
+            if self.normalize_dec:
+                model /= np.amax(model)
+            
+            # Do SmoothBatch
+            #if self.global_method in ["FedAvg", "NoFL"]:  # Maybe should add Per-FedAvg here...
+            #    model = self.smoothbatch*model + ((1 - self.smoothbatch)*self.w_prev)
+            #elif self.global_method=="FedAvgSB":
+            #    global_local_SB = self.smoothbatch*model + ((1 - self.smoothbatch)*self.global_w)
+            #    if self.mix_mixed_SB:
+            #        self.mixed_w = self.smoothbatch*self.mixed_w + ((1 - self.smoothbatch)*global_local_SB)
+            #    else:
+            #        self.mixed_w = global_local_SB
+        
+        if which!=None:
+            return model, self.eval_model(which)
+        else:
+            return model
+    
+    
+    def train_model(self):
+        D_0 = copy.deepcopy(self.w_prev)
+        # Set the w_prev equal to the current w:
+        self.w_prev = copy.deepcopy(self.w)
         if self.global_method in ["FedAvg", "NoFL", "FedAvgSB", "Per-FedAvg", "Per-FedAvg FO", "Per-FedAvg HF"]:
             if self.global_method!="NoFL":
                 # Overwrite local model with the new global model
-                self.w = copy.deepcopy(self.global_w)
+                if self.copy_type == 'deep':
+                    self.w = copy.deepcopy(self.global_w)
+                elif self.copy_type == 'shallow':
+                    self.w = copy.copy(self.global_w)
+                elif self.copy_type == 'none':
+                    self.w = self.global_w
+                else:
+                    raise ValueError("copy_type must be set to either deep, shallow, or none")
+            
+            # I think this ought to be on but it makes the global model and gradient diverge...
+            if self.wprev_global==True and ('Per-FedAvg' in self.method):
+                if self.copy_type == 'deep':
+                    self.w_prev = copy.deepcopy(self.global_w)
+                elif self.copy_type == 'shallow':
+                    self.w_prev = copy.copy(self.global_w)
+                elif self.copy_type == 'none':
+                    self.w_prev = self.global_w
+                else:
+                    raise ValueError("copy_type must be set to either deep, shallow, or none")
             
             for i in range(self.num_steps):
-                # I think this ought to be on but it makes the global model and gradient diverge...
-                # Why can't i do this outside the loop
-                if self.wprev_global==True and i==0 and ('Per-FedAvg' in self.method):
-                    self.w_prev = copy.deepcopy(self.global_w)
-                
                 ########################################
                 # Should I normalize the dec here?  
                 # I think this will prevent it from blowing up if I norm it every time
@@ -632,7 +715,7 @@ class Client(ModelBase, TrainingMethods):
                 elif self.method=='Per-FedAvg HF':
                     # Difference of gradients method
                     alpha = self.eta  # Yes
-                    delta = self.eta  # Not sure... not listed in paper
+                    delta = self.eta  # Not sure... value not listed in paper
                     # w inside original gradient for MAML
                     w_tilde = self.w_prev - alpha * gradient_cost_l2(self.F, self.w_prev, self.H, self.V, self.learning_batch, self.alphaF, self.alphaD, Ne=self.PCA_comps, flatten=False)
                     # First gradient term (+)
@@ -645,6 +728,11 @@ class Client(ModelBase, TrainingMethods):
                     self.w = gradient_cost_l2(self.F, w_tilde, self.H, self.V, self.learning_batch, self.alphaF, self.alphaD, Ne=self.PCA_comps, flatten=False) - alpha*d
                 else:
                     raise ValueError("Unrecognized method")
+                
+                if self.validate_memory_IDs:
+                    assert(id(self.w)!=id(self.global_w))
+                    assert(id(self.w_prev)!=id(self.global_w))
+                    
                 if self.mix_in_each_steps:
                     self.mixed_w = self.smoothbatch*self.w + ((1 - self.smoothbatch)*self.mixed_w)
             ########################################
@@ -711,6 +799,7 @@ class Client(ModelBase, TrainingMethods):
             if self.verbose: 
                 # Find a better way to print this out without spamming the console... eg log file...
                 print(f"Client{self.ID}: L: {L}, mu: {mu}")
+                
             kappa = L/mu
             a = np.max([128*kappa, self.tau])
             eta_t = 16 / (mu*(t+a))
