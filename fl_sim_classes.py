@@ -1137,16 +1137,18 @@ def central_tendency_plotting(all_user_input, highlight_default=False, default_l
     if custom_title:
         my_title = custom_title
     elif global_error and local_error:
-        my_title = f'Global and Local Costs Per Local Iter'
+        my_title = 'Global and Local Costs Per Local Iter'
     elif global_error:
-        my_title = f'Global Cost Per Local Iter'
+        my_title = 'Global Cost Per Local Iter'
     elif local_error:
-        my_title = f'Local Costs Per Local Iter'
+        my_title = 'Local Costs Per Local Iter'
     else:
-        raise ValueError("You set both global and local to False.  At least one must be true in order to plot something.")
+        print("FYI You set both global and local to False.  No title set.")
+        my_title = 'Please enter a custom title'
+        
 
     max_local_iters = 0
-    
+    label_idx = 0
     for user_idx, user_database in enumerate(all_user_input):
         for i in range(len(user_database)):
             # Skip over users that distort the scale
@@ -1225,12 +1227,21 @@ def central_tendency_plotting(all_user_input, highlight_default=False, default_l
                 for vec_idx, vec_vec in enumerate(my_vec):
                     if (plot_mean==True and vec_idx==0) or (plot_median==True and vec_idx==1):
                         if iterable_labels!=[]:
-                            my_label = iterable_labels[user_idx]
+                            my_label = iterable_labels[label_idx]
+                            label_idx += 1
                         else:
                             my_label = f"{tendency_label_dict[vec_idx]} {param_label_dict[flag_idx]}"
+                        if "GLOBAL:" in my_label.upper():
+                            my_linestyle = 'dashed'
+                        elif "LOCAL:" in my_label.upper():
+                            my_linestyle = 'solid'
+                        elif "PERS:" in my_label.upper():
+                            my_linestyle = 'dotted'
+                        else:
+                            my_linestyle = 'solid'
                         my_alpha = 0.4 if (highlight_default and user_idx==0) else 1
                         my_linewidth = 5 if (highlight_default and user_idx==0) else input_linewidth
-                        plt.plot(range(len(vec_vec)), vec_vec, label=my_label, alpha=my_alpha, linewidth=my_linewidth)
+                        plt.plot(range(len(vec_vec)), vec_vec, label=my_label, alpha=my_alpha, linewidth=my_linewidth, linestyle=my_linestyle)
                         
                         
         #param_list FOR REFERENCE: [plot_gradient, plot_pers_gradient, plot_global_gradient, global_error, local_error, pers_error, plot_performance, plot_Dnorm, plot_Fnorm]         
@@ -1284,9 +1295,10 @@ def central_tendency_plotting(all_user_input, highlight_default=False, default_l
         plt.legend(loc=my_legend_loc)
     
     if axes_off_list!=[]:
+        # left bottom top right 1 1 1 1
         ax = plt.gca()
-        for my_axis in axes_off_list:
-            ax.spines[my_axis].set_visible(False)
+        for key_pair in axes_off_list:
+            ax.spines[key_pair[0]].set_visible(key_pair[1])
         
     plt.show()
     
