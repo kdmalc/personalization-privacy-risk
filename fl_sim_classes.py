@@ -625,6 +625,8 @@ class Client(ModelBase, TrainingMethods):
     
     
     def train_given_model_1_comm_round(self, model, which):
+        '''This can be used for training the in ML pipeline but principally is for local-finetuning (eg training a model after it as completed its global training pipeline).'''
+        
         D_0 = copy.deepcopy(self.w_prev)
         # Set the w_prev equal to the current w:
         self.w_prev = copy.deepcopy(model)
