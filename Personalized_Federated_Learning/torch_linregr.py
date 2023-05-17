@@ -28,15 +28,22 @@ def cost_l2_torch(F, D, V, learning_batch, lambdaF=1e-7, lambdaD=1e-3, lambdaE=1
     term3 = lambdaF*(torch.linalg.matrix_norm((F)**2))
     return (term1 + term2 + term3)
 
-def full_train_linregr_updates(model, full_trial_input_data, full_trial_labels, learning_rate, normalize_emg=False, PCA_comps=64, num_iters_per_update=30, starting_update=10, dt=1/60, loss_log=[], update_ix=[0,  1200,  2402,  3604,  4806,  6008,  7210,  8412,  9614, 10816, 12018, 13220, 14422, 15624, 16826, 18028, 19230, 20432, 20769]):
+def full_train_linregr_updates(model, full_trial_input_data, full_trial_labels, learning_rate, normalize_emg=False, PCA_comps=64, num_iters_per_update=30, starting_update=10, use_full_data=False, dt=1/60, loss_log=None, update_ix=[0,  1200,  2402,  3604,  4806,  6008,  7210,  8412,  9614, 10816, 12018, 13220, 14422, 15624, 16826, 18028, 19230, 20432, 20769]):
+    
+    if loss_log is None:
+        loss_log = list()
     
     optimizer = torch.optim.SGD(model.parameters(), lr=learning_rate)
-    
+            
     for update in range(len(update_ix[starting_update:])-1):
         update += starting_update
         
-        lower_bound = update_ix[update]
-        upper_bound = update_ix[update+1]
+        if use_full_data:
+            lower_bound = update_ix[starting_update]
+            upper_bound = update_ix[-1]
+        else:
+            lower_bound = update_ix[update]
+            upper_bound = update_ix[update+1]
 
         for i in range(num_iters_per_update):
             if i==0:  # Then we reset our vars with the new update's data
@@ -74,4 +81,9 @@ def full_train_linregr_updates(model, full_trial_input_data, full_trial_labels, 
             loss_log.append(loss.item())
             # update weights
             optimizer.step()
+            
+        if use_full_data:
+            # Eg we only go through 1 outer loop since we already looped through the full data
+            return model, loss_log
+            
     return model, loss_log
