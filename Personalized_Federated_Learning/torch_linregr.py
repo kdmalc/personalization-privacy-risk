@@ -35,7 +35,10 @@ def full_train_linregr_updates(model, full_trial_input_data, full_trial_labels, 
     
     optimizer = torch.optim.SGD(model.parameters(), lr=learning_rate)
             
-    for update in range(len(update_ix[starting_update:])-1):
+    for update in range(len(update_ix[starting_update:])-1-1):  
+        #-1 to account for the update+1 we do for upper bound
+        #-1 again to account for us wanting to skip the last update since it is truncated
+        
         update += starting_update
         
         if use_full_data:
@@ -52,7 +55,7 @@ def full_train_linregr_updates(model, full_trial_input_data, full_trial_labels, 
 
                 # First, normalize the entire s matrix
                 if normalize_emg:
-                    s_normed = s_temp/torch.max(s_temp)
+                    s_normed = s_temp / torch.linalg.norm(s_temp, ord='fro')
                 else:
                     s_normed = s_temp
                 # Apply PCA if applicable

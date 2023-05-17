@@ -47,7 +47,7 @@ class Client(object):
         self.privacy = args.privacy
         self.dp_sigma = args.dp_sigma
 
-        self.loss = nn.CrossEntropyLoss()
+        self.loss = nn.CrossEntropyLoss()   # CHANGE THIS TO CUSTOM CPHS LOSS FUNCTION!!!!
         self.optimizer = torch.optim.SGD(self.model.parameters(), lr=self.learning_rate)
         self.learning_rate_scheduler = torch.optim.lr_scheduler.ExponentialLR(
             optimizer=self.optimizer, 
