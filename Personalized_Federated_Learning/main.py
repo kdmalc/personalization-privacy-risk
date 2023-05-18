@@ -109,12 +109,12 @@ if __name__ == "__main__":
     parser.add_argument('-data', "--dataset", type=str, default="mnist")  # KAI: Need to change this still but I have to read their code
     parser.add_argument('-nb', "--num_classes", type=int, default=10)
     parser.add_argument('-m', "--model", type=str, default="Linear Regression")  # KAI: Changed the default to Linear Regression
-    parser.add_argument('-lbs', "--batch_size", type=int, default=10)  # Idk what I should set this to
+    parser.add_argument('-lbs', "--batch_size", type=int, default=10)  # Idk what I should set this to... I don't think I want to be doing SGD???  Don't want to shuffle my data since it is kinda meaningless if I do, I think...
     parser.add_argument('-lr', "--local_learning_rate", type=float, default=0.005,  #This also probably needs to be changed...
                         help="Local learning rate")
     parser.add_argument('-ld', "--learning_rate_decay", type=bool, default=False)
     parser.add_argument('-ldg', "--learning_rate_decay_gamma", type=float, default=0.99)
-    parser.add_argument('-gr', "--global_rounds", type=int, default=2000)  # This is pretty high lol
+    parser.add_argument('-gr', "--global_rounds", type=int, default=500)  # KAI: Switched to 500 down from 2000
     parser.add_argument('-ls', "--local_epochs", type=int, default=1, 
                         help="Multiple update steps in one local epoch.")
     parser.add_argument('-algo', "--algorithm", type=str, default="FedAvg")
