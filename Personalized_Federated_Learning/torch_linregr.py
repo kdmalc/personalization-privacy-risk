@@ -3,7 +3,32 @@ import matplotlib.pyplot as plt
 import torch
 from sklearn.decomposition import PCA
 
-def cost_l2_torch(F, D, V, learning_batch, lambdaF=1e-7, lambdaD=1e-3, lambdaE=1e-6, Nd=2, Ne=64):
+class CPHSLoss(torch.nn.modules.loss._Loss):
+    def __init__(self, F, D, V, learning_batch, lambdaF=0, lambdaD=1e-6, lambdaE=1e-3, Nd=2, Ne=64) -> None:
+        super().__init__(F, D, V, learning_batch, lambdaF, lambdaD, lambdaE, Nd, Ne)
+        self.F = F
+        self.D = D
+        self.V = V
+        self.learning_batch = learning_batch
+        self.lambdaF = lambdaF
+        self.lambdaD = lambdaD
+        self.lambdaE = lambdaE
+        self.Nd = Nd
+        self.Ne = Ne
+        
+    def forward(self, input: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
+        Nt = self.learning_batch
+        self.D = self.D.view(self.Nd, self.Ne)
+        Vplus = self.V[:,1:]
+        # Performance
+        term1 = self.lambdaE*(torch.linalg.matrix_norm((torch.matmul(self.D, self.F) - Vplus))**2)
+        # D Norm
+        term2 = self.lambdaD*(torch.linalg.matrix_norm((self.D)**2))
+        # F Norm
+        term3 = self.lambdaF*(torch.linalg.matrix_norm((self.F)**2))
+        return (term1 + term2 + term3)
+
+def cost_l2_torch(F, D, V, learning_batch, lambdaF=0, lambdaD=1e-6, lambdaE=1e-3, Nd=2, Ne=64):
     # c_L2 = (lambdaE||DF + V+||_2)^2 + lambdaD*(||D||_2)^2 + lambdaF*(||F||_2)^2
     
     '''
@@ -28,7 +53,7 @@ def cost_l2_torch(F, D, V, learning_batch, lambdaF=1e-7, lambdaD=1e-3, lambdaE=1
     term3 = lambdaF*(torch.linalg.matrix_norm((F)**2))
     return (term1 + term2 + term3)
 
-def full_train_linregr_updates(model, full_trial_input_data, full_trial_labels, learning_rate, normalize_emg=False, PCA_comps=64, num_iters_per_update=30, starting_update=10, use_full_data=False, dt=1/60, loss_log=None, update_ix=[0,  1200,  2402,  3604,  4806,  6008,  7210,  8412,  9614, 10816, 12018, 13220, 14422, 15624, 16826, 18028, 19230, 20432, 20769]):
+def full_train_linregr_updates(model, full_trial_input_data, full_trial_labels, learning_rate, lambdasFDE=[0, 1e-6, 1e-3], use_CPHSLoss=False, normalize_emg=False, PCA_comps=64, num_iters_per_update=30, starting_update=10, use_full_data=False, dt=1/60, loss_log=None, update_ix=[0,  1200,  2402,  3604,  4806,  6008,  7210,  8412,  9614, 10816, 12018, 13220, 14422, 15624, 16826, 18028, 19230, 20432, 20769]):
     
     if loss_log is None:
         loss_log = list()
@@ -78,7 +103,10 @@ def full_train_linregr_updates(model, full_trial_input_data, full_trial_labels, 
             # forward pass and loss
             y_pred = model(torch.transpose(emg_streamed_batch, 0, 1))  # Why do I have to transpose again here... my original code didn't
             # F, D, V, learning_batch
-            loss = cost_l2_torch(emg_streamed_batch, model.weight, V, emg_streamed_batch.shape[1], Ne=PCA_comps)
+            if use_CPHSLoss:
+                loss = CPHSLoss(emg_streamed_batch, model.weight, V, emg_streamed_batch.shape[1], Ne=PCA_comps)
+            else:
+                loss = cost_l2_torch(emg_streamed_batch, model.weight, V, emg_streamed_batch.shape[1], Ne=PCA_comps)
             # backward pass
             loss.backward(retain_graph=True)
             loss_log.append(loss.item())
