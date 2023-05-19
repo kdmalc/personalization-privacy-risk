@@ -60,7 +60,7 @@ def cost_l2_torch(F, D, V, learning_batch, lambdaF=0, lambdaD=1e-3, lambdaE=1e-6
     term3 = lambdaF*(torch.linalg.matrix_norm((F)**2))
     return (term1 + term2 + term3)
 
-def full_train_linregr_updates(model, full_trial_input_data, full_trial_labels, learning_rate, lambdasFDE=[0, 1e-3, 1e-6], use_CPHSLoss=False, normalize_emg=False, PCA_comps=64, num_iters_per_update=30, starting_update=10, use_full_input_data=False, stream_data_updates=True, dt=1/60, loss_log=None, verbose=False, verbose_norms=True, return_cost_func_comps=False, update_ix=[0,  1200,  2402,  3604,  4806,  6008,  7210,  8412,  9614, 10816, 12018, 13220, 14422, 15624, 16826, 18028, 19230, 20432, 20769]):
+def full_train_linregr_updates(model, full_trial_input_data, full_trial_labels, learning_rate, lambdasFDE=[0, 1e-3, 1e-6], use_CPHSLoss=False, normalize_emg=False, PCA_comps=64, num_iters_per_update=30, normalize_V=False, starting_update=10, use_full_input_data=False, stream_data_updates=True, dt=1/60, loss_log=None, verbose=False, verbose_norms=True, return_cost_func_comps=False, update_ix=[0,  1200,  2402,  3604,  4806,  6008,  7210,  8412,  9614, 10816, 12018, 13220, 14422, 15624, 16826, 18028, 19230, 20432, 20769]):
     
     ##################
     ETerm_log = []
@@ -108,7 +108,7 @@ def full_train_linregr_updates(model, full_trial_input_data, full_trial_labels, 
                 # First, normalize the entire s matrix
                 if normalize_emg:
                     s_normed = s_temp / torch.linalg.norm(s_temp, ord='fro')
-                    assert torch.linalg.norm(s_normed, ord='fro')<1.2 and torch.linalg.norm(s_normed, ord='fro')>0.8
+                    assert (torch.linalg.norm(s_normed, ord='fro')<1.2) and (torch.linalg.norm(s_normed, ord='fro')>0.8)
                 else:
                     s_normed = s_temp
                 # Apply PCA if applicable
@@ -122,6 +122,9 @@ def full_train_linregr_updates(model, full_trial_input_data, full_trial_labels, 
                 v_actual =  torch.matmul(model.weight, s)
                 p_actual = torch.cumsum(v_actual, dim=1)*dt  # Numerical integration of v_actual to get p_actual
                 V = (p_reference - p_actual)*dt
+                if normalize_V:
+                    V = V/torch.linalg.norm(V, ord='fro')
+                    assert (torch.linalg.norm(V, ord='fro')<1.2) and (torch.linalg.norm(V, ord='fro')>0.8)
 
                 y = p_reference[:, :-1]  # To match the input
                 
