@@ -2,36 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import torch
 from sklearn.decomposition import PCA
-
-class CPHSLoss(torch.nn.modules.loss._Loss):
-    def __init__(self, F, D, V, learning_batch, lambdaF=0, lambdaD=1e-3, lambdaE=1e-6, Nd=2, Ne=64, return_cost_func_comps=False) -> None:
-        super().__init__(F, D, V, learning_batch, lambdaF, lambdaD, lambdaE, Nd, Ne, return_cost_func_comps)
-        self.F = F
-        self.D = D
-        self.V = V
-        self.learning_batch = learning_batch
-        self.lambdaF = lambdaF
-        self.lambdaD = lambdaD
-        self.lambdaE = lambdaE
-        self.Nd = Nd
-        self.Ne = Ne
-        self.return_cost_func_comps = return_cost_func_comps
-        # Don't use return_cost_func_comps since I don't think loss.item() will return a tuple, it only returns scalaras AFAIK
-        
-    def forward(self, input: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
-        Nt = self.learning_batch
-        self.D = self.D.view(self.Nd, self.Ne)
-        Vplus = self.V[:,1:]
-        # Performance
-        term1 = self.lambdaE*(torch.linalg.matrix_norm((torch.matmul(self.D, self.F) - Vplus))**2)
-        # D Norm
-        term2 = self.lambdaD*(torch.linalg.matrix_norm((self.D)**2))
-        # F Norm
-        term3 = self.lambdaF*(torch.linalg.matrix_norm((self.F)**2))
-        if self.return_cost_func_comps:
-            return (term1 + term2 + term3), term1, term2, term3
-        else:
-            return (term1 + term2 + term3)
+from custom_loss_func import CPHSLoss
 
 def cost_l2_torch(F, D, V, learning_batch, lambdaF=0, lambdaD=1e-3, lambdaE=1e-6, Nd=2, Ne=64, return_cost_func_comps=False):
     # c_L2 = (lambdaE||DF + V+||_2)^2 + lambdaD*(||D||_2)^2 + lambdaF*(||F||_2)^2
@@ -60,7 +31,7 @@ def cost_l2_torch(F, D, V, learning_batch, lambdaF=0, lambdaD=1e-3, lambdaE=1e-6
     term3 = lambdaF*(torch.linalg.matrix_norm((F)**2))
     return (term1 + term2 + term3)
 
-def full_train_linregr_updates(model, full_trial_input_data, full_trial_labels, learning_rate, lambdasFDE=[0, 1e-3, 1e-6], use_CPHSLoss=False, normalize_emg=False, PCA_comps=64, num_iters_per_update=30, normalize_V=False, starting_update=10, use_full_input_data=False, stream_data_updates=True, dt=1/60, loss_log=None, verbose=False, verbose_norms=True, return_cost_func_comps=False, update_ix=[0,  1200,  2402,  3604,  4806,  6008,  7210,  8412,  9614, 10816, 12018, 13220, 14422, 15624, 16826, 18028, 19230, 20432, 20769]):
+def full_train_linregr_updates(model, full_trial_input_data, full_trial_labels, learning_rate, lambdasFDE=[0, 1e-3, 1e-6], use_CPHSLoss=False, normalize_emg=False, PCA_comps=64, num_iters_per_update=30, normalize_V=False, starting_update=10, use_full_input_data=False, stream_data_updates=True, dt=1/60, loss_log=None, verbose=False, verbose_norms=False, return_cost_func_comps=False, update_ix=[0,  1200,  2402,  3604,  4806,  6008,  7210,  8412,  9614, 10816, 12018, 13220, 14422, 15624, 16826, 18028, 19230, 20432, 20769]):
     
     ##################
     ETerm_log = []

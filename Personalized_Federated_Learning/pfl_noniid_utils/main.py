@@ -161,17 +161,39 @@ if __name__ == "__main__":
                         help="Number of personalized training steps for pFedMe")
     parser.add_argument('-lrp', "--p_learning_rate", type=float, default=0.01,
                         help="personalized learning rate to caculate theta aproximately using K steps")
+    # FedFomo
+    parser.add_argument('-M', "--M", type=int, default=5,
+                        help="Server only sends M client models to one client at each round")
+    # FedMTL
+    parser.add_argument('-itk', "--itk", type=int, default=4000,
+                        help="The iterations for solving quadratic subproblems")
+    # FedAMP
+    parser.add_argument('-alk', "--alphaK", type=float, default=1.0, 
+                        help="lambda/sqrt(GLOABL-ITRATION) according to the paper")
+    parser.add_argument('-sg', "--sigma", type=float, default=1.0)
     # APFL
     parser.add_argument('-al', "--alpha", type=float, default=1.0)
+    # Ditto / FedRep
+    parser.add_argument('-pls', "--plocal_steps", type=int, default=1)
+    # MOON
+    parser.add_argument('-ta', "--tau", type=float, default=1.0)
+    # FedBABU
+    parser.add_argument('-fts', "--fine_tuning_steps", type=int, default=10)
+    # APPLE
+    parser.add_argument('-dlr', "--dr_learning_rate", type=float, default=0.0)
+    parser.add_argument('-L', "--L", type=float, default=1.0)
+    # FedGen
+    parser.add_argument('-nd', "--noise_dim", type=int, default=512)
+    parser.add_argument('-glr', "--generator_learning_rate", type=float, default=0.005)
+    parser.add_argument('-hd', "--hidden_dim", type=int, default=512)
+    parser.add_argument('-se', "--server_epochs", type=int, default=1000)
+    parser.add_argument('-lf', "--localize_feature_extractor", type=bool, default=False)
     # SCAFFOLD
     parser.add_argument('-slr', "--server_learning_rate", type=float, default=1.0)
-    
-    # Kai's additional args
-    parser.add_argument('-pca_channels', "--pca_channels", type=int, default=64,
-                        help="Number of principal components. 64 means do not use any PCA")
-    parser.add_argument('-lambdas', "--lambdas", type=list, default=[0, 1e-3, 1e-4],
-                        help="Lamda F, D, E penalty terms ")
-    # Go back and update those defaults...^^^
+    # FedALA
+    parser.add_argument('-et', "--eta", type=float, default=1.0)
+    parser.add_argument('-rp', "--rand_percent", type=int, default=80)
+    parser.add_argument('-li', "--layer_idx", type=int, default=1)
 
 
     args = parser.parse_args()

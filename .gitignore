@@ -1,11 +1,11 @@
 .ipynb_checkpoints
 __pycache__
-00*.ipynb
 Data
+UW_Code
+Random_Notes
 *.csv
 *.pkl
 *.pickle
 *.png
 *.jpg
 NMF.txt
-cphs_sims_environment.yml
