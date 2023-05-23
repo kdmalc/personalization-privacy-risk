@@ -46,12 +46,10 @@ def run(args):
         start = time.time()
 
         # Generate args.model
-        if model_str == "Transformer":
-            args.model = TransformerModel(ntoken=vocab_size, d_model=emb_dim, nhead=2, d_hid=emb_dim, nlayers=2, 
-                            num_classes=args.num_classes).to(args.device)
-        elif model_str == "Linear Regression":
+        if model_str == "Linear Regression":
             # KAI'S ADDITION
-            args.model = torch.nn.Linear(64, 2)  #input_size, output_size
+            #args.model = torch.nn.Linear(64, 2)  #input_size, output_size
+            args.model = torch.nn.Linear(args.pca_channels, 2)  #input_size, output_size
             #TransformerModel(ntoken=vocab_size, d_model=emb_dim, nhead=2, d_hid=emb_dim, nlayers=2, 
             #                num_classes=args.num_classes).to(args.device)
         else:
@@ -106,7 +104,7 @@ if __name__ == "__main__":
     parser.add_argument('-dev', "--device", type=str, default="cpu",  # KAI: Changed the default to cpu
                         choices=["cpu", "cuda"])
     parser.add_argument('-did', "--device_id", type=str, default="0")
-    parser.add_argument('-data', "--dataset", type=str, default="mnist")  # KAI: Need to change this still but I have to read their code
+    parser.add_argument('-data', "--dataset", type=str, default="cphs")  # KAI: Changed the default to cphs (from mnist)
     parser.add_argument('-nb', "--num_classes", type=int, default=10)
     parser.add_argument('-m', "--model", type=str, default="Linear Regression")  # KAI: Changed the default to Linear Regression
     parser.add_argument('-lbs', "--batch_size", type=int, default=10)  # Idk what I should set this to... I don't think I want to be doing SGD???  Don't want to shuffle my data since it is kinda meaningless if I do, I think...

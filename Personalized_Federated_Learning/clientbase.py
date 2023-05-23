@@ -17,12 +17,12 @@ class Client(object):
     Base class for clients in federated learning.
     """
 
-    def __init__(self, args, id, train_samples, test_samples, **kwargs):
+    def __init__(self, args, ID, train_samples, test_samples, **kwargs):
         self.model = copy.deepcopy(args.model)
         self.algorithm = args.algorithm
         self.dataset = args.dataset
         self.device = args.device
-        self.id = id  # integer
+        self.ID = ID  # integer
         self.save_folder_name = args.save_folder_name
 
         self.num_classes = args.num_classes
@@ -34,6 +34,7 @@ class Client(object):
 
         # check BatchNorm
         self.has_BatchNorm = False
+        # KAI: Idk what this is doing...
         for layer in self.model.children():
             if isinstance(layer, nn.BatchNorm2d):
                 self.has_BatchNorm = True
@@ -46,8 +47,24 @@ class Client(object):
 
         self.privacy = args.privacy
         self.dp_sigma = args.dp_sigma
+        
+        # My additional parameters
+        self.pca_channels = args.pca_channels
+        # Are args client-specific or shared for all...
+        self.lambdaF = args.lambdas[0]
+        self.lambdaD = args.lambdas[1]
+        self.lambdaE = args.lambdas[2]
 
-        self.loss = nn.CrossEntropyLoss()   # CHANGE THIS TO CUSTOM CPHS LOSS FUNCTION!!!!
+        # Before this I need to run the INIT update segmentation code...
+        #
+        #
+        #
+        # self.F = 
+        # self.V = 
+        
+        #self.loss = nn.CrossEntropyLoss()   
+        self.loss = CPHSLoss(self.F, self.model.weight, self.V, torch.view(self.F)[0], lambdaF=self.lambdaF, lambdaD=self.lambdaD, lambdaE=self.lambdaE, Nd=2, Ne=self.pca_channels, return_cost_func_comps=False)
+        
         self.optimizer = torch.optim.SGD(self.model.parameters(), lr=self.learning_rate)
         self.learning_rate_scheduler = torch.optim.lr_scheduler.ExponentialLR(
             optimizer=self.optimizer, 
@@ -59,13 +76,13 @@ class Client(object):
     def load_train_data(self, batch_size=None):
         if batch_size == None:
             batch_size = self.batch_size
-        train_data = read_client_data(self.dataset, self.id, is_train=True)
+        train_data = read_client_data(self.dataset, self.ID, is_train=True)
         return DataLoader(train_data, batch_size, drop_last=True, shuffle=False)
 
     def load_test_data(self, batch_size=None):
         if batch_size == None:
             batch_size = self.batch_size
-        test_data = read_client_data(self.dataset, self.id, is_train=False)
+        test_data = read_client_data(self.dataset, self.ID, is_train=False)
         return DataLoader(test_data, batch_size, drop_last=False, shuffle=False)
         
     def set_parameters(self, model):
@@ -170,12 +187,12 @@ class Client(object):
             item_path = self.save_folder_name
         if not os.path.exists(item_path):
             os.makedirs(item_path)
-        torch.save(item, os.path.join(item_path, "client_" + str(self.id) + "_" + item_name + ".pt"))
+        torch.save(item, os.path.join(item_path, "client_" + str(self.ID) + "_" + item_name + ".pt"))
 
     def load_item(self, item_name, item_path=None):
         if item_path == None:
             item_path = self.save_folder_name
-        return torch.load(os.path.join(item_path, "client_" + str(self.id) + "_" + item_name + ".pt"))
+        return torch.load(os.path.join(item_path, "client_" + str(self.ID) + "_" + item_name + ".pt"))
 
     # @staticmethod
     # def model_exists():

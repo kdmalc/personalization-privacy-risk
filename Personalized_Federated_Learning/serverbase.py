@@ -212,6 +212,7 @@ class Server(object):
 
     def train_metrics(self):
         if self.eval_new_clients and self.num_new_clients > 0:
+            print("KAI: Returned early for some reason, idk what this code is doing")
             return [0], [1], [0]
         
         num_samples = []
@@ -283,6 +284,7 @@ class Server(object):
                 raise NotImplementedError
         return True
 
+    # No idea what this does, I don't think it is used...
     def call_dlg(self, R):
         # items = []
         cnt = 0
@@ -299,7 +301,8 @@ class Server(object):
                 for i, (x, y) in enumerate(trainloader):
                     if i >= self.batch_num_per_client:
                         break
-
+                    
+                    # Some CUDA stuff to ignore for now
                     if type(x) == type([]):
                         x[0] = x[0].to(self.device)
                     else:
