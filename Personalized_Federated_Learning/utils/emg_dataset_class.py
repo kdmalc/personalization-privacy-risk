@@ -43,4 +43,11 @@ class CustomEMGDataset(torch.utils.data.Dataset):
     
     # This returns given an index the i-th sample and label
     def __getitem__(self, idx):
-        return self.dataset[idx],self.labels[idx]
+        if type(idx)==int:
+            return self.dataset[idx], self.labels[idx]
+        elif (idx.lower()=='x') or ('train' in idx.lower()):
+            return self.dataset
+        elif (idx.lower()=='y') or ('test' in idx.lower()):
+            return self.labels
+        else:
+            raise("Not supposed to run")

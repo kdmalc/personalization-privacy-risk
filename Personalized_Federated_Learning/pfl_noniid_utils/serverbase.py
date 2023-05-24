@@ -63,6 +63,9 @@ class Server(object):
         self.new_clients = []
         self.eval_new_clients = False
         self.fine_tuning_epoch = args.fine_tuning_epoch
+        
+        # Kai's additional params
+        self.global_round = 0
 
     def set_clients(self, clientObj):
         for i, train_slow, send_slow in zip(range(self.num_clients), self.train_slow_clients, self.send_slow_clients):
@@ -211,6 +214,8 @@ class Server(object):
         return ids, num_samples, tot_correct, tot_auc
 
     def train_metrics(self):
+        self.global_round += 1
+        
         if self.eval_new_clients and self.num_new_clients > 0:
             print("KAI: Returned early for some reason, idk what this code is doing")
             return [0], [1], [0]
@@ -218,6 +223,7 @@ class Server(object):
         num_samples = []
         losses = []
         for c in self.clients:
+            c.last_global_round = self.global_round
             cl, ns = c.train_metrics()
             num_samples.append(ns)
             losses.append(cl*1.0)

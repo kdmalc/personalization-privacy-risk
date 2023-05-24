@@ -54,6 +54,8 @@ class Client(object):
         self.lambdaF = args.lambdas[0]
         self.lambdaD = args.lambdas[1]
         self.lambdaE = args.lambdas[2]
+        self.local_round = 0
+        self.last_global_round = 0
 
         # Before this I need to run the INIT update segmentation code...
         #
@@ -62,7 +64,6 @@ class Client(object):
         # self.F = 
         # self.V = 
         
-        #self.loss = nn.CrossEntropyLoss()   
         self.loss = CPHSLoss(self.F, self.model.weight, self.V, torch.view(self.F)[0], lambdaF=self.lambdaF, lambdaD=self.lambdaD, lambdaE=self.lambdaE, Nd=2, Ne=self.pca_channels, return_cost_func_comps=False)
         
         self.optimizer = torch.optim.SGD(self.model.parameters(), lr=self.learning_rate)
@@ -74,6 +75,11 @@ class Client(object):
 
 
     def load_train_data(self, batch_size=None):
+        self.local_round += 1
+        
+        # Add data streaming update code here...
+        # What is self.dataset???
+        
         if batch_size == None:
             batch_size = self.batch_size
         train_data = read_client_data(self.dataset, self.ID, is_train=True)
@@ -140,7 +146,7 @@ class Client(object):
         
         return test_acc, test_num, auc
 
-    def train_metrics(self):
+    def train_metrics(self):        
         trainloader = self.load_train_data()
         # self.model = self.load_model('model')
         # self.model.to(self.device)
