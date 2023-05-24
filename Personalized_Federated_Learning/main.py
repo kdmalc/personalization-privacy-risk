@@ -21,19 +21,15 @@ from flcore.servers.serverlocal import Local
 #from flcore.trainmodel.models import *
 # They then import different model files but I don't want to use them
 
-from utils.result_utils import average_data
-from utils.mem_utils import MemReporter
+# I don't have these downloaded I don't think...
+from flcore.pflniid_utils.result_utils import average_data
+from flcore.pflniid_utils.mem_utils import MemReporter
 
 logger = logging.getLogger()
 logger.setLevel(logging.ERROR)
 
 warnings.simplefilter("ignore")
 torch.manual_seed(0)
-
-# hyper-params for Text tasks ---> NOT DOING TEXT STUFF...
-#vocab_size = 98635
-#max_len=200
-#emb_dim=32
 
 def run(args):
     time_list = []
@@ -46,12 +42,10 @@ def run(args):
         start = time.time()
 
         # Generate args.model
-        if model_str == "Linear Regression":
+        if model_str == "LinearRegression":
             # KAI'S ADDITION
             #args.model = torch.nn.Linear(64, 2)  #input_size, output_size
             args.model = torch.nn.Linear(args.pca_channels, 2)  #input_size, output_size
-            #TransformerModel(ntoken=vocab_size, d_model=emb_dim, nhead=2, d_hid=emb_dim, nlayers=2, 
-            #                num_classes=args.num_classes).to(args.device)
         else:
             raise NotImplementedError
 
@@ -172,7 +166,6 @@ if __name__ == "__main__":
     parser.add_argument('-lambdas', "--lambdas", type=list, default=[0, 1e-3, 1e-4],
                         help="Lamda F, D, E penalty terms ")
     # Go back and update those defaults...^^^
-
 
     args = parser.parse_args()
 

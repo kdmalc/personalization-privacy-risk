@@ -3,7 +3,7 @@
 import time
 from flcore.clients.clientavg import clientAVG
 from flcore.servers.serverbase import Server
-from threading import Thread
+#from threading import Thread
 
 
 class FedAvg(Server):
@@ -42,6 +42,7 @@ class FedAvg(Server):
 
             self.receive_models()
             if self.dlg_eval and i%self.dlg_gap == 0:
+                print("DLG think he on the team")
                 self.call_dlg(i)
             self.aggregate_parameters()
 
