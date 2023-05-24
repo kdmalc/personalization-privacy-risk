@@ -8,6 +8,14 @@ import warnings
 import numpy as np
 import logging
 
+# Run setup.py so that you can import different modules
+os.popen('sh setup.sh')
+# https://stackoverflow.com/questions/42900259/running-sh-file-from-python-script/42900528
+# Is path required?
+
+# Get the node creator code... might be better to use in serverbase.py
+#from utils import node_creator
+
 from flcore.servers.serveravg import FedAvg
 #from flcore.servers.serverpFedMe import pFedMe
 #from flcore.servers.serverperavg import PerAvg
@@ -15,7 +23,6 @@ from flcore.servers.serverlocal import Local
 #from flcore.servers.serverper import FedPer
 #from flcore.servers.serverapfl import APFL
 #from flcore.servers.serverscaffold import SCAFFOLD
-
 
 # None of these are models I can / want to run
 #from flcore.trainmodel.models import *
@@ -30,6 +37,21 @@ logger.setLevel(logging.ERROR)
 
 warnings.simplefilter("ignore")
 torch.manual_seed(0)
+
+# trainmodel/models.py: BaseHeadSplit code... I'm not using NNs so can I just delete?
+# split an original model into a base and a head
+#class BaseHeadSplit(nn.Module):
+#    def __init__(self, base, head):
+#        super(BaseHeadSplit, self).__init__()
+#
+#        self.base = base
+#        self.head = head
+#        
+#    def forward(self, x):
+#        out = self.base(x)
+#        out = self.head(out)
+#
+#        return out
 
 def run(args):
     time_list = []
@@ -53,9 +75,10 @@ def run(args):
 
         # select algorithm
         if args.algorithm == "FedAvg":
-            args.head = copy.deepcopy(args.model.fc)
-            args.model.fc = nn.Identity()
-            args.model = BaseHeadSplit(args.model, args.head)
+            # FIX ARGS.HEAD --> LINEAR REGRESSION HAS NO FC
+            #args.head = copy.deepcopy(args.model.fc)
+            #args.model.fc = nn.Identity()
+            #args.model = BaseHeadSplit(args.model, args.head)
             server = FedAvg(args, i)
         elif args.algorithm == "Local":
             server = Local(args, i)
@@ -64,9 +87,10 @@ def run(args):
         elif args.algorithm == "APFL":
             server = APFL(args, i)
         elif args.algorithm == "FedPer":
-            args.head = copy.deepcopy(args.model.fc)
-            args.model.fc = nn.Identity()
-            args.model = BaseHeadSplit(args.model, args.head)
+            # FIX ARGS.HEAD --> LINEAR REGRESSION HAS NO FC
+            #args.head = copy.deepcopy(args.model.fc)
+            #args.model.fc = nn.Identity()
+            #args.model = BaseHeadSplit(args.model, args.head)
             server = FedPer(args, i)
         elif args.algorithm == "SCAFFOLD":
             server = SCAFFOLD(args, i)

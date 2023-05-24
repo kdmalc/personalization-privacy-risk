@@ -8,8 +8,9 @@ import copy
 import time
 import random
 
-from utils.data_utils import read_client_data
-from utils.dlg import DLG
+from flcore.pflniid_utils.data_utils import read_client_data
+from flcore.pflniid_utils.dlg import DLG
+from utils import node_creator
 
 
 class Server(object):
@@ -31,7 +32,7 @@ class Server(object):
         self.algorithm = args.algorithm
         self.time_select = args.time_select
         self.goal = args.goal
-        self.time_threthold = args.time_threthold
+        self.time_threthold = args.time_threthold  # Spelled wrong lol
         self.save_folder_name = args.save_folder_name
         self.top_cnt = 20
         self.auto_break = args.auto_break
@@ -67,10 +68,33 @@ class Server(object):
         # Kai's additional params
         self.global_round = 0
 
-    def set_clients(self, clientObj):
+    def set_clients(self, clientObj):        
         for i, train_slow, send_slow in zip(range(self.num_clients), self.train_slow_clients, self.send_slow_clients):
+            # Should I switch i to be the subject ID? Not required idk
             train_data = read_client_data(self.dataset, i, is_train=True)
             test_data = read_client_data(self.dataset, i, is_train=False)
+            client = clientObj(self.args, 
+                            ID=i, 
+                            train_samples=len(train_data), 
+                            test_samples=len(test_data), 
+                            train_slow=train_slow, 
+                            send_slow=send_slow)
+            self.clients.append(client)
+            
+    def _set_clients(self, clientObj):
+        # Still under development
+        dataset_list = make_users(condition_number=1, dataset='CPHS')
+        
+        for i, train_slow, send_slow in zip(range(self.num_clients), self.train_slow_clients, self.send_slow_clients):
+            # Should I switch i to be the subject ID? Not required idk
+            
+            # Should I revamp or replace read_client_data?
+            ## Would be nice to revamp it...
+            train_data = read_client_data(self.dataset, i, is_train=True)
+            test_data = read_client_data(self.dataset, i, is_train=False)
+            
+            # This is all fine
+            ## Although I think all clients get the same args but whatever
             client = clientObj(self.args, 
                             ID=i, 
                             train_samples=len(train_data), 
@@ -336,7 +360,7 @@ class Server(object):
             train_data = read_client_data(self.dataset, i, is_train=True)
             test_data = read_client_data(self.dataset, i, is_train=False)
             client = clientObj(self.args, 
-                            id=i, 
+                            ID=i, 
                             train_samples=len(train_data), 
                             test_samples=len(test_data), 
                             train_slow=False, 

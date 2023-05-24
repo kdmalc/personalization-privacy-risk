@@ -5,7 +5,7 @@ import torch.nn as nn
 import numpy as np
 import time
 from flcore.clients.clientbase import Client
-from utils.privacy import *
+from flcore.pflniid_utils.privacy import *
 
 
 class clientAVG(Client):
