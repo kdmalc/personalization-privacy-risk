@@ -6,6 +6,7 @@ flcore/clients/clientapfl.py
 flcore/clients/clientavg.py
 flcore/clients/clientbase.py
 flcore/pflniid_utils/__init__.py
+flcore/pflniid_utils/calmsize_copy.py
 flcore/pflniid_utils/data_utils.py
 flcore/pflniid_utils/dlg.py
 flcore/pflniid_utils/get_mean_std.py

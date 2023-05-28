@@ -11,7 +11,7 @@ def make_users(condition_number=1, dataset='CPHS', all_user_keys=['METACPHS_S106
         with open(r"C:\Users\kdmen\Desktop\Research\personalization-privacy-risk\Data\continuous_full_data_block1.pickle", 'rb') as handle:
             refs_block1, _, _, _, emgs_block1, _, _, _, _, _, _ = pickle.load(handle)
     else:
-        print("Not supported yet")
+        raise("Dataset not supported yet")
     
     #if (type(condition_number) is not int) and len(condition_number)>1:
     #    pass
