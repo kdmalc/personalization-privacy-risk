@@ -10,6 +10,8 @@ flcore/pflniid_utils/calmsize_copy.py
 flcore/pflniid_utils/data_utils.py
 flcore/pflniid_utils/dlg.py
 flcore/pflniid_utils/get_mean_std.py
+flcore/pflniid_utils/import_test_all_utils.py
+flcore/pflniid_utils/import_test_utils_emg.py
 flcore/pflniid_utils/mem_utils.py
 flcore/pflniid_utils/privacy.py
 flcore/pflniid_utils/result_utils.py

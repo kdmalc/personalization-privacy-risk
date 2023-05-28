@@ -3,6 +3,8 @@
 import numpy as np
 import os
 import torch
+import pickle
+from utils.emg_dataset_class import *
 
 
 def read_data_archive(dataset, idx, is_train=True):
@@ -65,7 +67,7 @@ def read_data(dataset, idx, is_train=True, condition_number=1, test_split=0.25, 
         #return train_data
 
         my_user = all_user_keys[idx]
-        upper_bound = test_split*(emgs_block1[my_user][condition_number,:,:].shape[0])
+        upper_bound = round(test_split*(emgs_block1[my_user][condition_number,:,:].shape[0]))
         return CustomEMGDataset(emgs_block1[my_user][condition_number,:upper_bound,:], refs_block1[my_user][condition_number,:upper_bound,:])
     
     else:
@@ -76,7 +78,7 @@ def read_data(dataset, idx, is_train=True, condition_number=1, test_split=0.25, 
         #return test_data
         
         my_user = all_user_keys[idx]
-        upper_bound = test_split*(emgs_block1[my_user][condition_number,:,:].shape[0])
+        upper_bound = round(test_split*(emgs_block1[my_user][condition_number,:,:].shape[0]))
         return CustomEMGDataset(emgs_block1[my_user][condition_number,upper_bound:,:], refs_block1[my_user][condition_number,upper_bound:,:])
 
 

@@ -11,6 +11,7 @@ from sklearn.preprocessing import label_binarize
 from sklearn import metrics
 
 from flcore.pflniid_utils.data_utils import read_client_data
+from utils.custom_loss_class import CPHSLoss
 
 
 class Client(object):
@@ -79,7 +80,7 @@ class Client(object):
         self.local_round += 1
         
         # Add data streaming update code here...
-        # What is self.dataset???
+        # What is self.dataset??? --> STRING name of dataset
         
         if batch_size == None:
             batch_size = self.batch_size

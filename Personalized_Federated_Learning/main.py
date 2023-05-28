@@ -9,9 +9,11 @@ import numpy as np
 import logging
 
 # Run setup.py so that you can import different modules
-os.popen('sh setup.sh')
+#os.popen('setup.sh')
 # https://stackoverflow.com/questions/42900259/running-sh-file-from-python-script/42900528
-# Is path required?
+# Is path required?  This one is in the same directory so I think it's fine
+# ^ It runs but it runs in parallel so that the Python outpaces it... that seems wrong to me...
+# Also only needs to be run on start up, not each time you run main
 
 # Get the node creator code... might be better to use in serverbase.py
 #from utils import node_creator
