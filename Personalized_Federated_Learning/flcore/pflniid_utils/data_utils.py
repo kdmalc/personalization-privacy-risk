@@ -30,23 +30,19 @@ def read_data_archive(dataset, idx, is_train=True):
 def read_client_data_archive(dataset, idx, is_train=True):
     if is_train:
         train_data = read_data(dataset, idx, is_train)
-        #X_train = torch.Tensor(train_data['x']).type(torch.float32)
-        #y_train = torch.Tensor(train_data['y']).type(torch.int64)
         X_train = torch.Tensor(train_data['x']).type(torch.float32)
-        y_train = torch.Tensor(train_data['y']).type(torch.float32)
+        y_train = torch.Tensor(train_data['y']).type(torch.int64)
         train_data = [(x, y) for x, y in zip(X_train, y_train)]
         return train_data
     else:
         test_data = read_data(dataset, idx, is_train)
-        #X_test = torch.Tensor(test_data['x']).type(torch.float32)
-        #y_test = torch.Tensor(test_data['y']).type(torch.int64)
         X_test = torch.Tensor(test_data['x']).type(torch.float32)
-        y_test = torch.Tensor(test_data['y']).type(torch.float32)
+        y_test = torch.Tensor(test_data['y']).type(torch.int64)
         test_data = [(x, y) for x, y in zip(X_test, y_test)]
         return test_data
 
 
-def read_data(dataset, idx, is_train=True, condition_number=1, test_split=0.25, test_split_each_update=False):
+def read_data(dataset, idx, is_train=True, condition_number=1, test_split=0.2, test_split_each_update=False):
     # KAI'S EDITED VERSION WHICH IS NOW USED IN THE CODE
     
     if test_split_each_update:
@@ -60,29 +56,17 @@ def read_data(dataset, idx, is_train=True, condition_number=1, test_split=0.25, 
         raise("Dataset not supported")
             
     if is_train:
-        #train_data_dir = os.path.join('../dataset', dataset, 'train/')
-        #train_file = train_data_dir + str(idx) + '.npz'
-        #with open(train_file, 'rb') as f:
-        #    train_data = np.load(f, allow_pickle=True)['data'].tolist()
-        #return train_data
-
         my_user = all_user_keys[idx]
         upper_bound = round(test_split*(emgs_block1[my_user][condition_number,:,:].shape[0]))
         return CustomEMGDataset(emgs_block1[my_user][condition_number,:upper_bound,:], refs_block1[my_user][condition_number,:upper_bound,:])
     
     else:
-        #test_data_dir = os.path.join('../dataset', dataset, 'test/')
-        #test_file = test_data_dir + str(idx) + '.npz'
-        #with open(test_file, 'rb') as f:
-        #    test_data = np.load(f, allow_pickle=True)['data'].tolist()
-        #return test_data
-        
         my_user = all_user_keys[idx]
         upper_bound = round(test_split*(emgs_block1[my_user][condition_number,:,:].shape[0]))
         return CustomEMGDataset(emgs_block1[my_user][condition_number,upper_bound:,:], refs_block1[my_user][condition_number,upper_bound:,:])
 
 
-def read_client_data(dataset, idx, is_train=True, condition_number=1, test_split=0.25, test_split_each_update=False):
+def read_client_data(dataset, idx, is_train=True, condition_number=1, test_split=0.2, test_split_each_update=False):
     # KAI'S EDITED VERSION WHICH IS NOW USED IN THE CODE
     
     dataset_obj = read_data(dataset, idx, is_train, condition_number=condition_number, test_split=test_split, test_split_each_update=test_split_each_update)

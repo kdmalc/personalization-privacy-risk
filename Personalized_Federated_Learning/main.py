@@ -125,16 +125,18 @@ if __name__ == "__main__":
                         choices=["cpu", "cuda"])
     parser.add_argument('-did', "--device_id", type=str, default="0")
     parser.add_argument('-data', "--dataset", type=str, default="cphs")  # KAI: Changed the default to cphs (from mnist)
-    parser.add_argument('-nb', "--num_classes", type=int, default=10)
+    #parser.add_argument('-nb', "--num_classes", type=int, default=10)  # Not doing classification...
     parser.add_argument('-m', "--model", type=str, default="Linear Regression")  # KAI: Changed the default to Linear Regression
-    parser.add_argument('-lbs', "--batch_size", type=int, default=10)  # Idk what I should set this to... I don't think I want to be doing SGD???  Don't want to shuffle my data since it is kinda meaningless if I do, I think...
+    parser.add_argument('-lbs', "--batch_size", type=int, default=1200)  # Setting it to a full update would be 1300ish... how many batches does it run? In one epoch? Not even sure where that is set
+    # The 1300 and the batch size are 2 separate things...
+    # I want to restrict the given dataset to just the 1300, but then iterate in batches... or do I since we don't have that much data and can probably just use all the data at once? Make batch size match the update size? ...
     parser.add_argument('-lr', "--local_learning_rate", type=float, default=0.005,  #This also probably needs to be changed...
                         help="Local learning rate")
     parser.add_argument('-ld', "--learning_rate_decay", type=bool, default=False)
     parser.add_argument('-ldg', "--learning_rate_decay_gamma", type=float, default=0.99)
     parser.add_argument('-gr', "--global_rounds", type=int, default=500)  # KAI: Switched to 500 down from 2000
     parser.add_argument('-ls', "--local_epochs", type=int, default=1, 
-                        help="Multiple update steps in one local epoch.")
+                        help="Multiple update steps in one local epoch.")  # KAI: I think it was 1 originally.  I'm gonna keep it there.  Does this mean I can set batchsize to 1300 and cook?
     parser.add_argument('-algo', "--algorithm", type=str, default="FedAvg")
     parser.add_argument('-jr', "--join_ratio", type=float, default=1.0,
                         help="Ratio of clients per round")
@@ -191,8 +193,21 @@ if __name__ == "__main__":
                         help="Number of principal components. 64 means do not use any PCA")
     parser.add_argument('-lambdas', "--lambdas", type=list, default=[0, 1e-3, 1e-4],
                         help="Lamda F, D, E penalty terms ")
-    # Go back and update those defaults...^^^
-
+    parser.add_argument('-starting_update', "--starting_update", type=int, default=0,
+                        help="Which update to start on (for CPHS Simulation). Use 0 or 10.")
+    parser.add_argument('-test_split', "--test_split", type=float, default=0.2,
+                        help="Percent of data to use for testing")
+    parser.add_argument('-device_channels', "--device_channels", type=int, default=64,
+                        help="Number of recording channels with the used EMG device")
+    parser.add_argument('-dt', "--dt", type=float, default=1/60,
+                        help="Delta time, amount of time (sec?) between measurements")
+    parser.add_argument('-normalize_emg', "--normalize_emg", type=bool, default=False,
+                        help="Normalize the input EMG signals")
+    parser.add_argument('-normalize_V', "--normalize_V", type=bool, default=False,
+                        help="Normalize the V term in the cost function")
+    parser.add_argument('-local_round_threshold', "--local_round_threshold", type=int, default=50,
+                        help="Number of communication rounds per client until a client will advance to the next batch of streamed data")
+    
     args = parser.parse_args()
 
     # I always need to run on CPU only since I don't have Nvidia GPU available
