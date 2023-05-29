@@ -46,8 +46,8 @@ class Server(object):
         self.uploaded_ids = []
         self.uploaded_models = []
 
-        self.rs_test_acc = []
-        self.rs_test_auc = []
+        self.rs_test_loss = []
+        #self.rs_test_auc = []
         self.rs_train_loss = []
 
         self.times = times
@@ -201,14 +201,14 @@ class Server(object):
         if not os.path.exists(result_path):
             os.makedirs(result_path)
 
-        if (len(self.rs_test_acc)):
+        if (len(self.rs_train_loss)):  # rs_train_acc
             algo = algo + "_" + self.goal + "_" + str(self.times)
             file_path = result_path + "{}.h5".format(algo)
             print("File path: " + file_path)
 
             with h5py.File(file_path, 'w') as hf:
-                hf.create_dataset('rs_test_acc', data=self.rs_test_acc)
-                hf.create_dataset('rs_test_auc', data=self.rs_test_auc)
+                #hf.create_dataset('rs_test_acc', data=self.rs_test_acc)
+                #hf.create_dataset('rs_test_auc', data=self.rs_test_auc)
                 hf.create_dataset('rs_train_loss', data=self.rs_train_loss)
 
     def save_item(self, item, item_name):
@@ -225,17 +225,15 @@ class Server(object):
             return self.test_metrics_new_clients()
         
         num_samples = []
-        tot_correct = []
-        tot_auc = []
+        tot_loss = []
         for c in self.clients:
-            ct, ns, auc = c.test_metrics()
-            tot_correct.append(ct*1.0)
-            tot_auc.append(auc*ns)
+            tl, ns = c.test_metrics()
+            tot_loss.append(tl*1.0)
             num_samples.append(ns)
 
         ids = [c.id for c in self.clients]
 
-        return ids, num_samples, tot_correct, tot_auc
+        return ids, num_samples, tot_loss
 
     def train_metrics(self):
         self.global_round += 1
@@ -261,16 +259,15 @@ class Server(object):
         stats = self.test_metrics()
         stats_train = self.train_metrics()
 
-        test_acc = sum(stats[2])*1.0 / sum(stats[1])
-        test_auc = sum(stats[3])*1.0 / sum(stats[1])
-        train_loss = sum(stats_train[2])*1.0 / sum(stats_train[1])
-        accs = [a / n for a, n in zip(stats[2], stats[1])]
-        aucs = [a / n for a, n in zip(stats[3], stats[1])]
+        # Should these be divided by something?
+        # Do we not have a train_loss for every training round?...
+        test_loss = sum(stats[2])*1.0
+        train_loss = sum(stats_train[2])*1.0
         
         if acc == None:
-            self.rs_test_acc.append(test_acc)
+            self.rs_test_loss.append(test_loss)
         else:
-            acc.append(test_acc)
+            acc.append(test_loss)
         
         if loss == None:
             self.rs_train_loss.append(train_loss)
@@ -278,16 +275,7 @@ class Server(object):
             loss.append(train_loss)
 
         print("Averaged Train Loss: {:.4f}".format(train_loss))
-        print("Averaged Test Accurancy: {:.4f}".format(test_acc))
-        print("Averaged Test AUC: {:.4f}".format(test_auc))
-        # self.print_(test_acc, train_acc, train_loss)
-        print("Std Test Accurancy: {:.4f}".format(np.std(accs)))
-        print("Std Test AUC: {:.4f}".format(np.std(aucs)))
-
-    def print_(self, test_acc, test_auc, train_loss):
-        print("Average Test Accurancy: {:.4f}".format(test_acc))
-        print("Average Test AUC: {:.4f}".format(test_auc))
-        print("Average Train Loss: {:.4f}".format(train_loss))
+        print("Averaged Test Loss: {:.4f}".format(test_loss))
 
     def check_done(self, acc_lss, top_cnt=None, div_value=None):
         for acc_ls in acc_lss:
@@ -377,14 +365,12 @@ class Server(object):
     # evaluating on new clients
     def test_metrics_new_clients(self):
         num_samples = []
-        tot_correct = []
-        tot_auc = []
-        for c in self.new_clients:
-            ct, ns, auc = c.test_metrics()
-            tot_correct.append(ct*1.0)
-            tot_auc.append(auc*ns)
+        tot_loss = []
+        for c in self.clients:
+            tl, ns = c.test_metrics()
+            tot_loss.append(tl*1.0)
             num_samples.append(ns)
 
-        ids = [c.id for c in self.new_clients]
+        ids = [c.id for c in self.clients]
 
-        return ids, num_samples, tot_correct, tot_auc
+        return ids, num_samples, tot_loss

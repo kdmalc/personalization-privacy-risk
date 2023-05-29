@@ -72,7 +72,7 @@ class Client(object):
         
         # Before this I need to run the INIT update segmentation code...
         init_dl = self.load_train_data()
-        simulate_data_streaming(init_dl)
+        self.simulate_data_streaming(init_dl)
         # ^ This func sets F, V, etc
         
         self.loss = CPHSLoss(self.F, self.model.weight, self.V, self.F.size()[1], lambdaF=self.lambdaF, lambdaD=self.lambdaD, lambdaE=self.lambdaE, Nd=2, Ne=self.pca_channels, return_cost_func_comps=False)
@@ -85,7 +85,7 @@ class Client(object):
         self.learning_rate_decay = args.learning_rate_decay
         
         
-    def simulate_data_streaming(dl):
+    def simulate_data_streaming(self, dl):
         it = iter(dl)
         s0 = it.__next__()
         s_temp = s0[0][0:self.update_ix[1],:]
@@ -134,7 +134,7 @@ class Client(object):
             batch_size = self.batch_size
         test_data = read_client_data(self.dataset, self.ID, is_train=False)
         dl = DataLoader(
-            dataset=train_data,
+            dataset=test_data,
             batch_size=batch_size, 
             drop_last=False,  # Yah idk if this should be true or false or if it matters...
             shuffle=False) 
@@ -155,28 +155,15 @@ class Client(object):
 
     def test_metrics(self):
         testloaderfull = self.load_test_data()
-        simulate_data_streaming(testloaderfull)
-        # self.model = self.load_model('model')
-        # self.model.to(self.device)
+        self.simulate_data_streaming(testloaderfull)
         self.model.eval()
-
-        test_acc = 0
-        test_num = self.F.size()[1]
-        #y_prob = []
-        #y_true = []
+        
+        num_samples = self.F.size()[1]
 
         with torch.no_grad():
-            test_acc = CPHSLoss(self.F, self.model.weight, self.V, test_num, lambdaF=self.lambdaF, lambdaD=self.lambdaD, lambdaE=self.lambdaE, Nd=2, Ne=self.pca_channels, return_cost_func_comps=False)
+            test_loss = CPHSLoss(self.F, self.model.weight, self.V, num_samples, lambdaF=self.lambdaF, lambdaD=self.lambdaD, lambdaE=self.lambdaE, Nd=2, Ne=self.pca_channels, return_cost_func_comps=False)
 
-        # self.model.cpu()
-        # self.save_model(self.model, 'model')
-
-        #y_prob = np.concatenate(y_prob, axis=0)
-        #y_true = np.concatenate(y_true, axis=0)
-        # AUC not defined for regression, only for classification
-        #auc = metrics.roc_auc_score(y_true, y_prob, average='micro')
-
-        return test_acc, test_num
+        return test_loss, num_samples
     
 
     def train_metrics(self):        
