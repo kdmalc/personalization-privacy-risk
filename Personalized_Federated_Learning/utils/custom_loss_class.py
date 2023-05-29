@@ -2,7 +2,7 @@ import torch
 
 class CPHSLoss(torch.nn.modules.loss._Loss):
     def __init__(self, F, D, V, learning_batch, lambdaF=0, lambdaD=1e-3, lambdaE=1e-6, Nd=2, Ne=64, return_cost_func_comps=False, verbose=True) -> None:
-        super().__init__(F, D, V, learning_batch, lambdaF, lambdaD, lambdaE, Nd, Ne, return_cost_func_comps)
+        super().__init__()
         self.F = F
         self.D = D
         self.V = V
