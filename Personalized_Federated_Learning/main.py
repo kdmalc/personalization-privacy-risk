@@ -234,7 +234,7 @@ if __name__ == "__main__":
         print("Time threthold: {}".format(args.time_threthold))
     print("Running times: {}".format(args.times))
     print("Dataset: {}".format(args.dataset))
-    print("Number of classes: {}".format(args.num_classes))
+    #print("Number of classes: {}".format(args.num_classes))
     print("Backbone: {}".format(args.model))
     print("Using device: {}".format(args.device))
     print("Using DP: {}".format(args.privacy))

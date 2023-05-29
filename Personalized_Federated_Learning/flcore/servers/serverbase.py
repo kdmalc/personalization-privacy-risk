@@ -19,7 +19,7 @@ class Server(object):
         self.args = args
         self.device = args.device
         self.dataset = args.dataset
-        self.num_classes = args.num_classes
+        #self.num_classes = args.num_classes
         self.global_rounds = args.global_rounds
         self.local_epochs = args.local_epochs
         self.batch_size = args.batch_size

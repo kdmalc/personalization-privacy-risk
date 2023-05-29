@@ -102,7 +102,8 @@ class clientAPFL(Client):
                 test_num += y.shape[0]
 
                 y_prob.append(output.detach().cpu().numpy())
-                y_true.append(label_binarize(y.detach().cpu().numpy(), classes=np.arange(self.num_classes)))
+                # KAI: UPDATE THIS FOR REGRESSION!
+                #y_true.append(label_binarize(y.detach().cpu().numpy(), classes=np.arange(self.num_classes)))
 
         y_prob = np.concatenate(y_prob, axis=0)
         y_true = np.concatenate(y_true, axis=0)
