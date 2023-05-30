@@ -38,7 +38,13 @@ class clientAVG(Client):
                 if self.train_slow:
                     time.sleep(0.1 * np.abs(np.random.rand()))
                 output = self.model(x)
-                loss = self.loss(output, y)
+                
+                # KAI:
+                # I don't actually use the output in the loss func
+                #  Well I recalculate it
+                #loss = self.loss(output, y)
+                loss = self.loss(x, y, self.model)
+                
                 self.optimizer.zero_grad()
                 loss.backward()
                 self.optimizer.step()

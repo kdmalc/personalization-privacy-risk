@@ -36,6 +36,8 @@ class clientAPFL(Client):
             max_local_steps = np.random.randint(1, max_local_steps // 2)
 
         for step in range(max_local_steps):
+            # Is this training over the same data over and over again for each step?
+            # If mine only allows one __next__() then I can't fine-tune like this...
             for i, (x, y) in enumerate(trainloader):
                 if type(x) == type([]):
                     x[0] = x[0].to(self.device)
@@ -45,7 +47,13 @@ class clientAPFL(Client):
                 if self.train_slow:
                     time.sleep(0.1 * np.abs(np.random.rand()))
                 output = self.model(x)
-                loss = self.loss(output, y)
+                
+                # KAI:
+                # I don't actually use the output in the loss func
+                #  Well I recalculate it
+                #loss = self.loss(output, y)
+                loss = self.loss(x, y, self.model)
+                
                 self.optimizer.zero_grad()
                 loss.backward()
                 self.optimizer.step()

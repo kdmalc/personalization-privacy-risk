@@ -75,6 +75,8 @@ class Client(object):
         self.simulate_data_streaming(init_dl)
         # ^ This func sets F, V, etc
         
+        self.loss_obj = CPHSLoss(self.F, self.model.weight, self.V, self.F.size()[1], lambdaF=self.lambdaF, lambdaD=self.lambdaD, lambdaE=self.lambdaE, Nd=2, Ne=self.pca_channels, return_cost_func_comps=False)
+        #self.loss = self.loss_obj.calc_obj_loss()
         self.loss = CPHSLoss(self.F, self.model.weight, self.V, self.F.size()[1], lambdaF=self.lambdaF, lambdaD=self.lambdaD, lambdaE=self.lambdaE, Nd=2, Ne=self.pca_channels, return_cost_func_comps=False)
         
         self.optimizer = torch.optim.SGD(self.model.parameters(), lr=self.learning_rate)
@@ -158,11 +160,20 @@ class Client(object):
         self.simulate_data_streaming(testloaderfull)
         self.model.eval()
         
-        num_samples = self.F.size()[1]
-
+        #num_samples = self.F.size()[1]
         with torch.no_grad():
-            test_loss = CPHSLoss(self.F, self.model.weight, self.V, num_samples, lambdaF=self.lambdaF, lambdaD=self.lambdaD, lambdaE=self.lambdaE, Nd=2, Ne=self.pca_channels, return_cost_func_comps=False)
-
+            for x, y in testloaderfull:
+                if type(x) == type([]):
+                    x[0] = x[0].to(self.device)
+                else:
+                    x = x.to(self.device)
+                y = y.to(self.device)
+                output = self.model(x)
+                test_loss = self.loss_obj.forward(output, y, self.model)
+        #with torch.no_grad():
+            #self.loss_obj.update_FDV(self.F, self.model.weight, self.V, num_samples)
+            #test_loss = self.loss_obj.calc_obj_loss()
+            
         return test_loss, num_samples
     
 
@@ -182,7 +193,8 @@ class Client(object):
                     x = x.to(self.device)
                 y = y.to(self.device)
                 output = self.model(x)
-                loss = self.loss(output, y)
+                #loss = self.loss(output, y)
+                loss = self.loss_obj.forward(output, y, self.model)
                 train_num += y.shape[0]
                 losses += loss.item() * y.shape[0]
 
