@@ -67,8 +67,6 @@ def run(args):
 
         # Generate args.model
         if model_str == "LinearRegression":
-            # KAI'S ADDITION
-            #args.model = torch.nn.Linear(64, 2)  #input_size, output_size
             args.model = torch.nn.Linear(args.pca_channels, 2)  #input_size, output_size
         else:
             raise NotImplementedError
@@ -130,37 +128,42 @@ if __name__ == "__main__":
     parser.add_argument('-lbs', "--batch_size", type=int, default=1200)  # Setting it to a full update would be 1300ish... how many batches does it run? In one epoch? Not even sure where that is set
     # The 1300 and the batch size are 2 separate things...
     # I want to restrict the given dataset to just the 1300, but then iterate in batches... or do I since we don't have that much data and can probably just use all the data at once? Make batch size match the update size? ...
-    parser.add_argument('-lr', "--local_learning_rate", type=float, default=0.005,  #This also probably needs to be changed...
+    parser.add_argument('-lr', "--local_learning_rate", type=float, default=0.005,
                         help="Local learning rate")
     parser.add_argument('-ld', "--learning_rate_decay", type=bool, default=False)
     parser.add_argument('-ldg', "--learning_rate_decay_gamma", type=float, default=0.99)
-    parser.add_argument('-gr', "--global_rounds", type=int, default=500)  # KAI: Switched to 500 down from 2000
+    parser.add_argument('-gr', "--global_rounds", type=int, default=250)  # KAI: Switched to 250 down from 2000
     parser.add_argument('-ls', "--local_epochs", type=int, default=1, 
-                        help="Multiple update steps in one local epoch.")  # KAI: I think it was 1 originally.  I'm gonna keep it there.  Does this mean I can set batchsize to 1300 and cook?
+                        help="Multiple update steps in one local epoch.")  # KAI: I think it was 1 originally.  I'm gonna keep it there.  Does this mean I can set batchsize to 1300 and cook?Is my setup capable or running multiple epochs? Implicitly I was doing 1 epoch before, using the full update data I believe...
     parser.add_argument('-algo', "--algorithm", type=str, default="FedAvg")
-    parser.add_argument('-jr', "--join_ratio", type=float, default=1.0,
+    parser.add_argument('-jr', "--join_ratio", type=float, default=0.2,
                         help="Ratio of clients per round")
     parser.add_argument('-rjr', "--random_join_ratio", type=bool, default=False,
                         help="Random ratio of clients per round")
-    parser.add_argument('-nc', "--num_clients", type=int, default=2,
+    parser.add_argument('-nc', "--num_clients", type=int, default=14,
                         help="Total number of clients")
+    
+    # SECTION: Idk what this means lol
+    parser.add_argument('-eg', "--eval_gap", type=int, default=1,
+                        help="Rounds gap for evaluation")
     parser.add_argument('-pv', "--prev", type=int, default=0,
                         help="Previous Running times")
     parser.add_argument('-t', "--times", type=int, default=1,
                         help="Running times")
-    parser.add_argument('-eg', "--eval_gap", type=int, default=1,
-                        help="Rounds gap for evaluation")
+    parser.add_argument('-ab', "--auto_break", type=bool, default=False)
+    parser.add_argument('-dlg', "--dlg_eval", type=bool, default=False)
+    parser.add_argument('-dlgg', "--dlg_gap", type=int, default=100)
+    # FIGURE OUT WHAT THIS IS
+    parser.add_argument('-bnpc', "--batch_num_per_client", type=int, default=2)
+    parser.add_argument('-nnc', "--num_new_clients", type=int, default=0)
+    parser.add_argument('-fte', "--fine_tuning_epoch", type=int, default=0)
+    
     parser.add_argument('-dp', "--privacy", type=bool, default=False,
                         help="differential privacy")
     parser.add_argument('-dps', "--dp_sigma", type=float, default=0.0)
     parser.add_argument('-sfn', "--save_folder_name", type=str, default='items')
-    parser.add_argument('-ab', "--auto_break", type=bool, default=False)
-    parser.add_argument('-dlg', "--dlg_eval", type=bool, default=False)
-    parser.add_argument('-dlgg', "--dlg_gap", type=int, default=100)
-    parser.add_argument('-bnpc', "--batch_num_per_client", type=int, default=2)
-    parser.add_argument('-nnc', "--num_new_clients", type=int, default=0)
-    parser.add_argument('-fte', "--fine_tuning_epoch", type=int, default=0)
-    # practical
+
+    # SECTION: practical
     parser.add_argument('-cdr', "--client_drop_rate", type=float, default=0.0,
                         help="Rate for clients that train but drop out")
     parser.add_argument('-tsr', "--train_slow_rate", type=float, default=0.0,
@@ -171,7 +174,8 @@ if __name__ == "__main__":
                         help="Whether to group and select clients at each round according to time cost")
     parser.add_argument('-tth', "--time_threthold", type=float, default=10000,
                         help="The threthold for droping slow clients")
-    # pFedMe / PerAvg / FedProx / FedAMP / FedPHP
+    
+    # SECTION: pFedMe / PerAvg / FedProx / FedAMP / FedPHP
     parser.add_argument('-bt', "--beta", type=float, default=0.0,
                         help="Average moving parameter for pFedMe, Second learning rate of Per-FedAvg, \
                         or L1 regularization weight of FedTransfer")
@@ -188,7 +192,7 @@ if __name__ == "__main__":
     # SCAFFOLD
     parser.add_argument('-slr', "--server_learning_rate", type=float, default=1.0)
     
-    # Kai's additional args
+    # SECTION: Kai's additional args
     parser.add_argument('-pca_channels', "--pca_channels", type=int, default=64,
                         help="Number of principal components. 64 means do not use any PCA")
     parser.add_argument('-lambdas', "--lambdas", type=list, default=[0, 1e-3, 1e-4],
@@ -250,6 +254,19 @@ if __name__ == "__main__":
         print("DLG attack round gap: {}".format(args.dlg_gap))
     print("Total number of new clients: {}".format(args.num_new_clients))
     print("Fine tuning epoches on new clients: {}".format(args.fine_tuning_epoch))
+    
+    print("KAI'S ADDITIONS")
+    if args.pca_channels!=64:
+        print("Number of PCA Components Used: {}".format(args.pca_channels))
+    print("Lambda penalty terms (F, D, E): {}".format(args.lambdas))
+    print("Starting update: {}".format(args.starting_update))
+    print("Testing split: {}".format(args.test_split))
+    if args.dt!=1/60:
+        print("dt: {}".format(args.dt))
+    print("Normalize EMG input: {}".format(args.normalize_emg))
+    print("Normalize V term: {}".format(args.normalize_V))
+    print("Local round threshold: {}".format(args.local_round_threshold))
+    
     print("=" * 50)
 
 

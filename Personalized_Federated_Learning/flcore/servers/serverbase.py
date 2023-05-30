@@ -43,7 +43,7 @@ class Server(object):
         self.send_slow_clients = []
 
         self.uploaded_weights = []
-        self.uploaded_ids = []
+        self.uploaded_IDs = []
         self.uploaded_models = []
 
         self.rs_test_loss = []
@@ -145,7 +145,7 @@ class Server(object):
         active_clients = random.sample(
             self.selected_clients, int((1-self.client_drop_rate) * self.num_join_clients))
 
-        self.uploaded_ids = []
+        self.uploaded_IDs = []
         self.uploaded_weights = []
         self.uploaded_models = []
         tot_samples = 0
@@ -157,7 +157,7 @@ class Server(object):
                 client_time_cost = 0
             if client_time_cost <= self.time_threthold:
                 tot_samples += client.train_samples
-                self.uploaded_ids.append(client.id)
+                self.uploaded_IDs.append(client.ID)
                 self.uploaded_weights.append(client.train_samples)
                 self.uploaded_models.append(client.model)
         for i, w in enumerate(self.uploaded_weights):
@@ -231,9 +231,9 @@ class Server(object):
             tot_loss.append(tl*1.0)
             num_samples.append(ns)
 
-        ids = [c.id for c in self.clients]
+        IDs = [c.ID for c in self.clients]
 
-        return ids, num_samples, tot_loss
+        return IDs, num_samples, tot_loss
 
     def train_metrics(self):
         self.global_round += 1
@@ -244,15 +244,16 @@ class Server(object):
         
         num_samples = []
         losses = []
+        print(f"GLOBAL ROUND: {self.global_round}")
         for c in self.clients:
             c.last_global_round = self.global_round
             cl, ns = c.train_metrics()
             num_samples.append(ns)
             losses.append(cl*1.0)
 
-        ids = [c.id for c in self.clients]
+        IDs = [c.ID for c in self.clients]
 
-        return ids, num_samples, losses
+        return IDs, num_samples, losses
 
     # evaluate selected clients
     def evaluate(self, acc=None, loss=None):
@@ -274,6 +275,8 @@ class Server(object):
         else:
             loss.append(train_loss)
 
+        assert(!torch.isnan(train_loss))
+        assert(!torch.isnan(test_loss))
         print("Averaged Train Loss: {:.4f}".format(train_loss))
         print("Averaged Test Loss: {:.4f}".format(test_loss))
 
@@ -307,14 +310,14 @@ class Server(object):
         # items = []
         cnt = 0
         psnr_val = 0
-        for cid, client_model in zip(self.uploaded_ids, self.uploaded_models):
+        for cID, client_model in zip(self.uploaded_IDs, self.uploaded_models):
             client_model.eval()
             origin_grad = []
             for gp, pp in zip(self.global_model.parameters(), client_model.parameters()):
                 origin_grad.append(gp.data - pp.data)
 
             target_inputs = []
-            trainloader = self.clients[cid].load_train_data()
+            trainloader = self.clients[cID].load_train_data()
             with torch.no_grad():
                 for i, (x, y) in enumerate(trainloader):
                     if i >= self.batch_num_per_client:
@@ -371,6 +374,6 @@ class Server(object):
             tot_loss.append(tl*1.0)
             num_samples.append(ns)
 
-        ids = [c.id for c in self.clients]
+        IDs = [c.ID for c in self.clients]
 
-        return ids, num_samples, tot_loss
+        return IDs, num_samples, tot_loss

@@ -1,10 +1,10 @@
 import torch
 
 class CPHSLoss(torch.nn.modules.loss._Loss):
-    def __init__(self, F, D, V, learning_batch, lambdaF=0, lambdaD=1e-3, lambdaE=1e-6, Nd=2, Ne=64, return_cost_func_comps=False, verbose=True, dt=1/60, normalize_V=False) -> None:
+    def __init__(self, F, D, V, learning_batch, lambdaF=0, lambdaD=1e-3, lambdaE=1e-6, Nd=2, Ne=64, return_cost_func_comps=False, verbose=False, dt=1/60, normalize_V=False) -> None:
         super().__init__()
         self.F = F
-        self.D = D
+        self.D = D.detach().clone()
         self.V = V
         self.learning_batch = learning_batch
         self.lambdaF = lambdaF
@@ -16,9 +16,11 @@ class CPHSLoss(torch.nn.modules.loss._Loss):
         # Don't use return_cost_func_comps since I don't think loss.item() will return a tuple, it only returns scalars AFAIK
         self.dt = dt
         self.normalize_V = normalize_V
+        self.verbose = verbose
         
     def forward(self, outputs, targets, my_model):
-        p_reference = targets  # Does this need to be transposed idk
+        outputs = torch.transpose(outputs, 0, 1)
+        p_reference = torch.transpose(targets, 0, 1)
         p_actual = torch.cumsum(outputs, dim=1)*self.dt  # Numerical integration of v_actual to get p_actual
         self.V = (p_reference - p_actual)*self.dt
         if self.normalize_V:
@@ -26,11 +28,12 @@ class CPHSLoss(torch.nn.modules.loss._Loss):
             assert (torch.linalg.norm(self.V, ord='fro')<1.2) and (torch.linalg.norm(self.V, ord='fro')>0.8)
         
         Nt = self.learning_batch
-        self.D = my_model.weight.view(self.Nd, self.Ne)
+        self.D = my_model.weight.detach().clone()
+        self.D = self.D.view(self.Nd, self.Ne)
         Vplus = self.V[:,1:]
         
         # Performance
-        term1 = self.lambdaE*(torch.linalg.matrix_norm(outputs - Vplus)**2)
+        term1 = self.lambdaE*(torch.linalg.matrix_norm(outputs[:,:-1] - Vplus)**2)
         # D Norm
         term2 = self.lambdaD*(torch.linalg.matrix_norm(my_model.weight)**2)
         # F Norm
@@ -51,7 +54,7 @@ class CPHSLoss(torch.nn.modules.loss._Loss):
         
     def update_FDV(F, D, V, learning_batch):
         self.F = F
-        self.D = D
+        self.D = D.detach().clone()
         self.V = V
         self.learning_batch = learning_batch
         
@@ -66,7 +69,7 @@ class CPHSLoss(torch.nn.modules.loss._Loss):
         # F Norm
         term3 = self.lambdaF#*(torch.linalg.matrix_norm(self.F)**2)
         
-        if verbose:
+        if self.verbose:
             print(f"LambdaE*Error_Norm^2: {term1}")
             print(f"LambdaD*Decoder_Norm^2: {term2}")
             print(f"LambdaF*EMG_Norm^2: {term3}")
