@@ -21,14 +21,20 @@ class Local(Server):
 
     def train(self):
         for i in range(self.global_rounds+1):
+            ##############################################################
+            # I feel like I should be able to delete this... it doesn't affect self.evaluate()...
+            print("Selecting clients")
             self.selected_clients = self.select_clients()
+            ##############################################################
 
             if i%self.eval_gap == 0:
                 print(f"\n-------------Round number: {i}-------------")
                 print("\nEvaluate personalized models")
                 self.evaluate()
 
+            print("Selecting clients again...")
             self.selected_clients = self.select_clients()
+            print("CLIENT TRAINING")
             for client in self.selected_clients:
                 client.train()
 

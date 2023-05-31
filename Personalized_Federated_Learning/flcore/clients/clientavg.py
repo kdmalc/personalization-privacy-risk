@@ -30,6 +30,8 @@ class clientAVG(Client):
 
         for step in range(max_local_steps):
             for i, (x, y) in enumerate(trainloader):
+                print(f"Step {step}, pair {i} in traindl")
+                print(f"x.size(): {x.size()}")
                 if type(x) == type([]):
                     x[0] = x[0].to(self.device)
                 else:

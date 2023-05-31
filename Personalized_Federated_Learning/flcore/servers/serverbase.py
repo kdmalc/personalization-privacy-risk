@@ -19,7 +19,6 @@ class Server(object):
         self.args = args
         self.device = args.device
         self.dataset = args.dataset
-        #self.num_classes = args.num_classes
         self.global_rounds = args.global_rounds
         self.local_epochs = args.local_epochs
         self.batch_size = args.batch_size
@@ -47,7 +46,6 @@ class Server(object):
         self.uploaded_models = []
 
         self.rs_test_loss = []
-        #self.rs_test_auc = []
         self.rs_train_loss = []
 
         self.times = times
@@ -67,12 +65,32 @@ class Server(object):
         
         # Kai's additional params
         self.global_round = 0
+        self.test_split = args.test_split
+        self.condition_number = args.condition_number
+        self.debug_mode = args.debug_mode
+        if self.debug_mode:
+            self.all_user_keys = ['METACPHS_S106', 'METACPHS_S107', 'METACPHS_S108', 'METACPHS_S109', 'METACPHS_S110', 'METACPHS_S111', 'METACPHS_S112', 'METACPHS_S113', 'METACPHS_S114', 'METACPHS_S115', 'METACPHS_S116', 'METACPHS_S117', 'METACPHS_S118', 'METACPHS_S119']
+            if self.dataset.upper()=='CPHS':
+                with open(r"C:\Users\kdmen\Desktop\Research\personalization-privacy-risk\Data\continuous_full_data_block1.pickle", 'rb') as handle:
+                    self.all_labels, _, _, _, self.all_emg, _, _, _, _, _, _ = pickle.load(handle)
+            else:
+                raise("Dataset not supported")
 
     def set_clients(self, clientObj):        
         for i, train_slow, send_slow in zip(range(self.num_clients), self.train_slow_clients, self.send_slow_clients):
             # Should I switch i to be the subject ID? Not required idk
-            train_data = read_client_data(self.dataset, i, is_train=True)
-            test_data = read_client_data(self.dataset, i, is_train=False)
+            if self.debug_mode:
+                # This assumes that the id's are in order.
+                # This is fine when using all clients, otherwise would need to map idx to the included subjects' IDs
+                upper_bound = round(self.test_split*(self.all_emg[self.all_user_keys[i]][self.condition_number,:,:].shape[0]))
+                train_data = self.all_emg[self.all_user_keys[i]][self.condition_number,:upper_bound,:]
+                test_data = self.all_emg[self.all_user_keys[i]][self.condition_number,upper_bound:,:]
+                
+                # So where do I actually give the client their data?
+                #CustomEMGDataset(emgs_block1[my_user][condition_number,:upper_bound,:], refs_block1[my_user][condition_number,:upper_bound,:])
+            else:
+                train_data = read_client_data(self.dataset, i, is_train=True)
+                test_data = read_client_data(self.dataset, i, is_train=False)
             client = clientObj(self.args, 
                             ID=i, 
                             train_samples=len(train_data), 
@@ -82,8 +100,10 @@ class Server(object):
             self.clients.append(client)
             
     def _set_clients(self, clientObj):
+        print("_set_clients(): I haven't edited this one yet really")
+        
         # Still under development
-        dataset_list = make_users(condition_number=1, dataset='CPHS')
+        dataset_list = make_users(condition_number=self.condition_number, dataset=self.dataset)
         
         for i, train_slow, send_slow in zip(range(self.num_clients), self.train_slow_clients, self.send_slow_clients):
             # Should I switch i to be the subject ID? Not required idk
@@ -262,8 +282,11 @@ class Server(object):
 
         # Should these be divided by something?
         # Do we not have a train_loss for every training round?...
-        test_loss = sum(stats[2])*1.0
-        train_loss = sum(stats_train[2])*1.0
+        #test_loss = sum(stats[2])*1.0
+        #train_loss = sum(stats_train[2])*1.0
+        # Dividing by the length (should it be num samples instead...)
+        test_loss = sum(stats[2])*1.0 / len(stats[2])
+        train_loss = sum(stats_train[2])*1.0 / len(stats[2])
         
         if acc == None:
             self.rs_test_loss.append(test_loss)
@@ -275,8 +298,8 @@ class Server(object):
         else:
             loss.append(train_loss)
 
-        assert(!torch.isnan(train_loss))
-        assert(!torch.isnan(test_loss))
+        assert(np.isnan(train_loss)==False)
+        assert(np.isnan(test_loss)==False)
         print("Averaged Train Loss: {:.4f}".format(train_loss))
         print("Averaged Test Loss: {:.4f}".format(test_loss))
 

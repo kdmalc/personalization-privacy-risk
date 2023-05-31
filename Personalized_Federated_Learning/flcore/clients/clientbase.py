@@ -115,6 +115,7 @@ class Client(object):
 
 
     def load_train_data(self, batch_size=None):
+        print(f"Client{self.ID}: Setting Training DataLoader")
         self.local_round += 1
         if (self.current_update < 16) and (self.local_round%self.local_round_threshold==0):
             self.current_update += 1
@@ -129,7 +130,8 @@ class Client(object):
             shuffle=False) 
         return dl
 
-    def load_test_data(self, batch_size=None):        
+    def load_test_data(self, batch_size=None): 
+        print(f"Client{self.ID}: Setting Test DataLoader")
         if batch_size == None:
             batch_size = self.batch_size
         test_data = read_client_data(self.dataset, self.ID, is_train=False)
@@ -182,8 +184,11 @@ class Client(object):
 
         train_num = 0
         losses = 0
+        counter = 0
         with torch.no_grad():
             for x, y in trainloader:
+                counter += 1
+                print(f"Client{self.ID} train_metrics() round {counter}")
                 if type(x) == type([]):
                     x[0] = x[0].to(self.device)
                 else:
@@ -192,7 +197,8 @@ class Client(object):
                 output = self.model(x)
                 loss = self.loss(output, y, self.model)
                 train_num += y.shape[0]
-                losses += loss.item() * y.shape[0]
+                # Why are they multiplying by y.shape[0] here...
+                losses += loss.item() #* y.shape[0]
 
         # self.model.cpu()
         # self.save_model(self.model, 'model')

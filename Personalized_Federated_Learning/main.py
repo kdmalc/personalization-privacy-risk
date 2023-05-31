@@ -15,9 +15,6 @@ import logging
 # ^ It runs but it runs in parallel so that the Python outpaces it... that seems wrong to me...
 # Also only needs to be run on start up, not each time you run main
 
-# Get the node creator code... might be better to use in serverbase.py
-#from utils import node_creator
-
 from flcore.servers.serveravg import FedAvg
 #from flcore.servers.serverpFedMe import pFedMe
 #from flcore.servers.serverperavg import PerAvg
@@ -26,11 +23,6 @@ from flcore.servers.serverlocal import Local
 #from flcore.servers.serverapfl import APFL
 #from flcore.servers.serverscaffold import SCAFFOLD
 
-# None of these are models I can / want to run
-#from flcore.trainmodel.models import *
-# They then import different model files but I don't want to use them
-
-# I don't have these downloaded I don't think...
 from flcore.pflniid_utils.result_utils import average_data
 from flcore.pflniid_utils.mem_utils import MemReporter
 
@@ -39,21 +31,6 @@ logger.setLevel(logging.ERROR)
 
 warnings.simplefilter("ignore")
 torch.manual_seed(0)
-
-# trainmodel/models.py: BaseHeadSplit code... I'm not using NNs so can I just delete?
-# split an original model into a base and a head
-#class BaseHeadSplit(nn.Module):
-#    def __init__(self, base, head):
-#        super(BaseHeadSplit, self).__init__()
-#
-#        self.base = base
-#        self.head = head
-#        
-#    def forward(self, x):
-#        out = self.base(x)
-#        out = self.head(out)
-#
-#        return out
 
 def run(args):
     time_list = []
@@ -142,8 +119,13 @@ if __name__ == "__main__":
                         help="Random ratio of clients per round")
     parser.add_argument('-nc', "--num_clients", type=int, default=14,
                         help="Total number of clients")
+    parser.add_argument('-dp', "--privacy", type=bool, default=False,
+                        help="differential privacy")
+    parser.add_argument('-dps', "--dp_sigma", type=float, default=0.0)
+    parser.add_argument('-sfn', "--save_folder_name", type=str, default='items')
+
     
-    # SECTION: Idk what this means lol
+    # SECTION: Idk what these are lol
     parser.add_argument('-eg', "--eval_gap", type=int, default=1,
                         help="Rounds gap for evaluation")
     parser.add_argument('-pv', "--prev", type=int, default=0,
@@ -151,18 +133,12 @@ if __name__ == "__main__":
     parser.add_argument('-t', "--times", type=int, default=1,
                         help="Running times")
     parser.add_argument('-ab', "--auto_break", type=bool, default=False)
-    parser.add_argument('-dlg', "--dlg_eval", type=bool, default=False)
+    parser.add_argument('-dlg', "--dlg_eval", type=bool, default=False)  # DLG = Deep Leakage from Gradients
     parser.add_argument('-dlgg', "--dlg_gap", type=int, default=100)
-    # FIGURE OUT WHAT THIS IS
-    parser.add_argument('-bnpc', "--batch_num_per_client", type=int, default=2)
+    parser.add_argument('-bnpc', "--batch_num_per_client", type=int, default=2)  # Only used with DLG
     parser.add_argument('-nnc', "--num_new_clients", type=int, default=0)
     parser.add_argument('-fte', "--fine_tuning_epoch", type=int, default=0)
     
-    parser.add_argument('-dp', "--privacy", type=bool, default=False,
-                        help="differential privacy")
-    parser.add_argument('-dps', "--dp_sigma", type=float, default=0.0)
-    parser.add_argument('-sfn', "--save_folder_name", type=str, default='items')
-
     # SECTION: practical
     parser.add_argument('-cdr', "--client_drop_rate", type=float, default=0.0,
                         help="Rate for clients that train but drop out")
@@ -211,6 +187,10 @@ if __name__ == "__main__":
                         help="Normalize the V term in the cost function")
     parser.add_argument('-local_round_threshold', "--local_round_threshold", type=int, default=50,
                         help="Number of communication rounds per client until a client will advance to the next batch of streamed data")
+    parser.add_argument('-debug_mode', "--debug_mode", type=bool, default=False,
+                        help="In debug mode, the code is run to minimize overhead time in order to debug as fast as possible.  Namely, the data is held at the server to decrease init time, and communication delays are ignored.")
+    parser.add_argument('-condition_number', "--condition_number", type=int, default=1,
+                        help="Which condition number (trial) to train on")
     
     args = parser.parse_args()
 
@@ -266,25 +246,10 @@ if __name__ == "__main__":
     print("Normalize EMG input: {}".format(args.normalize_emg))
     print("Normalize V term: {}".format(args.normalize_V))
     print("Local round threshold: {}".format(args.local_round_threshold))
+    print("In Debug Mode: {}".format(args.debug_mode))
     
     print("=" * 50)
 
-
-    # if args.dataset == "mnist" or args.dataset == "fmnist":
-    #     generate_mnist('../dataset/mnist/', args.num_clients, 10, args.niid)
-    # elif args.dataset == "Cifar10" or args.dataset == "Cifar100":
-    #     generate_cifar10('../dataset/Cifar10/', args.num_clients, 10, args.niid)
-    # else:
-    #     generate_synthetic('../dataset/synthetic/', args.num_clients, 10, args.niid)
-
-    # with torch.profiler.profile(
-    #     activities=[
-    #         torch.profiler.ProfilerActivity.CPU,
-    #         torch.profiler.ProfilerActivity.CUDA],
-    #     profile_memory=True, 
-    #     on_trace_ready=torch.profiler.tensorboard_trace_handler('./log')
-    #     ) as prof:
-    # with torch.autograd.profiler.profile(profile_memory=True) as prof:
     run(args)
 
     
