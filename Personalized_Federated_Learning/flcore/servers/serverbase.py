@@ -320,8 +320,8 @@ class Server(object):
         else:
             loss.append(train_loss)
 
-        assert(np.isnan(train_loss)==False)
-        assert(np.isnan(test_loss)==False)
+        assert(train_loss<1e5)
+        assert(test_loss<1e5)
         print("Averaged Train Loss: {:.4f}".format(train_loss))
         print("Averaged Test Loss: {:.4f}".format(test_loss))
 
