@@ -20,20 +20,20 @@ def read_data(dataset, idx, is_train=True, condition_number=1, test_split=0.2, t
             refs_block1, _, _, _, emgs_block1, _, _, _, _, _, _ = pickle.load(handle)
     else:
         raise("Dataset not supported")
+        
+    my_user = all_user_keys[idx]
+    upper_bound = round((1-test_split)*(emgs_block1[my_user][condition_number,:,:].shape[0]))
             
     if is_train:
-        my_user = all_user_keys[idx]
-        upper_bound = round(test_split*(emgs_block1[my_user][condition_number,:,:].shape[0]))
         return CustomEMGDataset(emgs_block1[my_user][condition_number,:upper_bound,:], refs_block1[my_user][condition_number,:upper_bound,:])
     
     else:
-        my_user = all_user_keys[idx]
-        upper_bound = round(test_split*(emgs_block1[my_user][condition_number,:,:].shape[0]))
         return CustomEMGDataset(emgs_block1[my_user][condition_number,upper_bound:,:], refs_block1[my_user][condition_number,upper_bound:,:])
 
 
 def read_client_data(dataset, idx, is_train=True, condition_number=1, test_split=0.2, test_split_each_update=False):
     # KAI'S EDITED VERSION WHICH IS NOW USED IN THE CODE
+    print(f"Client{idx}, train={is_train}: read_CLIENT_data() called!")
     
     dataset_obj = read_data(dataset, idx, is_train, condition_number=condition_number, test_split=test_split, test_split_each_update=test_split_each_update)
     X_data = torch.Tensor(dataset_obj['x']).type(torch.float32)

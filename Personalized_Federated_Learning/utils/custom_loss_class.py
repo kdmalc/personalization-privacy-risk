@@ -47,18 +47,24 @@ class CPHSLoss(torch.nn.modules.loss._Loss):
             print(f"LambdaD*Decoder_Norm^2: {term2}")
             print(f"LambdaF*EMG_Norm^2: {term3}")
         
+        print(f"Error term: {term1}")
+        print(f"D term: {term2}")
+        print(f"F term: {term3}")
+        
         if self.return_cost_func_comps:
             return (term1 + term2 + term3), term1, term2, term3
         else:
             return (term1 + term2 + term3)
         
     def update_FDV(F, D, V, learning_batch):
+        print("update_FDV")
         self.F = F
         self.D = D.detach().clone()
         self.V = V
         self.learning_batch = learning_batch
         
     def calc_obj_loss(self) -> torch.Tensor:
+        print("calc_obj_loss")
         Nt = self.learning_batch
         self.D = self.D.view(self.Nd, self.Ne)
         Vplus = self.V[:,1:]

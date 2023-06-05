@@ -75,6 +75,7 @@ class Client(object):
         self.simulate_data_streaming(init_dl)
         # ^ This func sets F, V, etc
         
+        print("Init loss setup (no calc?)")
         self.loss = CPHSLoss(self.F, self.model.weight, self.V, self.F.size()[1], lambdaF=self.lambdaF, lambdaD=self.lambdaD, lambdaE=self.lambdaE, Nd=2, Ne=self.pca_channels, return_cost_func_comps=False)
         
         self.optimizer = torch.optim.SGD(self.model.parameters(), lr=self.learning_rate)
@@ -115,13 +116,14 @@ class Client(object):
 
 
     def load_train_data(self, batch_size=None):
-        print(f"Client{self.ID}: Setting Training DataLoader")
+        print(f"clientbase load_train_data(): Client{self.ID}: Setting Training DataLoader")
         self.local_round += 1
         if (self.current_update < 16) and (self.local_round%self.local_round_threshold==0):
             self.current_update += 1
         
         if batch_size == None:
             batch_size = self.batch_size
+        print("read_client_data()")
         train_data = read_client_data(self.dataset, self.ID, is_train=True)
         dl = DataLoader(
             dataset=train_data,
@@ -162,13 +164,14 @@ class Client(object):
         
         num_samples = 0
         with torch.no_grad():
-            for x, y in testloaderfull:
+            for i, (x, y) in enumerate(testloaderfull):
                 if type(x) == type([]):
                     x[0] = x[0].to(self.device)
                 else:
                     x = x.to(self.device)
                 y = y.to(self.device)
                 output = self.model(x)
+                print(f"clientbase test_metrics() LOSS {i}")
                 test_loss = self.loss(output, y, self.model)
                 
                 num_samples += x.size()[0]
@@ -176,7 +179,8 @@ class Client(object):
         return test_loss, num_samples
     
 
-    def train_metrics(self):        
+    def train_metrics(self):
+        print("Client train_metrics()")
         trainloader = self.load_train_data()
         # self.model = self.load_model('model')
         # self.model.to(self.device)
@@ -195,6 +199,7 @@ class Client(object):
                     x = x.to(self.device)
                 y = y.to(self.device)
                 output = self.model(x)
+                print("clientbase train_metrics() LOSS")
                 loss = self.loss(output, y, self.model)
                 train_num += y.shape[0]
                 # Why are they multiplying by y.shape[0] here...

@@ -76,10 +76,14 @@ class Server(object):
             else:
                 raise("Dataset not supported")
 
-    def set_clients(self, clientObj):        
+    def set_clients(self, clientObj):  
+        print("Serverbase set_clients")
         for i, train_slow, send_slow in zip(range(self.num_clients), self.train_slow_clients, self.send_slow_clients):
+            print(f"SBSC: iter {i}")
             # Should I switch i to be the subject ID? Not required idk
             if self.debug_mode:
+                print("DEBUG MODE")
+                
                 # This assumes that the id's are in order.
                 # This is fine when using all clients, otherwise would need to map idx to the included subjects' IDs
                 upper_bound = round(self.test_split*(self.all_emg[self.all_user_keys[i]][self.condition_number,:,:].shape[0]))
@@ -89,7 +93,9 @@ class Server(object):
                 # So where do I actually give the client their data?
                 #CustomEMGDataset(emgs_block1[my_user][condition_number,:upper_bound,:], refs_block1[my_user][condition_number,:upper_bound,:])
             else:
+                print("Setting train_data")
                 train_data = read_client_data(self.dataset, i, is_train=True)
+                print("Setting test_data")
                 test_data = read_client_data(self.dataset, i, is_train=False)
             client = clientObj(self.args, 
                             ID=i, 
@@ -246,7 +252,8 @@ class Server(object):
         
         num_samples = []
         tot_loss = []
-        for c in self.clients:
+        # Switching to just testing on the selected clients
+        for c in self.selected_clients:  #self.clients:
             tl, ns = c.test_metrics()
             tot_loss.append(tl*1.0)
             num_samples.append(ns)
@@ -264,8 +271,10 @@ class Server(object):
         
         num_samples = []
         losses = []
-        print(f"GLOBAL ROUND: {self.global_round}")
-        for c in self.clients:
+        print(f"Serverbase train_metrics(): GLOBAL ROUND: {self.global_round}")
+        # Switching to just testing on the selected clients
+        for c in self.selected_clients:  #self.clients:
+            print(f"Serverbase train_metrics(): Client{c.ID}")
             c.last_global_round = self.global_round
             cl, ns = c.train_metrics()
             num_samples.append(ns)
@@ -277,6 +286,13 @@ class Server(object):
 
     # evaluate selected clients
     def evaluate(self, acc=None, loss=None):
+        '''
+        KAI Docstring
+        This func runs test_metrics and train_metrics, and then sums all of
+        Previously, test_metrics and train_metrics were collecting the losses on ALL clients (even the untrained ones...)
+        I switched that (5/31 12:06pm) to be just the selected clients, the idea being that ALL clients explode the loss func
+        '''
+        print("Serverbase evaluate()")
         stats = self.test_metrics()
         stats_train = self.train_metrics()
 
@@ -285,8 +301,10 @@ class Server(object):
         #test_loss = sum(stats[2])*1.0
         #train_loss = sum(stats_train[2])*1.0
         # Dividing by the length (should it be num samples instead...)
+        print(f"Len of test_metrics() output: {len(stats[2])}")
+        print(f"Len of train_metrics() output: {len(stats_train[2])}")
         test_loss = sum(stats[2])*1.0 / len(stats[2])
-        train_loss = sum(stats_train[2])*1.0 / len(stats[2])
+        train_loss = sum(stats_train[2])*1.0 / len(stats_train[2])
         
         if acc == None:
             self.rs_test_loss.append(test_loss)
@@ -370,6 +388,7 @@ class Server(object):
         # self.save_item(items, f'DLG_{R}')
 
     def set_new_clients(self, clientObj):
+        print("Serverbase set_new_clients")
         for i in range(self.num_clients, self.num_clients + self.num_new_clients):
             train_data = read_client_data(self.dataset, i, is_train=True)
             test_data = read_client_data(self.dataset, i, is_train=False)

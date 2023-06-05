@@ -40,6 +40,7 @@ class clientAVG(Client):
                 if self.train_slow:
                     time.sleep(0.1 * np.abs(np.random.rand()))
                 output = self.model(x)
+                print(f"clientAVG ----> Training LOSS {i}")
                 loss = self.loss(output, y, self.model)
                 self.optimizer.zero_grad()
                 loss.backward()
