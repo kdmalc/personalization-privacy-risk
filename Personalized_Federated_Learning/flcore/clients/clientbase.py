@@ -124,7 +124,7 @@ class Client(object):
         if batch_size == None:
             batch_size = self.batch_size
         print("read_client_data()")
-        train_data = read_client_data(self.dataset, self.ID, is_train=True)
+        train_data = read_client_data(self.dataset, self.ID, self.current_update, is_train=True)
         dl = DataLoader(
             dataset=train_data,
             batch_size=batch_size, 
@@ -136,7 +136,7 @@ class Client(object):
         print(f"Client{self.ID}: Setting Test DataLoader")
         if batch_size == None:
             batch_size = self.batch_size
-        test_data = read_client_data(self.dataset, self.ID, is_train=False)
+        test_data = read_client_data(self.dataset, self.ID, self.current_update, is_train=False)
         dl = DataLoader(
             dataset=test_data,
             batch_size=batch_size, 

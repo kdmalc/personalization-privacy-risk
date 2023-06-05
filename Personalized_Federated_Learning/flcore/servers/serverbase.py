@@ -68,6 +68,7 @@ class Server(object):
         self.test_split = args.test_split
         self.condition_number = args.condition_number
         self.debug_mode = args.debug_mode
+        self.global_update = args.starting_update
         if self.debug_mode:
             self.all_user_keys = ['METACPHS_S106', 'METACPHS_S107', 'METACPHS_S108', 'METACPHS_S109', 'METACPHS_S110', 'METACPHS_S111', 'METACPHS_S112', 'METACPHS_S113', 'METACPHS_S114', 'METACPHS_S115', 'METACPHS_S116', 'METACPHS_S117', 'METACPHS_S118', 'METACPHS_S119']
             if self.dataset.upper()=='CPHS':
@@ -93,10 +94,13 @@ class Server(object):
                 # So where do I actually give the client their data?
                 #CustomEMGDataset(emgs_block1[my_user][condition_number,:upper_bound,:], refs_block1[my_user][condition_number,:upper_bound,:])
             else:
+                # ...
+                # Why is the server doing this
+                # It should not ever access the client data IRL
                 print("Setting train_data")
-                train_data = read_client_data(self.dataset, i, is_train=True)
+                train_data = read_client_data(self.dataset, i, self.global_update, is_train=True)
                 print("Setting test_data")
-                test_data = read_client_data(self.dataset, i, is_train=False)
+                test_data = read_client_data(self.dataset, i, self.global_update, is_train=False)
             client = clientObj(self.args, 
                             ID=i, 
                             train_samples=len(train_data), 
@@ -116,8 +120,8 @@ class Server(object):
             
             # Should I revamp or replace read_client_data?
             ## Would be nice to revamp it...
-            train_data = read_client_data(self.dataset, i, is_train=True)
-            test_data = read_client_data(self.dataset, i, is_train=False)
+            train_data = read_client_data(self.dataset, i, self.global_update, is_train=True)
+            test_data = read_client_data(self.dataset, i, self.global_update, is_train=False)
             
             # This is all fine
             ## Although I think all clients get the same args but whatever
@@ -390,8 +394,8 @@ class Server(object):
     def set_new_clients(self, clientObj):
         print("Serverbase set_new_clients")
         for i in range(self.num_clients, self.num_clients + self.num_new_clients):
-            train_data = read_client_data(self.dataset, i, is_train=True)
-            test_data = read_client_data(self.dataset, i, is_train=False)
+            train_data = read_client_data(self.dataset, i, self.global_update, is_train=True)
+            test_data = read_client_data(self.dataset, i, self.global_update, is_train=False)
             client = clientObj(self.args, 
                             ID=i, 
                             train_samples=len(train_data), 
