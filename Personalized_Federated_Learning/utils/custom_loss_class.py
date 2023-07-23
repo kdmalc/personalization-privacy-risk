@@ -1,4 +1,5 @@
 import torch
+from math import isnan
 
 class CPHSLoss(torch.nn.modules.loss._Loss):
     def __init__(self, F, D, V, learning_batch, lambdaF=0, lambdaD=1e-3, lambdaE=1e-6, Nd=2, Ne=64, return_cost_func_comps=False, verbose=False, dt=1/60, normalize_V=False) -> None:
@@ -43,20 +44,22 @@ class CPHSLoss(torch.nn.modules.loss._Loss):
         # self.lambdaF presumably will be 0 for every trial
 
         if self.verbose:
-            print(f"LambdaE*Error_Norm^2: {term1}")
-            print(f"LambdaD*Decoder_Norm^2: {term2}")
-            print(f"LambdaF*EMG_Norm^2: {term3}")
+            print(f"ERROR: LambdaE*Error_Norm^2: {term1}")
+            print(f"D: LambdaD*Decoder_Norm^2: {term2}")
+            print(f"F: LambdaF*EMG_Norm^2: {term3}")
         
-        print(f"Error term: {term1}")
-        print(f"D term: {term2}")
-        print(f"F term: {term3}")
+        if isnan(term1) or isnan(term2) or isnan(term3):
+            print(f"Error term: {term1}")
+            print(f"D term: {term2}")
+            print(f"F term: {term3}")
+            raise("One of the cost function terms is NAN...")
         
         if self.return_cost_func_comps:
             return (term1 + term2 + term3), term1, term2, term3
         else:
             return (term1 + term2 + term3)
         
-    def update_FDV(F, D, V, learning_batch):
+    def update_FDV(self, F, D, V, learning_batch):
         print("update_FDV")
         self.F = F
         self.D = D.detach().clone()

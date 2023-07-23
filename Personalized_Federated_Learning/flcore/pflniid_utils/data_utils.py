@@ -44,7 +44,7 @@ def read_data(dataset, client_idx, update_number, is_train=True, condition_idx=0
     else:
         update_lower_bound = max_training_update_lb
         update_upper_bound = max_training_update
-    print(update_upper_bound)
+    #print(f"Printing update upper bound for some reason: {update_upper_bound}")
     
     if is_train:
         return CustomEMGDataset(emgs_block1[my_user][condition_idx,update_lower_bound:update_upper_bound,:], refs_block1[my_user][condition_idx,update_lower_bound:update_upper_bound,:])

@@ -28,8 +28,10 @@ class clientAVG(Client):
         if self.train_slow:
             max_local_steps = np.random.randint(1, max_local_steps // 2)
 
-        for step in range(max_local_steps):
-            for i, (x, y) in enumerate(trainloader):
+        # WHICH OF THESE LOOPS IS EQUIVALENT TO MY EPOCHS...
+        running_num_samples = 0
+        for step in range(max_local_steps):  # I'm assuming this is gradient steps?...
+            for i, (x, y) in enumerate(trainloader):  # This is all the data in a given batch, I think? Can I just kill this... PITA
                 print(f"Step {step}, pair {i} in traindl")
                 print(f"x.size(): {x.size()}")
                 if type(x) == type([]):
@@ -42,9 +44,14 @@ class clientAVG(Client):
                 output = self.model(x)
                 print(f"clientAVG ----> Training LOSS {i}")
                 loss = self.loss(output, y, self.model)
+                self.loss_log.append(loss.item())
+                #self.running_epoch_loss.append(loss.item() * x.size(0))  # From: running_epoch_loss.append(loss.item() * images.size(0))
+                running_num_samples += x.size(0)
                 self.optimizer.zero_grad()
                 loss.backward()
                 self.optimizer.step()
+        #epoch_loss = self.running_epoch_loss / len(trainloader['train'])  # From: epoch_loss = running_epoch_loss / len(dataloaders['train'])
+        #self.loss_log.append(epoch_loss)  
 
         # self.model.cpu()
 

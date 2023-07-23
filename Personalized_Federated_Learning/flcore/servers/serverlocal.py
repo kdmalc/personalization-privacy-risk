@@ -23,34 +23,43 @@ class Local(Server):
         for i in range(self.global_rounds+1):
             ##############################################################
             # I feel like I should be able to delete this... it doesn't affect self.evaluate()...
-            print("Selecting clients")
-            self.selected_clients = self.select_clients()
+            #print("Selecting clients")
+            #self.selected_clients = self.select_clients()
             ##############################################################
 
             if i%self.eval_gap == 0:
                 print(f"\n-------------Round number: {i}-------------")
-                print("\nEvaluate personalized models")
-                self.evaluate()
+                if i!=0:
+                    print("\nEvaluate personalized models")
+                    self.evaluate()
+                    print(f"Printing rs_train_loss from eval() func on SB")
+                    print(f"len: {len(self.rs_train_loss[-1])}")
+                    print(self.rs_train_loss[-1])
+                    print()
 
-            print("Selecting clients again...")
+            print("Selecting clients")
             self.selected_clients = self.select_clients()
             print("CLIENT TRAINING")
             for client in self.selected_clients:
                 client.train()
+                print(f"Client{client.ID} loss: {client.loss_log[-1]}")
 
             # threads = [Thread(target=client.train)
             #            for client in self.selected_clients]
             # [t.start() for t in threads]
             # [t.join() for t in threads]
 
+            print()
+
             if self.auto_break and self.check_done(acc_lss=[self.rs_test_acc], top_cnt=self.top_cnt):
                 break
 
 
-        print("\nBest accuracy.")
+        print("\nBest Loss.")
         # self.print_(max(self.rs_test_acc), max(
         #     self.rs_train_acc), min(self.rs_train_loss))
-        print(max(self.rs_test_acc))
+        # Why is it testing without me telling it to...
+        print(min(self.rs_test_loss))
 
         self.save_results()
         self.save_global_model()

@@ -1,6 +1,0 @@
-#python=3.7.3  # I am currently using 3.9.13 
-pytorch=1.2.0
-torchvision=0.4.0
-#numpy=1.15.4  # I am currently using 1.15.4
-tensorboardx=1.4
-#matplotlib=3.0.1  # Not sure what my version is lol

@@ -11,4 +11,4 @@ num_conds = 8
 
 num_channels = 64
 
-update_ix = np.load(r"Data\update_ix.npy")
+update_ix = np.load(r"..\Data\update_ix.npy")

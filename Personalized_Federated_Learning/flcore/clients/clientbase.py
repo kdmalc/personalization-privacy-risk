@@ -10,6 +10,8 @@ from torch.utils.data import DataLoader
 from sklearn.preprocessing import label_binarize
 from sklearn import metrics
 
+from sklearn.decomposition import PCA
+
 from flcore.pflniid_utils.data_utils import read_client_data
 from utils.custom_loss_class import CPHSLoss
 
@@ -32,7 +34,6 @@ class Client(object):
         self.ID = ID  # integer
         self.save_folder_name = args.save_folder_name
 
-        #self.num_classes = args.num_classes
         self.train_samples = train_samples
         self.test_samples = test_samples
         self.batch_size = args.batch_size
@@ -58,9 +59,9 @@ class Client(object):
         # My additional parameters
         self.pca_channels = args.pca_channels
         self.device_channels = args.device_channels
-        self.lambdaF = args.lambdas[0]
-        self.lambdaD = args.lambdas[1]
-        self.lambdaE = args.lambdas[2]
+        self.lambdaF = args.lambdaF
+        self.lambdaD = args.lambdaD
+        self.lambdaE = args.lambdaE
         self.current_update = args.starting_update
         self.dt = args.dt
         self.normalize_emg = args.normalize_emg
@@ -75,9 +76,10 @@ class Client(object):
         self.simulate_data_streaming(init_dl)
         # ^ This func sets F, V, etc
         
-        print("Init loss setup (no calc?)")
         self.loss = CPHSLoss(self.F, self.model.weight, self.V, self.F.size()[1], lambdaF=self.lambdaF, lambdaD=self.lambdaD, lambdaE=self.lambdaE, Nd=2, Ne=self.pca_channels, return_cost_func_comps=False)
-        
+        self.loss_log = []
+        self.running_epoch_loss = []
+
         self.optimizer = torch.optim.SGD(self.model.parameters(), lr=self.learning_rate)
         self.learning_rate_scheduler = torch.optim.lr_scheduler.ExponentialLR(
             optimizer=self.optimizer, 
@@ -171,7 +173,7 @@ class Client(object):
                     x = x.to(self.device)
                 y = y.to(self.device)
                 output = self.model(x)
-                print(f"clientbase test_metrics() LOSS {i}")
+                #print(f"clientbase test_metrics() LOSS {i}")
                 test_loss = self.loss(output, y, self.model)
                 
                 num_samples += x.size()[0]

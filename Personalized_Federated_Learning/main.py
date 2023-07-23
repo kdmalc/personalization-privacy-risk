@@ -16,11 +16,11 @@ import logging
 # Also only needs to be run on start up, not each time you run main
 
 from flcore.servers.serveravg import FedAvg
-#from flcore.servers.serverpFedMe import pFedMe
-#from flcore.servers.serverperavg import PerAvg
+#from flcore.servers.serverpFedMe import pFedMe  # Didn't save this file, need to retrieve it from fork
+#from flcore.servers.serverperavg import PerAvg  # Didn't save this file, need to retrieve it from fork
 from flcore.servers.serverlocal import Local
-#from flcore.servers.serverper import FedPer
-#from flcore.servers.serverapfl import APFL
+#from flcore.servers.serverper import FedPer  # Didn't save this file, need to retrieve it from fork
+from flcore.servers.serverapfl import APFL
 #from flcore.servers.serverscaffold import SCAFFOLD
 
 from flcore.pflniid_utils.result_utils import average_data
@@ -59,18 +59,18 @@ def run(args):
             server = FedAvg(args, i)
         elif args.algorithm == "Local":
             server = Local(args, i)
-        elif args.algorithm == "PerAvg":
-            server = PerAvg(args, i)
+        #elif args.algorithm == "PerAvg":
+        #    server = PerAvg(args, i)
         elif args.algorithm == "APFL":
             server = APFL(args, i)
-        elif args.algorithm == "FedPer":
-            # FIX ARGS.HEAD --> LINEAR REGRESSION HAS NO FC
-            #args.head = copy.deepcopy(args.model.fc)
-            #args.model.fc = nn.Identity()
-            #args.model = BaseHeadSplit(args.model, args.head)
-            server = FedPer(args, i)
-        elif args.algorithm == "SCAFFOLD":
-            server = SCAFFOLD(args, i)
+        #elif args.algorithm == "FedPer":
+        #    # FIX ARGS.HEAD --> LINEAR REGRESSION HAS NO FC
+        #    #args.head = copy.deepcopy(args.model.fc)
+        #    #args.model.fc = nn.Identity()
+        #    #args.model = BaseHeadSplit(args.model, args.head)
+        #    server = FedPer(args, i)
+        #elif args.algorithm == "SCAFFOLD":
+        #    server = SCAFFOLD(args, i)
         else:
             raise NotImplementedError
 
@@ -79,10 +79,12 @@ def run(args):
         time_list.append(time.time()-start)
 
     print(f"\nAverage time cost: {round(np.average(time_list), 2)}s.")
-    
-
+      
     # Global average
-    average_data(dataset=args.dataset, algorithm=args.algorithm, goal=args.goal, times=args.times)
+    #average_data(dataset=args.dataset, algorithm=args.algorithm, goal=args.goal, times=args.times)
+    # Idk what that is supposed to do.  Prints acc from some file.  Don't need it, acc isn't the same for my task
+    print("Server's rs_train_loss: ")
+    print(server.rs_train_loss)  # I think this is a list...
 
     print("All done!")
 
@@ -109,10 +111,10 @@ if __name__ == "__main__":
                         help="Local learning rate")
     parser.add_argument('-ld', "--learning_rate_decay", type=bool, default=False)
     parser.add_argument('-ldg', "--learning_rate_decay_gamma", type=float, default=0.99)
-    parser.add_argument('-gr', "--global_rounds", type=int, default=250)  # KAI: Switched to 250 down from 2000
+    parser.add_argument('-gr', "--global_rounds", type=int, default=50)  # KAI: Switched to 50 down from 2000
     parser.add_argument('-ls', "--local_epochs", type=int, default=1, 
                         help="Multiple update steps in one local epoch.")  # KAI: I think it was 1 originally.  I'm gonna keep it there.  Does this mean I can set batchsize to 1300 and cook?Is my setup capable or running multiple epochs? Implicitly I was doing 1 epoch before, using the full update data I believe...
-    parser.add_argument('-algo', "--algorithm", type=str, default="FedAvg")
+    parser.add_argument('-algo', "--algorithm", type=str, default="Local")#default="FedAvg")
     parser.add_argument('-jr', "--join_ratio", type=float, default=0.2,
                         help="Ratio of clients per round")
     parser.add_argument('-rjr', "--random_join_ratio", type=bool, default=False,
@@ -171,8 +173,12 @@ if __name__ == "__main__":
     # SECTION: Kai's additional args
     parser.add_argument('-pca_channels', "--pca_channels", type=int, default=64,
                         help="Number of principal components. 64 means do not use any PCA")
-    parser.add_argument('-lambdas', "--lambdas", type=list, default=[0, 1e-3, 1e-4],
-                        help="Lamda F, D, E penalty terms ")
+    parser.add_argument('-lambdaF', "--lambdaF", type=float, default=0.0,
+                        help="Penalty term for user EMG input (user effort)")
+    parser.add_argument('-lambdaD', "--lambdaD", type=float, default=1e-3,
+                        help="Penalty term for the decoder norm (interface effort)")
+    parser.add_argument('-lambdaE', "--lambdaE", type=float, default=1e-4,
+                        help="Penalty term on performance error norm")
     parser.add_argument('-starting_update', "--starting_update", type=int, default=0,
                         help="Which update to start on (for CPHS Simulation). Use 0 or 10.")
     parser.add_argument('-test_split', "--test_split", type=float, default=0.2,
@@ -206,39 +212,40 @@ if __name__ == "__main__":
     print("Local batch size: {}".format(args.batch_size))
     print("Local steps: {}".format(args.local_epochs))
     print("Local learing rate: {}".format(args.local_learning_rate))
-    print("Local learing rate decay: {}".format(args.learning_rate_decay))
-    if args.learning_rate_decay:
-        print("Local learing rate decay gamma: {}".format(args.learning_rate_decay_gamma))
+    #print("Local learing rate decay: {}".format(args.learning_rate_decay))
+    #if args.learning_rate_decay:
+    #    print("Local learing rate decay gamma: {}".format(args.learning_rate_decay_gamma))
     print("Total number of clients: {}".format(args.num_clients))
     print("Clients join in each round: {}".format(args.join_ratio))
-    print("Clients randomly join: {}".format(args.random_join_ratio))
-    print("Client drop rate: {}".format(args.client_drop_rate))
-    print("Client select regarding time: {}".format(args.time_select))
-    if args.time_select:
-        print("Time threthold: {}".format(args.time_threthold))
-    print("Running times: {}".format(args.times))
+    #print("Clients randomly join: {}".format(args.random_join_ratio))
+    #print("Client drop rate: {}".format(args.client_drop_rate))
+    #print("Client select regarding time: {}".format(args.time_select))
+    #if args.time_select:
+    #    print("Time threthold: {}".format(args.time_threthold))
+    #print("Running times: {}".format(args.times))
     print("Dataset: {}".format(args.dataset))
     #print("Number of classes: {}".format(args.num_classes))
-    print("Backbone: {}".format(args.model))
-    print("Using device: {}".format(args.device))
-    print("Using DP: {}".format(args.privacy))
-    if args.privacy:
-        print("Sigma for DP: {}".format(args.dp_sigma))
-    print("Auto break: {}".format(args.auto_break))
+    print("Backbone (model): {}".format(args.model))
+    #print("Using device: {}".format(args.device))
+    #print("Using DP: {}".format(args.privacy))
+    #if args.privacy:
+    #    print("Sigma for DP: {}".format(args.dp_sigma))
+    #print("Auto break: {}".format(args.auto_break))
     if not args.auto_break:
         print("Global rounds: {}".format(args.global_rounds))
     if args.device == "cuda":
         print("Cuda device id: {}".format(os.environ["CUDA_VISIBLE_DEVICES"]))
-    print("DLG attack: {}".format(args.dlg_eval))
+    #print("DLG attack: {}".format(args.dlg_eval))
     if args.dlg_eval:
         print("DLG attack round gap: {}".format(args.dlg_gap))
     print("Total number of new clients: {}".format(args.num_new_clients))
     print("Fine tuning epoches on new clients: {}".format(args.fine_tuning_epoch))
     
+    print()
     print("KAI'S ADDITIONS")
     if args.pca_channels!=64:
         print("Number of PCA Components Used: {}".format(args.pca_channels))
-    print("Lambda penalty terms (F, D, E): {}".format(args.lambdas))
+    print(f"Lambda penalty terms (F, D, E): {args.lambdaF}, {args.lambdaD}, {args.lambdaE}")
     print("Starting update: {}".format(args.starting_update))
     print("Testing split: {}".format(args.test_split))
     if args.dt!=1/60:
@@ -249,6 +256,10 @@ if __name__ == "__main__":
     print("In Debug Mode: {}".format(args.debug_mode))
     
     print("=" * 50)
+
+    print()
+    print(f"YOU ARE RUNNING -{args.algorithm}- ALGORITHM")
+    #print()
 
     run(args)
 

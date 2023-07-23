@@ -7,6 +7,7 @@ import h5py
 import copy
 import time
 import random
+import pickle
 
 from flcore.pflniid_utils.data_utils import read_client_data
 from flcore.pflniid_utils.dlg import DLG
@@ -69,62 +70,73 @@ class Server(object):
         self.condition_number = args.condition_number
         self.debug_mode = args.debug_mode
         self.global_update = args.starting_update
-        if self.debug_mode:
-            self.all_user_keys = ['METACPHS_S106', 'METACPHS_S107', 'METACPHS_S108', 'METACPHS_S109', 'METACPHS_S110', 'METACPHS_S111', 'METACPHS_S112', 'METACPHS_S113', 'METACPHS_S114', 'METACPHS_S115', 'METACPHS_S116', 'METACPHS_S117', 'METACPHS_S118', 'METACPHS_S119']
-            if self.dataset.upper()=='CPHS':
-                with open(r"C:\Users\kdmen\Desktop\Research\personalization-privacy-risk\Data\continuous_full_data_block1.pickle", 'rb') as handle:
-                    self.all_labels, _, _, _, self.all_emg, _, _, _, _, _, _ = pickle.load(handle)
-            else:
-                raise("Dataset not supported")
+        # No idea what the point of this was...
+        #if self.debug_mode:
+        #    self.all_user_keys = ['METACPHS_S106', 'METACPHS_S107', 'METACPHS_S108', 'METACPHS_S109', 'METACPHS_S110', 'METACPHS_S111', 'METACPHS_S112', 'METACPHS_S113', 'METACPHS_S114', 'METACPHS_S115', 'METACPHS_S116', 'METACPHS_S117', 'METACPHS_S118', 'METACPHS_S119']
+        #    if self.dataset.upper()=='CPHS':
+        #        with open(r"C:\Users\kdmen\Desktop\Research\personalization-privacy-risk\Data\continuous_full_data_block1.pickle", 'rb') as handle:
+        #            self.all_labels, _, _, _, self.all_emg, _, _, _, _, _, _ = pickle.load(handle)
+        #    else:
+        #        raise("Dataset not supported")
 
     def set_clients(self, clientObj):  
-        print("Serverbase set_clients")
+        print("ServerBase Set_Clients (SBSC) -- probably called in init() of server children classes")
         for i, train_slow, send_slow in zip(range(self.num_clients), self.train_slow_clients, self.send_slow_clients):
             print(f"SBSC: iter {i}")
             # Should I switch i to be the subject ID? Not required idk
-            if self.debug_mode:
-                print("DEBUG MODE")
-                
-                # This assumes that the id's are in order.
-                # This is fine when using all clients, otherwise would need to map idx to the included subjects' IDs
-                upper_bound = round(self.test_split*(self.all_emg[self.all_user_keys[i]][self.condition_number,:,:].shape[0]))
-                train_data = self.all_emg[self.all_user_keys[i]][self.condition_number,:upper_bound,:]
-                test_data = self.all_emg[self.all_user_keys[i]][self.condition_number,upper_bound:,:]
-                
-                # So where do I actually give the client their data?
-                #CustomEMGDataset(emgs_block1[my_user][condition_number,:upper_bound,:], refs_block1[my_user][condition_number,:upper_bound,:])
-            else:
-                # ...
-                # Why is the server doing this
-                # It should not ever access the client data IRL
-                print("Setting train_data")
-                train_data = read_client_data(self.dataset, i, self.global_update, is_train=True)
-                print("Setting test_data")
-                test_data = read_client_data(self.dataset, i, self.global_update, is_train=False)
+
+            # Server should not be dolling out the data to the clients...
+            #if self.debug_mode:
+            #    print("DEBUG MODE")
+            #    # This assumes that the id's are in order.
+            #    # This is fine when using all clients, otherwise would need to map idx to the included subjects' IDs
+            #    upper_bound = round(self.test_split*(self.all_emg[self.all_user_keys[i]][self.condition_number,:,:].shape[0]))
+            #    train_data = self.all_emg[self.all_user_keys[i]][self.condition_number,:upper_bound,:]
+            #    test_data = self.all_emg[self.all_user_keys[i]][self.condition_number,upper_bound:,:]
+            #    # So where do I actually give the client their data? --> WITHOUT THIS SERVER STILL IS JUST PASSING NUM SAMPLES TO CLIENTS BRUH
+            #    #CustomEMGDataset(emgs_block1[my_user][condition_number,:upper_bound,:], refs_block1[my_user][condition_number,:upper_bound,:])
+            #else:
+
+            # THIS IS THE DEFAULT CODE
+            # Server should not ever access the client data IRL
+            # So is train_data literally just not used other than for its length lol
+            print("Setting train_data")
+            train_data = read_client_data(self.dataset, i, self.global_update, is_train=True)
+            print("Setting test_data")
+            test_data = read_client_data(self.dataset, i, self.global_update, is_train=False)
             client = clientObj(self.args, 
                             ID=i, 
                             train_samples=len(train_data), 
                             test_samples=len(test_data), 
                             train_slow=train_slow, 
                             send_slow=send_slow)
+            
+            # THIS IS WHAT I ACTUALLY WANT TO RUN, ONCE IT IS RUNNING
+            # base_data_path = 'C:\Users\kdmen\Desktop\Research\personalization-privacy-risk\Data\Client_Specific_Files\'
+            #client = clientObj(self.args, 
+            #                ID=i, 
+            #                train_samples=0,  # Remeber to add in extra logic to kill it if =0
+            #                test_samples=0, 
+            #                client_data_path= base_data_path + 'client' + str(i) + '.csv',
+            #                train_slow=train_slow, 
+            #                send_slow=send_slow)
+            
             self.clients.append(client)
             
     def _set_clients(self, clientObj):
         print("_set_clients(): I haven't edited this one yet really")
+        # Where does this even get called/used lol
         
-        # Still under development
-        dataset_list = make_users(condition_number=self.condition_number, dataset=self.dataset)
+        # Still under development ... What does that mean... DO I even ever call dataset_list...???
+        #dataset_list = make_users(condition_number=self.condition_number, dataset=self.dataset)
         
         for i, train_slow, send_slow in zip(range(self.num_clients), self.train_slow_clients, self.send_slow_clients):
-            # Should I switch i to be the subject ID? Not required idk
+            # Should I switch i to be the subject ID? Not required right now
             
-            # Should I revamp or replace read_client_data?
-            ## Would be nice to revamp it...
+            # Should I revamp or replace read_client_data? Why...?
             train_data = read_client_data(self.dataset, i, self.global_update, is_train=True)
             test_data = read_client_data(self.dataset, i, self.global_update, is_train=False)
             
-            # This is all fine
-            ## Although I think all clients get the same args but whatever
             client = clientObj(self.args, 
                             ID=i, 
                             train_samples=len(train_data), 
@@ -186,9 +198,9 @@ class Server(object):
             except ZeroDivisionError:
                 client_time_cost = 0
             if client_time_cost <= self.time_threthold:
-                tot_samples += client.train_samples
+                tot_samples += client.train_samples  # tot_samples += client.num_train_samples
                 self.uploaded_IDs.append(client.ID)
-                self.uploaded_weights.append(client.train_samples)
+                self.uploaded_weights.append(client.train_samples)  # What is going on here
                 self.uploaded_models.append(client.model)
         for i, w in enumerate(self.uploaded_weights):
             self.uploaded_weights[i] = w / tot_samples
@@ -227,6 +239,7 @@ class Server(object):
         
     def save_results(self):
         algo = self.dataset + "_" + self.algorithm
+        # Is this path wrt serverbase.py or main.py...
         result_path = "../results/"
         if not os.path.exists(result_path):
             os.makedirs(result_path)
@@ -236,6 +249,7 @@ class Server(object):
             file_path = result_path + "{}.h5".format(algo)
             print("File path: " + file_path)
 
+            # Why h5py and not just pickle or txt...
             with h5py.File(file_path, 'w') as hf:
                 #hf.create_dataset('rs_test_acc', data=self.rs_test_acc)
                 #hf.create_dataset('rs_test_auc', data=self.rs_test_auc)
@@ -289,7 +303,7 @@ class Server(object):
         return IDs, num_samples, losses
 
     # evaluate selected clients
-    def evaluate(self, acc=None, loss=None):
+    def evaluate(self, train=True, test=False, acc=None, loss=None):
         '''
         KAI Docstring
         This func runs test_metrics and train_metrics, and then sums all of
@@ -297,33 +311,35 @@ class Server(object):
         I switched that (5/31 12:06pm) to be just the selected clients, the idea being that ALL clients explode the loss func
         '''
         print("Serverbase evaluate()")
-        stats = self.test_metrics()
-        stats_train = self.train_metrics()
+        # Wait why is it checking both train and test... I thought test was supposed to be held out till the end...
+        if test:
+            stats = self.test_metrics()
+            test_loss = sum(stats[2])*1.0
+            print(f"Len of test_metrics() output: {len(stats[2])}")
+            test_loss = sum(stats[2])*1.0 / len(stats[2])
 
-        # Should these be divided by something?
-        # Do we not have a train_loss for every training round?...
-        #test_loss = sum(stats[2])*1.0
-        #train_loss = sum(stats_train[2])*1.0
-        # Dividing by the length (should it be num samples instead...)
-        print(f"Len of test_metrics() output: {len(stats[2])}")
-        print(f"Len of train_metrics() output: {len(stats_train[2])}")
-        test_loss = sum(stats[2])*1.0 / len(stats[2])
-        train_loss = sum(stats_train[2])*1.0 / len(stats_train[2])
-        
-        if acc == None:
-            self.rs_test_loss.append(test_loss)
-        else:
-            acc.append(test_loss)
-        
-        if loss == None:
-            self.rs_train_loss.append(train_loss)
-        else:
-            loss.append(train_loss)
+            if acc == None:
+                self.rs_test_loss.append(test_loss)
+            else:
+                acc.append(test_loss)
 
-        assert(train_loss<1e5)
-        assert(test_loss<1e5)
-        print("Averaged Train Loss: {:.4f}".format(train_loss))
-        print("Averaged Test Loss: {:.4f}".format(test_loss))
+            #assert(test_loss<1e5)
+            print("Averaged Test Loss: {:.4f}".format(test_loss))
+
+        if train:
+            stats_train = self.train_metrics()
+            train_loss = sum(stats_train[2])*1.0
+            print(f"Len of train_metrics() output: {len(stats_train[2])}")
+            train_loss = sum(stats_train[2])*1.0 / len(stats_train[2])
+        
+            if loss == None:
+                self.rs_train_loss.append(train_loss)
+            else:
+                loss.append(train_loss)
+
+            #assert(train_loss<1e5)
+            print("Averaged Train Loss: {:.4f}".format(train_loss))
+
 
     def check_done(self, acc_lss, top_cnt=None, div_value=None):
         for acc_ls in acc_lss:
