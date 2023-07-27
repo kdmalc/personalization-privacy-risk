@@ -20,7 +20,9 @@ class Local(Server):
 
 
     def train(self):
+        print(f"Outside of loop: self.rs_train_loss TYPE: {type(self.rs_train_loss)}")
         for i in range(self.global_rounds+1):
+            print(f"Inside of loop: self.rs_train_loss TYPE: {type(self.rs_train_loss)}")
             ##############################################################
             # I feel like I should be able to delete this... it doesn't affect self.evaluate()...
             #print("Selecting clients")
@@ -33,8 +35,12 @@ class Local(Server):
                     print("\nEvaluate personalized models")
                     self.evaluate()
                     print(f"Printing rs_train_loss from eval() func on SB")
-                    print(f"len: {len(self.rs_train_loss[-1])}")
-                    print(self.rs_train_loss[-1])
+
+                    #print(f"len: {len(self.rs_train_loss[-1])}")
+                    if type(self.rs_train_loss[-1]) in [int, float]:
+                        print(f"rs_train_loss: {self.rs_train_loss[-1]}")
+                    else:
+                        print(f"len: {len(self.rs_train_loss[-1])}")
                     print()
 
             print("Selecting clients")

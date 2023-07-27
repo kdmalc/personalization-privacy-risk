@@ -66,7 +66,7 @@ class Server(object):
         
         # Kai's additional params
         self.global_round = 0
-        self.test_split = args.test_split
+        self.test_split_fraction = args.test_split_fraction
         self.condition_number = args.condition_number
         self.debug_mode = args.debug_mode
         self.global_update = args.starting_update
@@ -78,6 +78,7 @@ class Server(object):
         #            self.all_labels, _, _, _, self.all_emg, _, _, _, _, _, _ = pickle.load(handle)
         #    else:
         #        raise("Dataset not supported")
+        self.test_split_each_update = args.test_split_each_update
 
     def set_clients(self, clientObj):  
         print("ServerBase Set_Clients (SBSC) -- probably called in init() of server children classes")
@@ -100,26 +101,26 @@ class Server(object):
             # THIS IS THE DEFAULT CODE
             # Server should not ever access the client data IRL
             # So is train_data literally just not used other than for its length lol
-            print("Setting train_data")
-            train_data = read_client_data(self.dataset, i, self.global_update, is_train=True)
-            print("Setting test_data")
-            test_data = read_client_data(self.dataset, i, self.global_update, is_train=False)
-            client = clientObj(self.args, 
-                            ID=i, 
-                            train_samples=len(train_data), 
-                            test_samples=len(test_data), 
-                            train_slow=train_slow, 
-                            send_slow=send_slow)
-            
-            # THIS IS WHAT I ACTUALLY WANT TO RUN, ONCE IT IS RUNNING
-            # base_data_path = 'C:\Users\kdmen\Desktop\Research\personalization-privacy-risk\Data\Client_Specific_Files\'
+            #print("Setting train_data")
+            #train_data = read_client_data(self.dataset, i, self.global_update, is_train=True)
+            #print("Setting test_data")
+            #test_data = read_client_data(self.dataset, i, self.global_update, is_train=False)
             #client = clientObj(self.args, 
             #                ID=i, 
-            #                train_samples=0,  # Remeber to add in extra logic to kill it if =0
-            #                test_samples=0, 
-            #                client_data_path= base_data_path + 'client' + str(i) + '.csv',
+            #                train_samples=len(train_data), 
+            #                test_samples=len(test_data), 
             #                train_slow=train_slow, 
             #                send_slow=send_slow)
+            
+            # THIS IS WHAT I ACTUALLY WANT TO RUN, ONCE IT IS RUNNING
+            # ID = i probably isn't the best solution... assumes things are in order...... no? Not a good solution regardless
+            base_data_path = 'C:\\Users\\kdmen\\Desktop\\Research\\personalization-privacy-risk\\Data\\Client_Specific_Files\\'
+            client = clientObj(self.args, 
+                                ID=i, 
+                                train_samples = base_data_path + "UserID" + str(i) + "_TrainData_8by20770by64.npy", 
+                                test_samples = base_data_path + "UserID" + str(i) + "_Labels_8by20770by2.npy", 
+                                train_slow=train_slow, 
+                                send_slow=send_slow)
             
             self.clients.append(client)
             
@@ -335,10 +336,13 @@ class Server(object):
             if loss == None:
                 self.rs_train_loss.append(train_loss)
             else:
+                print("Server evaluate loss!=None!")
                 loss.append(train_loss)
 
             #assert(train_loss<1e5)
             print("Averaged Train Loss: {:.4f}".format(train_loss))
+
+        assert(type(self.rs_train_loss)==type([1,2,3]))
 
 
     def check_done(self, acc_lss, top_cnt=None, div_value=None):

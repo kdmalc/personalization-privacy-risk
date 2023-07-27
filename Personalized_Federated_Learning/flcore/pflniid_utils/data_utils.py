@@ -6,8 +6,9 @@ import torch
 import pickle
 from utils.emg_dataset_class import *
 
-
+# This is depreciated
 def read_data(dataset, client_idx, update_number, is_train=True, condition_idx=0, test_split=0.2, test_split_each_update=False):
+    assert("Tried to run read_data()")
     # KAI'S EDITED VERSION WHICH IS NOW USED IN THE CODE
     
     # Some data
@@ -28,6 +29,7 @@ def read_data(dataset, client_idx, update_number, is_train=True, condition_idx=0
         
     my_user = all_user_keys[client_idx]
     upper_bound = round((1-test_split)*(emgs_block1[my_user][condition_idx,:,:].shape[0]))
+    # The below gets stuck in the debugger and just keeps running until you step over
     train_test_update_number_split = min(update_ix, key=lambda x:abs(x-upper_bound))
     max_training_update = update_ix.index(train_test_update_number_split)
     max_training_update_lb = max_training_update-1
@@ -53,15 +55,16 @@ def read_data(dataset, client_idx, update_number, is_train=True, condition_idx=0
     
 
 def read_client_data(dataset, client_idx, update_number, is_train=True, condition_idx=1, test_split=0.2, test_split_each_update=False):
+    assert("Tried to run read_client_data()")
     # KAI'S EDITED VERSION WHICH IS NOW USED IN THE CODE
     print(f"Client{client_idx}, train={is_train}: read_CLIENT_data() called!")
     
     dataset_obj = read_data(dataset, client_idx, update_number, is_train=is_train, condition_idx=condition_idx, test_split=test_split, test_split_each_update=test_split_each_update)
     X_data = torch.Tensor(dataset_obj['x']).type(torch.float32)
+    # The below line (or this line??) gets stuck in the debugger too. Have to step out and get to the space above idk
     y_data = torch.Tensor(dataset_obj['y']).type(torch.float32)
     zipped_data = [(x, y) for x, y in zip(X_data, y_data)]
     return zipped_data
-    
     
 ######################################################################################
 

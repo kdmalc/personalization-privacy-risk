@@ -181,8 +181,8 @@ if __name__ == "__main__":
                         help="Penalty term on performance error norm")
     parser.add_argument('-starting_update', "--starting_update", type=int, default=0,
                         help="Which update to start on (for CPHS Simulation). Use 0 or 10.")
-    parser.add_argument('-test_split', "--test_split", type=float, default=0.2,
-                        help="Percent of data to use for testing")
+    parser.add_argument('-test_split_fraction', "--test_split_fraction", type=float, default=0.2,
+                        help="Fraction of data to use for testing")
     parser.add_argument('-device_channels', "--device_channels", type=int, default=64,
                         help="Number of recording channels with the used EMG device")
     parser.add_argument('-dt', "--dt", type=float, default=1/60,
@@ -197,6 +197,8 @@ if __name__ == "__main__":
                         help="In debug mode, the code is run to minimize overhead time in order to debug as fast as possible.  Namely, the data is held at the server to decrease init time, and communication delays are ignored.")
     parser.add_argument('-condition_number', "--condition_number", type=int, default=1,
                         help="Which condition number (trial) to train on")
+    parser.add_argument('-test_split_each_update', "--test_split_each_update", type=bool, default=False,
+                        help="Implement train/test split within each update or on the entire dataset")
     
     args = parser.parse_args()
 
@@ -247,7 +249,7 @@ if __name__ == "__main__":
         print("Number of PCA Components Used: {}".format(args.pca_channels))
     print(f"Lambda penalty terms (F, D, E): {args.lambdaF}, {args.lambdaD}, {args.lambdaE}")
     print("Starting update: {}".format(args.starting_update))
-    print("Testing split: {}".format(args.test_split))
+    print("Testing split: {}".format(args.test_split_fraction))
     if args.dt!=1/60:
         print("dt: {}".format(args.dt))
     print("Normalize EMG input: {}".format(args.normalize_emg))

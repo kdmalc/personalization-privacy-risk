@@ -14,6 +14,7 @@ from sklearn.decomposition import PCA
 
 from flcore.pflniid_utils.data_utils import read_client_data
 from utils.custom_loss_class import CPHSLoss
+from utils.emg_dataset_class import *
 
 
 #https://www.youtube.com/watch?v=3GVUzwXXihs
@@ -26,7 +27,8 @@ class Client(object):
     Base class for clients in federated learning.
     """
 
-    def __init__(self, args, ID, train_samples, test_samples, **kwargs):
+    #def __init__(self, args, ID, train_samples, test_samples, **kwargs):  # Original version
+    def __init__(self, args, ID, samples_path, labels_path, **kwargs):
         self.model = copy.deepcopy(args.model)
         self.algorithm = args.algorithm
         self.dataset = args.dataset
@@ -34,8 +36,11 @@ class Client(object):
         self.ID = ID  # integer
         self.save_folder_name = args.save_folder_name
 
-        self.train_samples = train_samples
-        self.test_samples = test_samples
+        self.samples_path = samples_path
+        self.labels_path = labels_path
+        # I don't think I can know this ahead of time... I'll set it in my load data func
+        #self.train_samples = train_samples
+        #self.test_samples = test_samples
         self.batch_size = args.batch_size
         self.learning_rate = args.local_learning_rate
         self.local_epochs = args.local_epochs
@@ -48,6 +53,7 @@ class Client(object):
                 self.has_BatchNorm = True
                 break
 
+        # Why do they use kwargs... that's annoying. I don't wanna pass it in every time...
         self.train_slow = kwargs['train_slow']
         self.send_slow = kwargs['send_slow']
         self.train_time_cost = {'num_rounds': 0, 'total_cost': 0.0}
@@ -70,7 +76,10 @@ class Client(object):
         self.last_global_round = 0
         self.local_round_threshold = args.local_round_threshold
         self.update_ix=[0,  1200,  2402,  3604,  4806,  6008,  7210,  8412,  9614, 10816, 12018, 13220, 14422, 15624, 16826, 18028, 19230, 20432, 20769]
-        
+        self.test_split_fraction = args.test_split_fraction
+        self.test_split_each_update = args.test_split_each_update
+        self.condition_number = args.condition_number
+
         # Before this I need to run the INIT update segmentation code...
         init_dl = self.load_train_data()
         self.simulate_data_streaming(init_dl)
@@ -117,30 +126,83 @@ class Client(object):
         self.Y = p_reference[:, :-1]  # To match the input
 
 
-    def load_train_data(self, batch_size=None):
-        print(f"clientbase load_train_data(): Client{self.ID}: Setting Training DataLoader")
-        self.local_round += 1
-        if (self.current_update < 16) and (self.local_round%self.local_round_threshold==0):
-            self.current_update += 1
+    def _load_train_data(self):
+        #def read_data(dataset, client_idx, update_number, is_train=True, condition_idx=0, test_split=0.2, test_split_each_update=False):        
+        # Print some stuff
+        print(f"Client{self.ID} loading data file in [SHOULD RUN ONCE]")
+        if self.test_split_each_update:
+            raise("Not supported yet.  Idk if this is necessary :/")
+        # Load in client's data
+        with open(self.samples_path, 'rb') as handle:
+            samples_npy = np.load(handle)
+        with open(self.labels_path, 'rb') as handle:
+            labels_npy = np.load(handle)
+        # Select for given condition #THIS IS THE ACTUAL TRAINING DATA AND LABELS FOR THE GIVEN TRIAL
+        self.cond_samples_npy = samples_npy[self.condition_number,:,:]
+        self.cond_labels_npy = labels_npy[self.condition_number,:,:]
+        # Split data into train and test sets
+        testsplit_upper_bound = round((1-self.test_split_fraction)*(self.cond_samples_npy.shape[0]))
+        # Set the number of examples (used to be done on init) --> ... THIS IS ABOUT TRAIN/TEST SPLIT
+        self.train_samples = testsplit_upper_bound
+        self.test_samples = self.cond_samples_npy.shape[0] - testsplit_upper_bound
+        # The below gets stuck in the debugger and just keeps running until you step over
+        train_test_update_number_split = min(self.update_ix, key=lambda x:abs(x-testsplit_upper_bound))
+        self.max_training_update_upbound = self.update_ix.index(train_test_update_number_split)
+        self.max_training_update_lowbound = self.max_training_update_upbound-1
         
+
+    def load_train_data(self, batch_size=None):
+        # Load full client dataasets
+        if self.local_round == 0:
+            self._load_train_data()   # Returns nothing, sets self variables
+
+        self.local_round += 1
+        # Check if you need to advance the update
+        if (self.local_round>1) and (self.current_update < 16) and (self.local_round%self.local_round_threshold==0):
+            self.current_update += 1
+            print(f"Client{self.ID} advances to update {self.current_update}")
+        # Slice the full client dataset based on the current update number
+        # Originally from def read_data()
+        if self.current_update < self.max_training_update_upbound:
+            self.update_lower_bound = self.update_ix[self.current_update]
+            self.update_upper_bound = self.update_ix[self.current_update+1]
+        else:
+            self.update_lower_bound = self.max_training_update_lowbound
+            self.update_upper_bound = self.max_training_update_upbound
+        # Set the Dataset Obj
+        # Uhhhh is this creating a new one each time? As long as its not re-reading in the data it probably doesn't matter...
+        #train_data = read_client_data(self.dataset, self.ID, self.current_update, is_train=True)  # Original code
+        #CustomEMGDataset(emgs_block1[my_user][condition_idx,update_lower_bound:update_upper_bound,:], refs_block1[my_user][condition_idx,update_lower_bound:update_upper_bound,:])
+        training_dataset_obj = CustomEMGDataset(self.cond_samples_npy[self.update_lower_bound:self.update_upper_bound,:], self.cond_labels_npy[self.update_lower_bound:self.update_upper_bound,:])
+        X_data = torch.Tensor(training_dataset_obj['x']).type(torch.float32)
+        y_data = torch.Tensor(training_dataset_obj['y']).type(torch.float32)
+        training_data_for_dataloader = [(x, y) for x, y in zip(X_data, y_data)]
+        
+        print(f"clientbase load_train_data(): Client{self.ID}: Setting Training DataLoader")
+        # Set dataloader
         if batch_size == None:
             batch_size = self.batch_size
-        print("read_client_data()")
-        train_data = read_client_data(self.dataset, self.ID, self.current_update, is_train=True)
         dl = DataLoader(
-            dataset=train_data,
+            dataset=training_data_for_dataloader,
             batch_size=batch_size, 
             drop_last=False,  # Yah idk if this should be true or false or if it matters...
             shuffle=False) 
         return dl
 
     def load_test_data(self, batch_size=None): 
+        # Make sure this runs AFTER load_train_data so the data is already loaded in
         print(f"Client{self.ID}: Setting Test DataLoader")
         if batch_size == None:
             batch_size = self.batch_size
-        test_data = read_client_data(self.dataset, self.ID, self.current_update, is_train=False)
+
+        #test_data = read_client_data(self.dataset, self.ID, self.current_update, is_train=False)
+        testing_dataset_obj = CustomEMGDataset(self.cond_samples_npy[self.update_upper_bound:,:], self.cond_labels_npy[self.update_upper_bound:,:])
+        X_data = torch.Tensor(testing_dataset_obj['x']).type(torch.float32)
+        y_data = torch.Tensor(testing_dataset_obj['y']).type(torch.float32)
+        testing_data_for_dataloader = [(x, y) for x, y in zip(X_data, y_data)]
+
         dl = DataLoader(
-            dataset=test_data,
+            dataset=testing_data_for_dataloader,
             batch_size=batch_size, 
             drop_last=False,  # Yah idk if this should be true or false or if it matters...
             shuffle=False) 
