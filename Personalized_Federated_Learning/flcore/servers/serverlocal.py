@@ -20,15 +20,7 @@ class Local(Server):
 
 
     def train(self):
-        print(f"Outside of loop: self.rs_train_loss TYPE: {type(self.rs_train_loss)}")
         for i in range(self.global_rounds+1):
-            print(f"Inside of loop: self.rs_train_loss TYPE: {type(self.rs_train_loss)}")
-            ##############################################################
-            # I feel like I should be able to delete this... it doesn't affect self.evaluate()...
-            #print("Selecting clients")
-            #self.selected_clients = self.select_clients()
-            ##############################################################
-
             if i%self.eval_gap == 0:
                 print(f"\n-------------Round number: {i}-------------")
                 if i!=0:
@@ -43,12 +35,12 @@ class Local(Server):
                         print(f"len: {len(self.rs_train_loss[-1])}")
                     print()
 
-            print("Selecting clients")
             self.selected_clients = self.select_clients()
-            print("CLIENT TRAINING")
+            print(f"Selected client IDs: {[client.ID for client in self.selected_clients]}")
+            #print("CLIENT TRAINING")
             for client in self.selected_clients:
                 client.train()
-                print(f"Client{client.ID} loss: {client.loss_log[-1]}")
+                print(f"Client{client.ID} loss: {client.loss_log[-1]:0,.3f}")
 
             # threads = [Thread(target=client.train)
             #            for client in self.selected_clients]
@@ -60,7 +52,7 @@ class Local(Server):
             if self.auto_break and self.check_done(acc_lss=[self.rs_test_acc], top_cnt=self.top_cnt):
                 break
 
-
+        self.evaluate(train=False, test=True, acc=None, loss=None)
         print("\nBest Loss.")
         # self.print_(max(self.rs_test_acc), max(
         #     self.rs_train_acc), min(self.rs_train_loss))

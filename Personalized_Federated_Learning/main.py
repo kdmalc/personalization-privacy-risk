@@ -90,6 +90,9 @@ def run(args):
 
     reporter.report()
 
+    # How do I get the clients to return them?... self.clients AKA server.clients should work
+    return server
+
 
 if __name__ == "__main__":
     total_start = time.time()
@@ -104,6 +107,7 @@ if __name__ == "__main__":
     parser.add_argument('-data', "--dataset", type=str, default="cphs")  # KAI: Changed the default to cphs (from mnist)
     #parser.add_argument('-nb', "--num_classes", type=int, default=10)  # Not doing classification...
     parser.add_argument('-m', "--model", type=str, default="LinearRegression")  # KAI: Changed the default to Linear Regression
+    # I have little confidence in this batch size being correct...
     parser.add_argument('-lbs', "--batch_size", type=int, default=1200)  # Setting it to a full update would be 1300ish... how many batches does it run? In one epoch? Not even sure where that is set
     # The 1300 and the batch size are 2 separate things...
     # I want to restrict the given dataset to just the 1300, but then iterate in batches... or do I since we don't have that much data and can probably just use all the data at once? Make batch size match the update size? ...
@@ -111,10 +115,10 @@ if __name__ == "__main__":
                         help="Local learning rate")
     parser.add_argument('-ld', "--learning_rate_decay", type=bool, default=False)
     parser.add_argument('-ldg', "--learning_rate_decay_gamma", type=float, default=0.99)
-    parser.add_argument('-gr', "--global_rounds", type=int, default=50)  # KAI: Switched to 50 down from 2000
+    parser.add_argument('-gr', "--global_rounds", type=int, default=25)  # KAI: Switched to 25 down from 2000
     parser.add_argument('-ls', "--local_epochs", type=int, default=1, 
-                        help="Multiple update steps in one local epoch.")  # KAI: I think it was 1 originally.  I'm gonna keep it there.  Does this mean I can set batchsize to 1300 and cook?Is my setup capable or running multiple epochs? Implicitly I was doing 1 epoch before, using the full update data I believe...
-    parser.add_argument('-algo', "--algorithm", type=str, default="Local")#default="FedAvg")
+                        help="Multiple update steps in one local epoch.")  # KAI: I think it was 1 originally.  I'm gonna keep it there.  Does this mean I can set batchsize to 1300 and cook? Is my setup capable or running multiple epochs? Implicitly I was doing 1 epoch before, using the full update data I believe...
+    parser.add_argument('-algo', "--algorithm", type=str, default="Local") #Local #FedAvg
     parser.add_argument('-jr', "--join_ratio", type=float, default=0.2,
                         help="Ratio of clients per round")
     parser.add_argument('-rjr', "--random_join_ratio", type=bool, default=False,
@@ -199,6 +203,12 @@ if __name__ == "__main__":
                         help="Which condition number (trial) to train on")
     parser.add_argument('-test_split_each_update', "--test_split_each_update", type=bool, default=False,
                         help="Implement train/test split within each update or on the entire dataset")
+    parser.add_argument('-verbose', "--verbose", type=bool, default=False,
+                        help="Print out a bunch of extra stuff")
+    parser.add_argument('-slow_clients_bool', "--slow_clients_bool", type=bool, default=False,
+                        help="Control whether or not to have ANY slow clients")
+    parser.add_argument('-return_cost_func_comps', "--return_cost_func_comps", type=bool, default=True,
+                        help="Return Loss, Error, DTerm, FTerm from loss class")
     
     args = parser.parse_args()
 
@@ -263,7 +273,8 @@ if __name__ == "__main__":
     print(f"YOU ARE RUNNING -{args.algorithm}- ALGORITHM")
     #print()
 
-    run(args)
+    # Idk if I can access this lol
+    server_obj = run(args)
 
     
     # print(prof.key_averages().table(sort_by="cpu_time_total", row_limit=20))

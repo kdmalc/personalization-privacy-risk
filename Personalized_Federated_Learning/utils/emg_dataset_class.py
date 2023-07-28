@@ -43,6 +43,8 @@ class CustomEMGDataset(torch.utils.data.Dataset):
     
     # This returns given an index the i-th sample and label
     def __getitem__(self, idx):
+        # This doesn't make any sense, why does train point to samples but test points to labels?
+        # It appears that I am only using x/y as the inputs for idx anyways...
         if type(idx)==int:
             return self.dataset[idx], self.labels[idx]
         elif (idx.lower()=='x') or ('train' in idx.lower()):

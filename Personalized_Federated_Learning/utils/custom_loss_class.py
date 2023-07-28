@@ -43,7 +43,7 @@ class CPHSLoss(torch.nn.modules.loss._Loss):
         # I switched it so I can pass in the outputs instead of the inputs...
         # self.lambdaF presumably will be 0 for every trial
 
-        if self.verbose:
+        if True: #self.verbose:
             print(f"ERROR: LambdaE*Error_Norm^2: {term1}")
             print(f"D: LambdaD*Decoder_Norm^2: {term2}")
             print(f"F: LambdaF*EMG_Norm^2: {term3}")
@@ -52,7 +52,7 @@ class CPHSLoss(torch.nn.modules.loss._Loss):
             print(f"Error term: {term1}")
             print(f"D term: {term2}")
             print(f"F term: {term3}")
-            raise("One of the cost function terms is NAN...")
+            raise ValueError("One of the cost function terms is NAN...")
         
         if self.return_cost_func_comps:
             return (term1 + term2 + term3), term1, term2, term3
@@ -79,9 +79,9 @@ class CPHSLoss(torch.nn.modules.loss._Loss):
         term3 = self.lambdaF#*(torch.linalg.matrix_norm(self.F)**2)
         
         if self.verbose:
-            print(f"LambdaE*Error_Norm^2: {term1}")
-            print(f"LambdaD*Decoder_Norm^2: {term2}")
-            print(f"LambdaF*EMG_Norm^2: {term3}")
+            print(f"LambdaE*Error_Norm^2: {term1:0,.5f}")
+            print(f"LambdaD*Decoder_Norm^2: {term2:0,.5f}")
+            print(f"LambdaF*EMG_Norm^2: {term3:0,.1f}")
         
         if self.return_cost_func_comps:
             return (term1 + term2 + term3), term1, term2, term3

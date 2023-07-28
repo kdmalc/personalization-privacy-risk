@@ -4,6 +4,7 @@ import copy
 import torch
 import torch.nn as nn
 import numpy as np
+import random
 import os
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
@@ -27,29 +28,25 @@ class Client(object):
     Base class for clients in federated learning.
     """
 
-    #def __init__(self, args, ID, train_samples, test_samples, **kwargs):  # Original version
     def __init__(self, args, ID, samples_path, labels_path, **kwargs):
         self.model = copy.deepcopy(args.model)
         self.algorithm = args.algorithm
         self.dataset = args.dataset
         self.device = args.device
-        self.ID = ID  # integer
+        self.ID = ID  # integer for now... maybe switch to subject codes later?
         self.save_folder_name = args.save_folder_name
 
         self.samples_path = samples_path
         self.labels_path = labels_path
-        # I don't think I can know this ahead of time... I'll set it in my load data func
-        #self.train_samples = train_samples
-        #self.test_samples = test_samples
         self.batch_size = args.batch_size
         self.learning_rate = args.local_learning_rate
         self.local_epochs = args.local_epochs
 
         # check BatchNorm
         self.has_BatchNorm = False
-        # KAI: Idk what this is doing...
         for layer in self.model.children():
             if isinstance(layer, nn.BatchNorm2d):
+                print("Layer is Batchnorm!")
                 self.has_BatchNorm = True
                 break
 
@@ -78,16 +75,22 @@ class Client(object):
         self.update_ix=[0,  1200,  2402,  3604,  4806,  6008,  7210,  8412,  9614, 10816, 12018, 13220, 14422, 15624, 16826, 18028, 19230, 20432, 20769]
         self.test_split_fraction = args.test_split_fraction
         self.test_split_each_update = args.test_split_each_update
+        self.test_split_users = args.test_split_users
+        assert not self.test_split_users and self.test_split_each_update, "test_split_users and test_split_each_update cannot both be true (contradictory test conditions)"
         self.condition_number = args.condition_number
+        self.verbose = args.verbose
+        self.return_cost_func_comps = args.return_cost_func_comps
 
         # Before this I need to run the INIT update segmentation code...
         init_dl = self.load_train_data()
         self.simulate_data_streaming(init_dl)
         # ^ This func sets F, V, etc
         
-        self.loss = CPHSLoss(self.F, self.model.weight, self.V, self.F.size()[1], lambdaF=self.lambdaF, lambdaD=self.lambdaD, lambdaE=self.lambdaE, Nd=2, Ne=self.pca_channels, return_cost_func_comps=False)
+        self.loss = CPHSLoss(self.F, self.model.weight, self.V, self.F.size()[1], lambdaF=self.lambdaF, lambdaD=self.lambdaD, lambdaE=self.lambdaE, Nd=2, Ne=self.pca_channels, return_cost_func_comps=self.return_cost_func_comps)
         self.loss_log = []
-        self.running_epoch_loss = []
+        self.cost_func_comps_log = []
+        #self.running_epoch_loss = []
+        self.testing_clients = []
 
         self.optimizer = torch.optim.SGD(self.model.parameters(), lr=self.learning_rate)
         self.learning_rate_scheduler = torch.optim.lr_scheduler.ExponentialLR(
@@ -97,9 +100,11 @@ class Client(object):
         self.learning_rate_decay = args.learning_rate_decay
         
         
-    def simulate_data_streaming(self, dl):
+    def simulate_data_streaming(self, dl, test_data=False):
         it = iter(dl)
         s0 = it.__next__()
+        # self.max_training_update_upbound
+        # I think this is wrong, implies it never advances the update? Didnt I handle that somewhere else tho...
         s_temp = s0[0][0:self.update_ix[1],:]
         p_reference = torch.transpose(s0[1][0:self.update_ix[1],:], 0, 1)
 
@@ -127,11 +132,8 @@ class Client(object):
 
 
     def _load_train_data(self):
-        #def read_data(dataset, client_idx, update_number, is_train=True, condition_idx=0, test_split=0.2, test_split_each_update=False):        
-        # Print some stuff
-        print(f"Client{self.ID} loading data file in [SHOULD RUN ONCE]")
-        if self.test_split_each_update:
-            raise("Not supported yet.  Idk if this is necessary :/")
+        if self.verbose:
+            print(f"Client{self.ID} loading data file in [SHOULD ONLY RUN ONCE PER CLIENT]")
         # Load in client's data
         with open(self.samples_path, 'rb') as handle:
             samples_npy = np.load(handle)
@@ -141,34 +143,48 @@ class Client(object):
         self.cond_samples_npy = samples_npy[self.condition_number,:,:]
         self.cond_labels_npy = labels_npy[self.condition_number,:,:]
         # Split data into train and test sets
-        testsplit_upper_bound = round((1-self.test_split_fraction)*(self.cond_samples_npy.shape[0]))
+        if self.test_split_users:
+            # NOT FINISHED YET
+            # Randomly pick the test_split_fraction of users to be completely held out of training to be used for testing
+            num_test_users = round(len(self.clients)*self.test_split_fraction)
+            # Pick/sample num_test_users from self.clients to be removed and put into self.testing_clients
+            self.testing_clients = [self.clients.pop(random.randrange(len(self.clients))) for _ in range(num_test_users)]
+            # Hmmm this requires a full rewrite of the code... 
+            raise ValueError("test_split_users is not fully supported yet")
+        elif self.test_split_each_update:
+            # Idk this might actually be supported just in a different function. I'm not sure. Don't plan on using it rn so who cares
+            raise ValueError("test_split_each_update not supported yet.  Idk if this is necessary to add")
+        else: 
+            testsplit_upper_bound = round((1-self.test_split_fraction)*(self.cond_samples_npy.shape[0]))
         # Set the number of examples (used to be done on init) --> ... THIS IS ABOUT TRAIN/TEST SPLIT
         self.train_samples = testsplit_upper_bound
         self.test_samples = self.cond_samples_npy.shape[0] - testsplit_upper_bound
         # The below gets stuck in the debugger and just keeps running until you step over
         train_test_update_number_split = min(self.update_ix, key=lambda x:abs(x-testsplit_upper_bound))
         self.max_training_update_upbound = self.update_ix.index(train_test_update_number_split)
-        self.max_training_update_lowbound = self.max_training_update_upbound-1
         
 
     def load_train_data(self, batch_size=None):
         # Load full client dataasets
         if self.local_round == 0:
             self._load_train_data()   # Returns nothing, sets self variables
+            if self.current_update < self.max_training_update_upbound:
+                self.update_lower_bound = self.update_ix[self.current_update]
+                self.update_upper_bound = self.update_ix[self.current_update+1]
 
         self.local_round += 1
         # Check if you need to advance the update
+        # ---> THIS IMPLIES THAT I AM CREATING A NEW TRAINING LOADER FOR EACH UPDATE...
         if (self.local_round>1) and (self.current_update < 16) and (self.local_round%self.local_round_threshold==0):
             self.current_update += 1
             print(f"Client{self.ID} advances to update {self.current_update}")
-        # Slice the full client dataset based on the current update number
-        # Originally from def read_data()
-        if self.current_update < self.max_training_update_upbound:
-            self.update_lower_bound = self.update_ix[self.current_update]
-            self.update_upper_bound = self.update_ix[self.current_update+1]
-        else:
-            self.update_lower_bound = self.max_training_update_lowbound
-            self.update_upper_bound = self.max_training_update_upbound
+            # Slice the full client dataset based on the current update number
+            if self.current_update < self.max_training_update_upbound:
+                self.update_lower_bound = self.update_ix[self.current_update]
+                self.update_upper_bound = self.update_ix[self.current_update+1]
+            else:
+                self.update_lower_bound = self.max_training_update_upbound - 1
+                self.update_upper_bound = self.max_training_update_upbound
         # Set the Dataset Obj
         # Uhhhh is this creating a new one each time? As long as its not re-reading in the data it probably doesn't matter...
         #train_data = read_client_data(self.dataset, self.ID, self.current_update, is_train=True)  # Original code
@@ -178,7 +194,8 @@ class Client(object):
         y_data = torch.Tensor(training_dataset_obj['y']).type(torch.float32)
         training_data_for_dataloader = [(x, y) for x, y in zip(X_data, y_data)]
         
-        print(f"clientbase load_train_data(): Client{self.ID}: Setting Training DataLoader")
+        if self.verbose:
+            print(f"clientbase load_train_data(): Client{self.ID}: Setting Training DataLoader")
         # Set dataloader
         if batch_size == None:
             batch_size = self.batch_size
@@ -221,11 +238,19 @@ class Client(object):
         for param, new_param in zip(model.parameters(), new_params):
             param.data = new_param.data.clone()
 
-    def test_metrics(self):
+    def test_metrics(self, saved_model=None):
+        if saved_model != None:
+            self.model = self.load_model(saved_model)
+        self.model.to(self.device)
+
         testloaderfull = self.load_test_data()
+        # Should I be simulate streaming with the testing data... 
+        # no the defualt should be holding a subj or two out and testing on them...
+        # Maybe it doesnt matter as much since I'm not doing classification, so bias wouldn't be subject level but rather time/task-progress level
         self.simulate_data_streaming(testloaderfull)
         self.model.eval()
-        
+
+        running_test_loss = []
         num_samples = 0
         with torch.no_grad():
             for i, (x, y) in enumerate(testloaderfull):
@@ -235,16 +260,19 @@ class Client(object):
                     x = x.to(self.device)
                 y = y.to(self.device)
                 output = self.model(x)
-                #print(f"clientbase test_metrics() LOSS {i}")
+                #print(f"clientbase test_metrics() loss index {i}")
                 test_loss = self.loss(output, y, self.model)
-                
+                running_test_loss += test_loss
                 num_samples += x.size()[0]
             
-        return test_loss, num_samples
+        return running_test_loss, num_samples
     
 
     def train_metrics(self):
-        print("Client train_metrics()")
+        # Wtf is this function for I have no idea.........
+
+        if self.verbose:
+            print("Client train_metrics()")
         trainloader = self.load_train_data()
         # self.model = self.load_model('model')
         # self.model.to(self.device)
@@ -263,8 +291,11 @@ class Client(object):
                     x = x.to(self.device)
                 y = y.to(self.device)
                 output = self.model(x)
-                print("clientbase train_metrics() LOSS")
+                if self.verbose:
+                    print("clientbase train_metrics() calculating loss")
                 loss = self.loss(output, y, self.model)
+                if self.return_cost_func_comps:
+                    loss = loss[0]
                 train_num += y.shape[0]
                 # Why are they multiplying by y.shape[0] here...
                 losses += loss.item() #* y.shape[0]

@@ -26,9 +26,10 @@ class FedAvg(Server):
     def train(self):
         for i in range(self.global_rounds+1):
             s_t = time.time()
-            print("Select clients")
+            #print("Select clients")
             self.selected_clients = self.select_clients()
-            print("Send models")
+            print(f"Selected client IDs: {[client.ID for client in self.selected_clients]}")
+            #print("Send models")
             self.send_models()
 
             if i%self.eval_gap == 0:
@@ -39,6 +40,7 @@ class FedAvg(Server):
             print("CLIENT TRAINING")
             for client in self.selected_clients:
                 client.train()
+                print(f"Client{client.ID} loss: {client.loss_log[-1]:0,.3f}")
 
             # threads = [Thread(target=client.train)
             #            for client in self.selected_clients]
@@ -57,10 +59,10 @@ class FedAvg(Server):
             if self.auto_break and self.check_done(acc_lss=[self.rs_test_acc], top_cnt=self.top_cnt):
                 break
 
-        print("\nBest accuracy.")
+        print("\nBest loss.")
         # self.print_(max(self.rs_test_acc), max(
         #     self.rs_train_acc), min(self.rs_train_loss))
-        print(max(self.rs_test_loss))
+        print(min(self.rs_test_loss))
         print("\nAverage time cost per round.")
         print(sum(self.Budget[1:])/len(self.Budget[1:]))
 
