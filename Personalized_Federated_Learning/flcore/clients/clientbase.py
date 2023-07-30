@@ -76,7 +76,7 @@ class Client(object):
         self.test_split_fraction = args.test_split_fraction
         self.test_split_each_update = args.test_split_each_update
         self.test_split_users = args.test_split_users
-        assert not self.test_split_users and self.test_split_each_update, "test_split_users and test_split_each_update cannot both be true (contradictory test conditions)"
+        assert (not (self.test_split_users and self.test_split_each_update)), "test_split_users and test_split_each_update cannot both be true (contradictory test conditions)"
         self.condition_number = args.condition_number
         self.verbose = args.verbose
         self.return_cost_func_comps = args.return_cost_func_comps
@@ -239,6 +239,9 @@ class Client(object):
             param.data = new_param.data.clone()
 
     def test_metrics(self, saved_model=None):
+        '''Kai's docs: This function is for evaluating the model (on the testing data) during training
+        Note that model.eval() is called so params aren't updated.'''
+
         if saved_model != None:
             self.model = self.load_model(saved_model)
         self.model.to(self.device)
@@ -247,10 +250,10 @@ class Client(object):
         # Should I be simulate streaming with the testing data... 
         # no the defualt should be holding a subj or two out and testing on them...
         # Maybe it doesnt matter as much since I'm not doing classification, so bias wouldn't be subject level but rather time/task-progress level
-        self.simulate_data_streaming(testloaderfull)
+        #self.simulate_data_streaming(testloaderfull)
         self.model.eval()
 
-        running_test_loss = []
+        running_test_loss = 0
         num_samples = 0
         with torch.no_grad():
             for i, (x, y) in enumerate(testloaderfull):
@@ -260,16 +263,17 @@ class Client(object):
                     x = x.to(self.device)
                 y = y.to(self.device)
                 output = self.model(x)
-                #print(f"clientbase test_metrics() loss index {i}")
-                test_loss = self.loss(output, y, self.model)
+                test_loss = self.loss(output, y, self.model)[0].item()  # Just get the actual loss function term
                 running_test_loss += test_loss
+                print(f"clientbase test_metrics() batch: {i}, loss: {test_loss}")
                 num_samples += x.size()[0]
             
         return running_test_loss, num_samples
     
 
     def train_metrics(self):
-        # Wtf is this function for I have no idea.........
+        '''Kai's docs: This function is for evaluating the model (on the training data for some reason) during training
+        Note that model.eval() is called so params aren't updated.'''
 
         if self.verbose:
             print("Client train_metrics()")
@@ -284,19 +288,19 @@ class Client(object):
         with torch.no_grad():
             for x, y in trainloader:
                 counter += 1
-                print(f"Client{self.ID} train_metrics() round {counter}")
                 if type(x) == type([]):
                     x[0] = x[0].to(self.device)
                 else:
                     x = x.to(self.device)
                 y = y.to(self.device)
                 output = self.model(x)
-                if self.verbose:
-                    print("clientbase train_metrics() calculating loss")
                 loss = self.loss(output, y, self.model)
                 if self.return_cost_func_comps:
                     loss = loss[0]
-                train_num += y.shape[0]
+                #if self.verbose:
+                #    pass
+                print(f"Client{self.ID} train_metrics() batch: {counter}, loss: {loss}")
+                train_num += y.shape[0]  # Why is this y.shape and not x.shape?... I guess they are the same row dims?
                 # Why are they multiplying by y.shape[0] here...
                 losses += loss.item() #* y.shape[0]
 

@@ -45,6 +45,10 @@ class clientAVG(Client):
                 loss = self.loss(output, y, self.model)
                 if self.return_cost_func_comps:
                     self.cost_func_comps_log.append(loss[1:])
+                    # Remove these later...
+                    print(f"ETerm: {loss[1]}")
+                    print(f"DTerm: {loss[2]}")
+                    print(f"FTerm: {loss[3]}")
                     loss = loss[0]
                 self.loss_log.append(loss.item())
                 #self.running_epoch_loss.append(loss.item() * x.size(0))  # From: running_epoch_loss.append(loss.item() * images.size(0))

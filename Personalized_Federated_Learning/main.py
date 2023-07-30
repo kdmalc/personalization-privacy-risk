@@ -209,7 +209,9 @@ if __name__ == "__main__":
                         help="Control whether or not to have ANY slow clients")
     parser.add_argument('-return_cost_func_comps', "--return_cost_func_comps", type=bool, default=True,
                         help="Return Loss, Error, DTerm, FTerm from loss class")
-    
+    parser.add_argument('-test_split_users', "--test_split_users", type=bool, default=False,
+                        help="Split testing data by holding out some users (fraction held out determined by test_split_fraction)")
+
     args = parser.parse_args()
 
     # I always need to run on CPU only since I don't have Nvidia GPU available

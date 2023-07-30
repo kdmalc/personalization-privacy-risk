@@ -43,10 +43,10 @@ class CPHSLoss(torch.nn.modules.loss._Loss):
         # I switched it so I can pass in the outputs instead of the inputs...
         # self.lambdaF presumably will be 0 for every trial
 
-        if True: #self.verbose:
-            print(f"ERROR: LambdaE*Error_Norm^2: {term1}")
-            print(f"D: LambdaD*Decoder_Norm^2: {term2}")
-            print(f"F: LambdaF*EMG_Norm^2: {term3}")
+        if self.verbose:
+            print(f"ERROR: LambdaE*Error_Norm^2: {term1:0,.4f}")
+            print(f"D: LambdaD*Decoder_Norm^2: {term2:0,.4f}")
+            print(f"F: LambdaF*EMG_Norm^2: {term3:0,.1f}")
         
         if isnan(term1) or isnan(term2) or isnan(term3):
             print(f"Error term: {term1}")
@@ -79,8 +79,8 @@ class CPHSLoss(torch.nn.modules.loss._Loss):
         term3 = self.lambdaF#*(torch.linalg.matrix_norm(self.F)**2)
         
         if self.verbose:
-            print(f"LambdaE*Error_Norm^2: {term1:0,.5f}")
-            print(f"LambdaD*Decoder_Norm^2: {term2:0,.5f}")
+            print(f"LambdaE*Error_Norm^2: {term1:0,.4f}")
+            print(f"LambdaD*Decoder_Norm^2: {term2:0,.4f}")
             print(f"LambdaF*EMG_Norm^2: {term3:0,.1f}")
         
         if self.return_cost_func_comps:

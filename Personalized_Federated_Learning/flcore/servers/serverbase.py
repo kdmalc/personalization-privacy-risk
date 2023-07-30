@@ -231,8 +231,7 @@ class Server(object):
         
         num_samples = []
         tot_loss = []
-        # Switching to just testing on the selected clients
-        for c in self.selected_clients:  #self.clients:
+        for c in self.clients:
             tl, ns = c.test_metrics()
             tot_loss.append(tl*1.0)
             num_samples.append(ns)
@@ -251,8 +250,7 @@ class Server(object):
         num_samples = []
         losses = []
         print(f"Serverbase train_metrics(): GLOBAL ROUND: {self.global_round}")
-        # Switching to just testing on the selected clients
-        for c in self.selected_clients:  #self.clients:
+        for c in self.clients:
             if self.verbose:
                 print(f"Serverbase train_metrics(): Client{c.ID}")
             c.last_global_round = self.global_round
@@ -265,7 +263,7 @@ class Server(object):
         return IDs, num_samples, losses
 
     # evaluate selected clients
-    def evaluate(self, train=True, test=False, acc=None, loss=None):
+    def evaluate(self, train=True, test=True, acc=None, loss=None):
         '''
         KAI Docstring
         This func runs test_metrics and train_metrics, and then sums all of
@@ -274,38 +272,43 @@ class Server(object):
         '''
         if self.verbose:
             print("Serverbase evaluate()")
-        # Wait why is it checking both train and test... I thought test was supposed to be held out till the end...
         if test:
             stats = self.test_metrics()
-            test_loss = sum(stats[2])*1.0
             if self.verbose:
-                print(f"Len of test_metrics() output: {len(stats[2])}")
-            test_loss = sum(stats[2])*1.0 / len(stats[2])
+                print(f"Len of test_metrics() output: {len(stats[0])}")
+            #test_loss = sum(stats[2])*1.0 / len(stats[2])  # Idk what this was doing either. Not relevant to us...
+            #test_loss = sum(stats[2])*1.0  # Used to return test_acc, test_num, auc; idk what it is summing tho (or why auc wouldn't be a scalar...)
+            test_loss = stats[2]#*1.0  #It's already a float...
 
             if acc == None:
-                self.rs_test_loss.append(test_loss)
+                # Idk what rs is...
+                avg_test_loss = sum(test_loss)/len(test_loss)
+                self.rs_test_loss.append(avg_test_loss)
             else:
                 acc.append(test_loss)
 
             #assert(test_loss<1e5)
-            print("Averaged Test Loss: {:.4f}".format(test_loss))
+            print("Averaged Test Loss: {:.4f}".format(avg_test_loss))
 
         if train:
             stats_train = self.train_metrics()
-            train_loss = sum(stats_train[2])*1.0
             if self.verbose:
-                print(f"Len of train_metrics() output: {len(stats_train[2])}")
-            train_loss = sum(stats_train[2])*1.0 / len(stats_train[2])
+                print(f"Len of train_metrics() output: {len(stats_train[0])}")
+            #train_loss = sum(stats_train[2])*1.0
+            #train_loss = sum(stats_train[2])*1.0 / len(stats_train[2])
+            train_loss = stats_train[2]#*1.0
         
             if loss == None:
-                self.rs_train_loss.append(train_loss)
+                avg_train_loss = sum(train_loss)/len(train_loss)
+                self.rs_train_loss.append(avg_train_loss)
             else:
                 print("Server evaluate loss!=None!")
                 loss.append(train_loss)
 
             #assert(train_loss<1e5)
-            print("Averaged Train Loss: {:.4f}".format(train_loss))
+            print("Averaged Train Loss: {:.4f}".format(avg_train_loss))
 
+        # I don't think I still need this...
         assert(type(self.rs_train_loss)==type(list()))
 
 

@@ -9,3 +9,5 @@ Random_Notes
 *.png
 *.jpg
 NMF.txt
+*.h5
+*.pt
