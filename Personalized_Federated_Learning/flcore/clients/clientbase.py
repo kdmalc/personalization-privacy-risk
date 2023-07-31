@@ -265,7 +265,7 @@ class Client(object):
                 output = self.model(x)
                 test_loss = self.loss(output, y, self.model)[0].item()  # Just get the actual loss function term
                 running_test_loss += test_loss
-                print(f"clientbase test_metrics() batch: {i}, loss: {test_loss}")
+                print(f"clientbase test_metrics() batch: {i}, loss: {test_loss:0,.1f}")
                 num_samples += x.size()[0]
             
         return running_test_loss, num_samples
@@ -299,7 +299,7 @@ class Client(object):
                     loss = loss[0]
                 #if self.verbose:
                 #    pass
-                print(f"Client{self.ID} train_metrics() batch: {counter}, loss: {loss}")
+                print(f"Client{self.ID} train_metrics() batch: {counter}, loss: {loss:0,.1f}")
                 train_num += y.shape[0]  # Why is this y.shape and not x.shape?... I guess they are the same row dims?
                 # Why are they multiplying by y.shape[0] here...
                 losses += loss.item() #* y.shape[0]

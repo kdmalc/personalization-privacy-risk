@@ -275,8 +275,8 @@ if __name__ == "__main__":
     print(f"YOU ARE RUNNING -{args.algorithm}- ALGORITHM")
     #print()
 
-    # Idk if I can access this lol
     server_obj = run(args)
+    # Does it save the model somewhere?
 
     
     # print(prof.key_averages().table(sort_by="cpu_time_total", row_limit=20))

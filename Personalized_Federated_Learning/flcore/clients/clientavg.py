@@ -25,8 +25,8 @@ class clientAVG(Client):
         start_time = time.time()
 
         max_local_steps = self.local_epochs
-        if self.train_slow:
-            max_local_steps = np.random.randint(1, max_local_steps // 2)
+        #if self.train_slow:
+        #    max_local_steps = np.random.randint(1, max_local_steps // 2)
 
         # WHICH OF THESE LOOPS IS EQUIVALENT TO MY EPOCHS...
         running_num_samples = 0
@@ -38,8 +38,8 @@ class clientAVG(Client):
                 else:
                     x = x.to(self.device)
                 y = y.to(self.device)
-                if self.train_slow:
-                    time.sleep(0.1 * np.abs(np.random.rand()))
+                #if self.train_slow:
+                #    time.sleep(0.1 * np.abs(np.random.rand()))
                 output = self.model(x)
                 #print(f"clientAVG ----> Training LOSS {i}")  # What is this even tellimg me lol
                 loss = self.loss(output, y, self.model)
