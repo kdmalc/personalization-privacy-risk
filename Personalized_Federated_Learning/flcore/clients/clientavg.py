@@ -31,6 +31,7 @@ class clientAVG(Client):
         # WHICH OF THESE LOOPS IS EQUIVALENT TO MY EPOCHS...
         running_num_samples = 0
         for step in range(max_local_steps):  # I'm assuming this is gradient steps?...
+            #^ In the original repo, max_local_steps is max_local_epochs... idk what local epochs are those... just gradient steps?...
             for i, (x, y) in enumerate(trainloader):  # This is all the data in a given batch, I think? Can I just kill this... PITA
                 print(f"Step {step}, pair {i} in traindl: x.size(): {x.size()}")
                 if type(x) == type([]):
@@ -45,19 +46,20 @@ class clientAVG(Client):
                 loss = self.loss(output, y, self.model)
                 if self.return_cost_func_comps:
                     self.cost_func_comps_log.append(loss[1:])
-                    # Remove these later...
-                    print(f"ETerm: {loss[1]}")
-                    print(f"DTerm: {loss[2]}")
-                    print(f"FTerm: {loss[3]}")
                     loss = loss[0]
-                self.loss_log.append(loss.item())
+                else:
+                    self.cost_func_comps_log.append((self.loss.term1_error.detach().numpy(), self.loss.term2_ld_decnorm.detach().numpy(), self.loss.term3_lf_emgnorm.detach().numpy()))
+                if loss.grad==None:
+                    #self.gradient_log.append(loss.grad)#.detach().numpy())
+                    pass
+                else:
+                    print("Gradient is not none!")
+                    self.gradient_log.append(loss.grad.detach().numpy())
+                self.loss_log.append(loss.item())#.detach().numpy())
                 #self.running_epoch_loss.append(loss.item() * x.size(0))  # From: running_epoch_loss.append(loss.item() * images.size(0))
                 running_num_samples += x.size(0)
                 self.optimizer.zero_grad()
-                #################################################################################################
-                # Is this gonna be messed up now since I'm returning other things not related to the gradient...?
                 loss.backward()
-                #################################################################################################
                 self.optimizer.step()
         #epoch_loss = self.running_epoch_loss / len(trainloader['train'])  # From: epoch_loss = running_epoch_loss / len(dataloaders['train'])
         #self.loss_log.append(epoch_loss)  

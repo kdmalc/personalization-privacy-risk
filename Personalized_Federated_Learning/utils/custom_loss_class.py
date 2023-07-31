@@ -18,6 +18,10 @@ class CPHSLoss(torch.nn.modules.loss._Loss):
         self.dt = dt
         self.normalize_V = normalize_V
         self.verbose = verbose
+        self.term1_error = 0
+        self.term2_ld_decnorm = 0
+        self.term3_lf_emgnorm = 0
+
         
     def forward(self, outputs, targets, my_model):
         outputs = torch.transpose(outputs, 0, 1)
@@ -34,30 +38,31 @@ class CPHSLoss(torch.nn.modules.loss._Loss):
         Vplus = self.V[:,1:]
         
         # Performance
-        term1 = self.lambdaE*(torch.linalg.matrix_norm(outputs[:,:-1] - Vplus)**2)
+        self.term1_error = self.lambdaE*(torch.linalg.matrix_norm(outputs[:,:-1] - Vplus)**2)
         # D Norm
-        term2 = self.lambdaD*(torch.linalg.matrix_norm(my_model.weight)**2)
+        self.term2_ld_decnorm = self.lambdaD*(torch.linalg.matrix_norm(my_model.weight)**2)
         # F Norm
-        term3 = self.lambdaF
+        self.term3_lf_emgnorm = self.lambdaF*(torch.linalg.matrix_norm(self.F)**2)
         #term3 = self.lambdaF*(torch.linalg.matrix_norm(inputs)**2)
         # I switched it so I can pass in the outputs instead of the inputs...
         # self.lambdaF presumably will be 0 for every trial
 
         if self.verbose:
-            print(f"ERROR: LambdaE*Error_Norm^2: {term1:0,.4f}")
-            print(f"D: LambdaD*Decoder_Norm^2: {term2:0,.4f}")
-            print(f"F: LambdaF*EMG_Norm^2: {term3:0,.1f}")
+            print(f"ERROR: LambdaE*Error_Norm^2: {self.term1_error:0,.4f}")
+            print(f"D: LambdaD*Decoder_Norm^2: {self.term2_ld_decnorm:0,.4f}")
+            print(f"F: LambdaF*EMG_Norm^2: {self.term3_lf_emgnorm:0,.1f}")
         
-        if isnan(term1) or isnan(term2) or isnan(term3):
-            print(f"Error term: {term1}")
-            print(f"D term: {term2}")
-            print(f"F term: {term3}")
+        if isnan(self.term1_error) or isnan(self.term2_ld_decnorm) or isnan(self.term3_lf_emgnorm):
+            print(f"Error term: {self.term1_error}")
+            print(f"D term: {self.term2_ld_decnorm}")
+            print(f"F term: {self.term3_lf_emgnorm}")
             raise ValueError("One of the cost function terms is NAN...")
         
+        total_loss = self.term1_error + self.term2_ld_decnorm + self.term3_lf_emgnorm
         if self.return_cost_func_comps:
-            return (term1 + term2 + term3), term1, term2, term3
+            return total_loss, self.term1_error, self.term2_ld_decnorm, self.term3_lf_emgnorm
         else:
-            return (term1 + term2 + term3)
+            return total_loss
         
     def update_FDV(self, F, D, V, learning_batch):
         print("update_FDV")
@@ -72,18 +77,19 @@ class CPHSLoss(torch.nn.modules.loss._Loss):
         self.D = self.D.view(self.Nd, self.Ne)
         Vplus = self.V[:,1:]
         # Performance
-        term1 = self.lambdaE*(torch.linalg.matrix_norm((torch.matmul(self.D, self.F) - Vplus))**2)
+        self.term1_error = self.lambdaE*(torch.linalg.matrix_norm((torch.matmul(self.D, self.F) - Vplus))**2)
         # D Norm
-        term2 = self.lambdaD*(torch.linalg.matrix_norm(self.D)**2)
+        self.term2_ld_decnorm = self.lambdaD*(torch.linalg.matrix_norm(self.D)**2)
         # F Norm
-        term3 = self.lambdaF#*(torch.linalg.matrix_norm(self.F)**2)
+        self.term3_lf_emgnorm = self.lambdaF*(torch.linalg.matrix_norm(self.F)**2)
         
         if self.verbose:
-            print(f"LambdaE*Error_Norm^2: {term1:0,.4f}")
-            print(f"LambdaD*Decoder_Norm^2: {term2:0,.4f}")
-            print(f"LambdaF*EMG_Norm^2: {term3:0,.1f}")
+            print(f"LambdaE*Error_Norm^2: {self.term1_error:0,.4f}")
+            print(f"LambdaD*Decoder_Norm^2: {self.term2_ld_decnorm:0,.4f}")
+            print(f"LambdaF*EMG_Norm^2: {self.term3_lf_emgnorm:0,.1f}")
         
+        total_loss = self.term1_error + self.term2_ld_decnorm + self.term3_lf_emgnorm
         if self.return_cost_func_comps:
-            return (term1 + term2 + term3), term1, term2, term3
+            return total_loss, self.term1_error, self.term2_ld_decnorm, self.term3_lf_emgnorm
         else:
-            return (term1 + term2 + term3)
+            return total_loss

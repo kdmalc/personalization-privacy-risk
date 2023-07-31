@@ -89,6 +89,7 @@ class Client(object):
         self.loss = CPHSLoss(self.F, self.model.weight, self.V, self.F.size()[1], lambdaF=self.lambdaF, lambdaD=self.lambdaD, lambdaE=self.lambdaE, Nd=2, Ne=self.pca_channels, return_cost_func_comps=self.return_cost_func_comps)
         self.loss_log = []
         self.cost_func_comps_log = []
+        self.gradient_log = []
         #self.running_epoch_loss = []
         self.testing_clients = []
 
@@ -263,7 +264,11 @@ class Client(object):
                     x = x.to(self.device)
                 y = y.to(self.device)
                 output = self.model(x)
-                test_loss = self.loss(output, y, self.model)[0].item()  # Just get the actual loss function term
+                loss = self.loss(output, y, self.model)
+                # I don't think I do anything with the cost func comps here regardless...
+                if self.return_cost_func_comps:
+                    loss = loss[0]
+                test_loss = loss.item()  # Just get the actual loss function term
                 running_test_loss += test_loss
                 print(f"clientbase test_metrics() batch: {i}, loss: {test_loss:0,.1f}")
                 num_samples += x.size()[0]

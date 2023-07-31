@@ -8,6 +8,7 @@ import copy
 import time
 import random
 import pickle
+from datetime import datetime
 
 from flcore.pflniid_utils.data_utils import read_client_data
 from flcore.pflniid_utils.dlg import DLG
@@ -48,6 +49,11 @@ class Server(object):
 
         self.rs_test_loss = []
         self.rs_train_loss = []
+        # Can't save dicts to HD5F files...
+        #self.cost_func_comps_dict = dict()
+        #self.gradient_dict = dict()
+        self.cost_func_comps_log = []
+        self.gradient_log = []
 
         self.times = times
         self.eval_gap = args.eval_gap
@@ -132,6 +138,7 @@ class Server(object):
         return selected_clients
 
     def send_models(self):
+        print("SENDING GLOBAL MODEL TO CLIENTS")
         assert (len(self.clients) > 0)
 
         for client in self.clients:
@@ -198,10 +205,16 @@ class Server(object):
         model_path = os.path.join(model_path, self.algorithm + "_server" + ".pt")
         return os.path.exists(model_path)
         
-    def save_results(self):
+    def save_results(self, save_cost_func_comps=False, save_gradient=False):
         algo = self.dataset + "_" + self.algorithm
+
         # Is this path wrt serverbase.py or main.py...
-        result_path = "../results/"
+        # get current date and time
+        current_datetime = datetime.now().strftime("%m-%d_%H-%M")
+        # convert datetime obj to string
+        str_current_datetime = str(current_datetime)
+
+        result_path = "../results/mdHM_" + str_current_datetime
         if not os.path.exists(result_path):
             os.makedirs(result_path)
 
@@ -214,7 +227,17 @@ class Server(object):
             with h5py.File(file_path, 'w') as hf:
                 #hf.create_dataset('rs_test_acc', data=self.rs_test_acc)
                 #hf.create_dataset('rs_test_auc', data=self.rs_test_auc)
+                hf.create_dataset('rs_test_loss', data=self.rs_test_loss)
                 hf.create_dataset('rs_train_loss', data=self.rs_train_loss)
+                if save_cost_func_comps:
+                    hf.create_dataset('cost_func_comps_log', data=self.cost_func_comps_log)
+                    #hf.create_dataset('cost_func_comps_dict', data=self.cost_func_comps_dict)
+                print()
+                print(self.gradient_log)
+                print()
+                if save_gradient:
+                    hf.create_dataset('gradient_log', data=self.gradient_log)
+                    #hf.create_dataset('gradient_dict', data=self.gradient_dict)
 
     def save_item(self, item, item_name):
         if not os.path.exists(self.save_folder_name):
@@ -340,6 +363,7 @@ class Server(object):
 
     # No idea what this does, I don't think it is used...
     def call_dlg(self, R):
+        raise ValueError("call_dlg has not been developed yet")
         # items = []
         cnt = 0
         psnr_val = 0
@@ -394,6 +418,7 @@ class Server(object):
 
     # fine-tuning on new clients
     def fine_tuning_new_clients(self):
+        print("fine_tuning_new_clients USES GLOBAL MODEL!!!")
         for client in self.new_clients:
             client.set_parameters(self.global_model)
             for e in range(self.fine_tuning_epoch):

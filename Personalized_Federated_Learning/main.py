@@ -115,7 +115,7 @@ if __name__ == "__main__":
                         help="Local learning rate")
     parser.add_argument('-ld', "--learning_rate_decay", type=bool, default=False)
     parser.add_argument('-ldg', "--learning_rate_decay_gamma", type=float, default=0.99)
-    parser.add_argument('-gr', "--global_rounds", type=int, default=25)  # KAI: Switched to 25 down from 2000
+    parser.add_argument('-gr', "--global_rounds", type=int, default=5)  # KAI: Switched to 5 down from 2000
     parser.add_argument('-ls', "--local_epochs", type=int, default=1, 
                         help="Multiple update steps in one local epoch.")  # KAI: I think it was 1 originally.  I'm gonna keep it there.  Does this mean I can set batchsize to 1300 and cook? Is my setup capable or running multiple epochs? Implicitly I was doing 1 epoch before, using the full update data I believe...
     parser.add_argument('-algo', "--algorithm", type=str, default="Local") #Local #FedAvg
@@ -130,7 +130,6 @@ if __name__ == "__main__":
     parser.add_argument('-dps', "--dp_sigma", type=float, default=0.0)
     parser.add_argument('-sfn', "--save_folder_name", type=str, default='items')
 
-    
     # SECTION: Idk what these are lol
     parser.add_argument('-eg', "--eval_gap", type=int, default=1,
                         help="Rounds gap for evaluation")
@@ -207,7 +206,7 @@ if __name__ == "__main__":
                         help="Print out a bunch of extra stuff")
     parser.add_argument('-slow_clients_bool', "--slow_clients_bool", type=bool, default=False,
                         help="Control whether or not to have ANY slow clients")
-    parser.add_argument('-return_cost_func_comps', "--return_cost_func_comps", type=bool, default=True,
+    parser.add_argument('-return_cost_func_comps', "--return_cost_func_comps", type=bool, default=False, #True
                         help="Return Loss, Error, DTerm, FTerm from loss class")
     parser.add_argument('-test_split_users', "--test_split_users", type=bool, default=False,
                         help="Split testing data by holding out some users (fraction held out determined by test_split_fraction)")

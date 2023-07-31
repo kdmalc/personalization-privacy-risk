@@ -63,7 +63,13 @@ class Local(Server):
         print("\nBest Loss.")
         print(min(self.rs_test_loss))
 
-        self.save_results()
+        for idx, client in enumerate(self.clients):
+            #self.cost_func_comps_dict[idx] = client.cost_func_comps_log
+            #self.gradient_dict[idx] = client.gradient_log
+            self.cost_func_comps_log.append(client.cost_func_comps_log)
+            self.gradient_log.append(client.gradient_log)
+
+        self.save_results(save_cost_func_comps=True, save_gradient=True)
         model_path = os.path.join("models", self.dataset)
         model_path = os.path.join(model_path, "Local")
         for client in self.clients:
