@@ -214,7 +214,7 @@ class Server(object):
         # convert datetime obj to string
         str_current_datetime = str(current_datetime)
 
-        result_path = "../results/mdHM_" + str_current_datetime
+        result_path = "../results/mdHM_" + str_current_datetime + "_"
         if not os.path.exists(result_path):
             os.makedirs(result_path)
 
@@ -223,16 +223,13 @@ class Server(object):
             file_path = result_path + "{}.h5".format(algo)
             print("File path: " + file_path)
 
-            # Why h5py and not just pickle or txt...
             with h5py.File(file_path, 'w') as hf:
                 hf.create_dataset('rs_test_loss', data=self.rs_test_loss)
                 hf.create_dataset('rs_train_loss', data=self.rs_train_loss)
                 if save_cost_func_comps:
                     print("cost_func_comps_log")
                     print(self.cost_func_comps_log)
-                    print()
-                    #hf.create_dataset('cost_func_comps_dict', data=self.cost_func_comps_dict)
-                    #hf.create_dataset('cost_func_comps_log', data=self.cost_func_comps_log)
+                    print()                    
                     G1 = hf.create_group('cost_func_tuples_by_client')
                     for idx, cost_func_comps in enumerate(self.cost_func_comps_log):
                         name_str = 'ClientID' + str(idx)
@@ -242,8 +239,6 @@ class Server(object):
                     print('gradient_norm_log')
                     print(self.gradient_norm_log)
                     print()
-                    #hf.create_dataset('gradient_dict', data=self.gradient_dict)
-                    #hf.create_dataset('gradient_norm_log', data=self.gradient_norm_log)
                     G2 = hf.create_group('gradient_norm_lists_by_client')
                     for idx, grad_norm_list in enumerate(self.gradient_norm_log):
                         name_str = 'ClientID' + str(idx)

@@ -32,7 +32,7 @@ class Local(Server):
                 print(f"\n-------------Round number: {i}-------------")
                 if i!=0:
                     print("\nEvaluate personalized models")
-                    self.evaluate()
+                    self.evaluate()  # I don't understand why train_metrics() is used at all? Need it to log stuff later tho...
 
                     #print(f"len: {len(self.rs_train_loss[-1])}")
                     if type(self.rs_train_loss[-1]) in [int, float]:
@@ -41,12 +41,12 @@ class Local(Server):
                         print(f"len: {len(self.rs_train_loss[-1])}")
                     print()
 
-            self.selected_clients = self.select_clients()
+            #self.selected_clients = self.select_clients()  # FOR LOCAL WE CAN JUST RUN ALL CLIENTS AT ONCE SINCE WE ARE NOT AGGREGATING
             #print(f"Selected client IDs: {[client.ID for client in self.selected_clients]}")
             #print("CLIENT TRAINING")
             for client in self.selected_clients:
                 client.train()
-                print(f"Client{client.ID} loss: {client.loss_log[-1]:0,.3f}")
+                print(f"Client{client.ID} round {i} loss: {client.loss_log[-1]:0,.3f}")
 
             # threads = [Thread(target=client.train)
             #            for client in self.selected_clients]
