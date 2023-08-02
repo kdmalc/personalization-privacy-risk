@@ -7,12 +7,12 @@ import h5py
 import copy
 import time
 import random
-import pickle
+#import pickle
 from datetime import datetime
 
 from flcore.pflniid_utils.data_utils import read_client_data
-from flcore.pflniid_utils.dlg import DLG
-from utils import node_creator
+#from flcore.pflniid_utils.dlg import DLG
+#from utils import node_creator
 
 
 class Server(object):
@@ -53,7 +53,7 @@ class Server(object):
         #self.cost_func_comps_dict = dict()
         #self.gradient_dict = dict()
         self.cost_func_comps_log = []
-        self.gradient_log = []
+        self.gradient_norm_log = []
 
         self.times = times
         self.eval_gap = args.eval_gap
@@ -61,8 +61,8 @@ class Server(object):
         self.train_slow_rate = args.train_slow_rate
         self.send_slow_rate = args.send_slow_rate
 
-        self.dlg_eval = args.dlg_eval
-        self.dlg_gap = args.dlg_gap
+        #self.dlg_eval = args.dlg_eval
+        #self.dlg_gap = args.dlg_gap
         self.batch_num_per_client = args.batch_num_per_client
 
         self.num_new_clients = args.num_new_clients
@@ -225,18 +225,18 @@ class Server(object):
 
             # Why h5py and not just pickle or txt...
             with h5py.File(file_path, 'w') as hf:
-                #hf.create_dataset('rs_test_acc', data=self.rs_test_acc)
-                #hf.create_dataset('rs_test_auc', data=self.rs_test_auc)
                 hf.create_dataset('rs_test_loss', data=self.rs_test_loss)
                 hf.create_dataset('rs_train_loss', data=self.rs_train_loss)
                 if save_cost_func_comps:
+                    print("cost_func_comps_log")
+                    print(self.cost_func_comps_log)
                     hf.create_dataset('cost_func_comps_log', data=self.cost_func_comps_log)
                     #hf.create_dataset('cost_func_comps_dict', data=self.cost_func_comps_dict)
                 print()
-                print(self.gradient_log)
+                print(self.gradient_norm_log)
                 print()
                 if save_gradient:
-                    hf.create_dataset('gradient_log', data=self.gradient_log)
+                    hf.create_dataset('gradient_norm_log', data=self.gradient_norm_log)
                     #hf.create_dataset('gradient_dict', data=self.gradient_dict)
 
     def save_item(self, item, item_name):
@@ -404,17 +404,36 @@ class Server(object):
         # self.save_item(items, f'DLG_{R}')
 
     def set_new_clients(self, clientObj):
-        print("---------------> Serverbase set_new_clients: still using read_client_data and lengths...")
-        for i in range(self.num_clients, self.num_clients + self.num_new_clients):
-            train_data = read_client_data(self.dataset, i, self.global_update, is_train=True)
-            test_data = read_client_data(self.dataset, i, self.global_update, is_train=False)
-            client = clientObj(self.args, 
-                            ID=i, 
-                            train_samples=len(train_data), 
-                            test_samples=len(test_data), 
-                            train_slow=False, 
-                            send_slow=False)
-            self.new_clients.append(client)
+        #print("---------------> Serverbase set_new_clients: still using read_client_data and lengths...")
+        #for i in range(self.num_clients, self.num_clients + self.num_new_clients):
+        #    train_data = read_client_data(self.dataset, i, self.global_update, is_train=True)
+        #   test_data = read_client_data(self.dataset, i, self.global_update, is_train=False)
+        #    client = clientObj(self.args, 
+        #                    ID=i, 
+        #                    train_samples=len(train_data), 
+        #                    test_samples=len(test_data), 
+        #                    train_slow=False, 
+        #                    send_slow=False)
+        #    self.new_clients.append(client)
+        #if self.verbose:
+        #    print("ServerBase set_new_clients (SBSNC)")
+        if self.num_new_clients==0:
+            pass
+        else:
+            assert("set_new_clients must be refactored, IDs by index will not work here")
+            #for i, train_slow, send_slow in zip(range(self.num_clients), self.train_slow_clients, self.send_slow_clients):
+            for i in range(self.num_clients, self.num_clients + self.num_new_clients):
+                print(f"SBSNC: iter {i}")
+                # Should I switch i to be the subject ID? Not specifically required to run, for now at least
+                # ID = i probably isn't the best solution... assumes things are in order...... no? Not a good solution regardless
+                base_data_path = 'C:\\Users\\kdmen\\Desktop\\Research\\personalization-privacy-risk\\Data\\Client_Specific_Files\\'
+                client = clientObj(self.args, 
+                                    ID=i, 
+                                    train_samples = base_data_path + "UserID" + str(i) + "_TrainData_8by20770by64.npy", 
+                                    test_samples = base_data_path + "UserID" + str(i) + "_Labels_8by20770by2.npy", 
+                                    train_slow=False, 
+                                    send_slow=False)
+                self.clients.append(client)
 
     # fine-tuning on new clients
     def fine_tuning_new_clients(self):

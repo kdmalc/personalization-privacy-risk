@@ -30,8 +30,7 @@ class clientAVG(Client):
 
         # WHICH OF THESE LOOPS IS EQUIVALENT TO MY EPOCHS...
         running_num_samples = 0
-        for step in range(max_local_steps):  # I'm assuming this is gradient steps?...
-            #^ In the original repo, max_local_steps is max_local_epochs... idk what local epochs are those... just gradient steps?...
+        for step in range(max_local_steps):  # I'm assuming this is gradient steps?... are local epochs the same as gd steps?
             for i, (x, y) in enumerate(trainloader):  # This is all the data in a given batch, I think? Can I just kill this... PITA
                 print(f"Step {step}, pair {i} in traindl: x.size(): {x.size()}")
                 if type(x) == type([]):
@@ -48,14 +47,36 @@ class clientAVG(Client):
                     self.cost_func_comps_log.append(loss[1:])
                     loss = loss[0]
                 else:
-                    self.cost_func_comps_log.append((self.loss.term1_error.detach().numpy(), self.loss.term2_ld_decnorm.detach().numpy(), self.loss.term3_lf_emgnorm.detach().numpy()))
-                if loss.grad==None:
-                    #self.gradient_log.append(loss.grad)#.detach().numpy())
-                    pass
+                    # .item() ONLY WORKS WITH 1D TENSORS!!!
+                    t1 = self.loss.term1_error.item()
+                    t2 = self.loss.term2_ld_decnorm.item()
+                    t3 = self.loss.term3_lf_emgnorm.item()
+                    if np.isnan(t1):
+                        print("CLIENTAVG: Error term is None...")
+                        t1 = -1
+                    if np.isnan(t2):
+                        print("CLIENTAVG: Decoder Effort term is None...")
+                        t2 = -1
+                    if np.isnan(t3):
+                        print("CLIENTAVG: User Effort term is None...")
+                        t3 = -1
+                    self.cost_func_comps_log.append((t1, t2, t3))
+                # I think loss.grad is always none (gradient is wrt the loss, loss is a leaf)
+                #if loss.grad==None:
+                #    #self.gradient_norm_log.append(loss.grad)#.detach().numpy())
+                #    pass
+                #else:
+                #    print("Gradient is not none!")
+                # Gradient norm
+                weight_grad = self.model.weight.grad
+                if weight_grad == None:
+                    print("Weight gradient is None...")
+                    self.gradient_norm_log.append(-1)
                 else:
-                    print("Gradient is not none!")
-                    self.gradient_log.append(loss.grad.detach().numpy())
-                self.loss_log.append(loss.item())#.detach().numpy())
+                    #grad_norm = torch.linalg.norm(self.model.weight.grad, ord='fro')
+                    grad_norm = np.linalg.norm(self.model.weight.grad.detach().numpy())
+                    self.gradient_norm_log.append(grad_norm)
+                self.loss_log.append(loss.item())
                 #self.running_epoch_loss.append(loss.item() * x.size(0))  # From: running_epoch_loss.append(loss.item() * images.size(0))
                 running_num_samples += x.size(0)
                 self.optimizer.zero_grad()

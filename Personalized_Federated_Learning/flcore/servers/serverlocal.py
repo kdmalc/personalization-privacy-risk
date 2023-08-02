@@ -2,7 +2,7 @@
 
 from flcore.clients.clientavg import clientAVG
 from flcore.servers.serverbase import Server
-from threading import Thread
+#from threading import Thread
 import torch
 import os
 
@@ -41,7 +41,7 @@ class Local(Server):
                         print(f"len: {len(self.rs_train_loss[-1])}")
                     print()
 
-            #self.selected_clients = self.select_clients()
+            self.selected_clients = self.select_clients()
             #print(f"Selected client IDs: {[client.ID for client in self.selected_clients]}")
             #print("CLIENT TRAINING")
             for client in self.selected_clients:
@@ -63,11 +63,14 @@ class Local(Server):
         print("\nBest Loss.")
         print(min(self.rs_test_loss))
 
+        # So how do I do this given that not all clients will have trained and thus some of these will be empty...
+        # No this is post training so they should all be filled, just different lengths...
+        # OHH my problem is that since I am only running for 5 training rounds some clients haven't trained at all lol
         for idx, client in enumerate(self.clients):
             #self.cost_func_comps_dict[idx] = client.cost_func_comps_log
-            #self.gradient_dict[idx] = client.gradient_log
+            #self.gradient_dict[idx] = client.gradient_norm_log
             self.cost_func_comps_log.append(client.cost_func_comps_log)
-            self.gradient_log.append(client.gradient_log)
+            self.gradient_norm_log.append(client.gradient_norm_log)
 
         self.save_results(save_cost_func_comps=True, save_gradient=True)
         model_path = os.path.join("models", self.dataset)

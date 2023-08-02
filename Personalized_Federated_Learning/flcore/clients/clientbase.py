@@ -13,7 +13,7 @@ from sklearn import metrics
 
 from sklearn.decomposition import PCA
 
-from flcore.pflniid_utils.data_utils import read_client_data
+#from flcore.pflniid_utils.data_utils import read_client_data
 from utils.custom_loss_class import CPHSLoss
 from utils.emg_dataset_class import *
 
@@ -89,7 +89,7 @@ class Client(object):
         self.loss = CPHSLoss(self.F, self.model.weight, self.V, self.F.size()[1], lambdaF=self.lambdaF, lambdaD=self.lambdaD, lambdaE=self.lambdaE, Nd=2, Ne=self.pca_channels, return_cost_func_comps=self.return_cost_func_comps)
         self.loss_log = []
         self.cost_func_comps_log = []
-        self.gradient_log = []
+        self.gradient_norm_log = []
         #self.running_epoch_loss = []
         self.testing_clients = []
 
@@ -209,7 +209,8 @@ class Client(object):
 
     def load_test_data(self, batch_size=None): 
         # Make sure this runs AFTER load_train_data so the data is already loaded in
-        print(f"Client{self.ID}: Setting Test DataLoader")
+        if self.verbose:
+            print(f"Client{self.ID}: Setting Test DataLoader")
         if batch_size == None:
             batch_size = self.batch_size
 
@@ -270,7 +271,8 @@ class Client(object):
                     loss = loss[0]
                 test_loss = loss.item()  # Just get the actual loss function term
                 running_test_loss += test_loss
-                print(f"clientbase test_metrics() batch: {i}, loss: {test_loss:0,.1f}")
+                if self.verbose:
+                    print(f"clientbase test_metrics() batch: {i}, loss: {test_loss:0,.1f}")
                 num_samples += x.size()[0]
             
         return running_test_loss, num_samples
@@ -302,9 +304,8 @@ class Client(object):
                 loss = self.loss(output, y, self.model)
                 if self.return_cost_func_comps:
                     loss = loss[0]
-                #if self.verbose:
-                #    pass
-                print(f"Client{self.ID} train_metrics() batch: {counter}, loss: {loss:0,.1f}")
+                if self.verbose:
+                    print(f"Client{self.ID} train_metrics() batch: {counter}, loss: {loss:0,.1f}")
                 train_num += y.shape[0]  # Why is this y.shape and not x.shape?... I guess they are the same row dims?
                 # Why are they multiplying by y.shape[0] here...
                 losses += loss.item() #* y.shape[0]

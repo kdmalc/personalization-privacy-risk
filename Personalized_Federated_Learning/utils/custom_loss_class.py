@@ -5,7 +5,7 @@ class CPHSLoss(torch.nn.modules.loss._Loss):
     def __init__(self, F, D, V, learning_batch, lambdaF=0, lambdaD=1e-3, lambdaE=1e-6, Nd=2, Ne=64, return_cost_func_comps=False, verbose=False, dt=1/60, normalize_V=False) -> None:
         super().__init__()
         self.F = F
-        self.D = D.detach().clone()
+        self.D = D#.detach().clone()
         self.V = V
         self.learning_batch = learning_batch
         self.lambdaF = lambdaF
@@ -22,6 +22,19 @@ class CPHSLoss(torch.nn.modules.loss._Loss):
         self.term2_ld_decnorm = 0
         self.term3_lf_emgnorm = 0
 
+
+    def forward2(self, outputs, targets):
+        outputs = torch.transpose(outputs, 0, 1)
+        p_reference = torch.transpose(targets, 0, 1)
+        p_actual = torch.cumsum(outputs, dim=1)*self.dt  # Numerical integration of v_actual to get p_actual
+        self.V = (p_reference - p_actual)*self.dt
+        if self.normalize_V:
+            self.V = self.V/torch.linalg.norm(self.V, ord='fro')
+            assert (torch.linalg.norm(self.V, ord='fro')<1.2) and (torch.linalg.norm(self.V, ord='fro')>0.8)
+        Vplus = self.V[:,1:]
+        # Performance
+        return self.lambdaE*(torch.linalg.matrix_norm(outputs[:,:-1] - Vplus)**2)
+
         
     def forward(self, outputs, targets, my_model):
         outputs = torch.transpose(outputs, 0, 1)
@@ -32,9 +45,11 @@ class CPHSLoss(torch.nn.modules.loss._Loss):
             self.V = self.V/torch.linalg.norm(self.V, ord='fro')
             assert (torch.linalg.norm(self.V, ord='fro')<1.2) and (torch.linalg.norm(self.V, ord='fro')>0.8)
         
-        Nt = self.learning_batch
-        self.D = my_model.weight.detach().clone()
-        self.D = self.D.view(self.Nd, self.Ne)
+        #Nt = self.learning_batch
+        # What is this doing...
+        #self.D = my_model.weight.detach().clone()
+        #self.D = self.D.view(self.Nd, self.Ne)
+        #self.D = my_model.weight.view(self.Nd, self.Ne)
         Vplus = self.V[:,1:]
         
         # Performance
@@ -67,13 +82,14 @@ class CPHSLoss(torch.nn.modules.loss._Loss):
     def update_FDV(self, F, D, V, learning_batch):
         print("update_FDV")
         self.F = F
+        # Why...
         self.D = D.detach().clone()
         self.V = V
         self.learning_batch = learning_batch
         
     def calc_obj_loss(self) -> torch.Tensor:
         print("calc_obj_loss")
-        Nt = self.learning_batch
+        #Nt = self.learning_batch
         self.D = self.D.view(self.Nd, self.Ne)
         Vplus = self.V[:,1:]
         # Performance
