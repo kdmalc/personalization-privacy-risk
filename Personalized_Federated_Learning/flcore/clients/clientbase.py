@@ -102,6 +102,11 @@ class Client(object):
         
         
     def simulate_data_streaming(self, dl, test_data=False):
+        '''This function sets F and V which appear in the cost function. Not clear how this is needed in the current iteration.
+        Specifically: the loss function is its own class/object so it doesn't have access to these (F and V)
+        Furthermore using F and V can be entirely avoided on the basis of model.output
+        - V is set by passing in the labels, and F is multipled by 0 (lambdaF)
+        Not sure what purpose this serves anymore...'''
         it = iter(dl)
         s0 = it.__next__()
         # self.max_training_update_upbound
@@ -163,29 +168,27 @@ class Client(object):
         # The below gets stuck in the debugger and just keeps running until you step over
         train_test_update_number_split = min(self.update_ix, key=lambda x:abs(x-testsplit_upper_bound))
         self.max_training_update_upbound = self.update_ix.index(train_test_update_number_split)
+        self.test_split_idx = self.update_ix[self.max_training_update_upbound]
         
 
     def load_train_data(self, batch_size=None):
         # Load full client dataasets
         if self.local_round == 0:
             self._load_train_data()   # Returns nothing, sets self variables
-            if self.current_update < self.max_training_update_upbound:
-                self.update_lower_bound = self.update_ix[self.current_update]
-                self.update_upper_bound = self.update_ix[self.current_update+1]
-
+        # Do I really want this here...
         self.local_round += 1
         # Check if you need to advance the update
-        # ---> THIS IMPLIES THAT I AM CREATING A NEW TRAINING LOADER FOR EACH UPDATE...
+        # ---> THIS IMPLIES THAT I AM CREATING A NEW TRAINING LOADER FOR EACH UPDATE... this is what I want actually I think
         if (self.local_round>1) and (self.current_update < 16) and (self.local_round%self.local_round_threshold==0):
             self.current_update += 1
             print(f"Client{self.ID} advances to update {self.current_update}")
-            # Slice the full client dataset based on the current update number
-            if self.current_update < self.max_training_update_upbound:
-                self.update_lower_bound = self.update_ix[self.current_update]
-                self.update_upper_bound = self.update_ix[self.current_update+1]
-            else:
-                self.update_lower_bound = self.max_training_update_upbound - 1
-                self.update_upper_bound = self.max_training_update_upbound
+        # Slice the full client dataset based on the current update number
+        if self.current_update < self.max_training_update_upbound:
+            self.update_lower_bound = self.update_ix[self.current_update]
+            self.update_upper_bound = self.update_ix[self.current_update+1]
+        else:
+            self.update_lower_bound = self.max_training_update_upbound - 1
+            self.update_upper_bound = self.max_training_update_upbound
         # Set the Dataset Obj
         # Uhhhh is this creating a new one each time? As long as its not re-reading in the data it probably doesn't matter...
         #train_data = read_client_data(self.dataset, self.ID, self.current_update, is_train=True)  # Original code
@@ -196,7 +199,7 @@ class Client(object):
         training_data_for_dataloader = [(x, y) for x, y in zip(X_data, y_data)]
         
         if self.verbose:
-            print(f"clientbase load_train_data(): Client{self.ID}: Setting Training DataLoader")
+            print(f"cb load_train_data(): Client{self.ID}: Setting Training DataLoader")
         # Set dataloader
         if batch_size == None:
             batch_size = self.batch_size
@@ -215,7 +218,7 @@ class Client(object):
             batch_size = self.batch_size
 
         #test_data = read_client_data(self.dataset, self.ID, self.current_update, is_train=False)
-        testing_dataset_obj = CustomEMGDataset(self.cond_samples_npy[self.update_upper_bound:,:], self.cond_labels_npy[self.update_upper_bound:,:])
+        testing_dataset_obj = CustomEMGDataset(self.cond_samples_npy[self.test_split_idx:,:], self.cond_labels_npy[self.test_split_idx:,:])
         X_data = torch.Tensor(testing_dataset_obj['x']).type(torch.float32)
         y_data = torch.Tensor(testing_dataset_obj['y']).type(torch.float32)
         testing_data_for_dataloader = [(x, y) for x, y in zip(X_data, y_data)]
@@ -257,6 +260,7 @@ class Client(object):
 
         running_test_loss = 0
         num_samples = 0
+        print(f'cb Client{self.ID} test_metrics()')
         with torch.no_grad():
             for i, (x, y) in enumerate(testloaderfull):
                 if type(x) == type([]):
@@ -271,8 +275,8 @@ class Client(object):
                     loss = loss[0]
                 test_loss = loss.item()  # Just get the actual loss function term
                 running_test_loss += test_loss
-                if self.verbose:
-                    print(f"clientbase test_metrics() batch: {i}, loss: {test_loss:0,.1f}")
+                #if self.verbose:
+                print(f"batch {i}, loss {test_loss:0,.2f}")
                 num_samples += x.size()[0]
             
         return running_test_loss, num_samples
@@ -287,11 +291,13 @@ class Client(object):
         trainloader = self.load_train_data()
         # self.model = self.load_model('model')
         # self.model.to(self.device)
+        #self.simulate_data_streaming(trainloader)  # ... idk if i need to be doing this ... hmmm
         self.model.eval()
 
         train_num = 0
         losses = 0
         counter = 0
+        print(f'cb Client{self.ID} train_metrics()')
         with torch.no_grad():
             for x, y in trainloader:
                 counter += 1
@@ -304,8 +310,8 @@ class Client(object):
                 loss = self.loss(output, y, self.model)
                 if self.return_cost_func_comps:
                     loss = loss[0]
-                if self.verbose:
-                    print(f"Client{self.ID} train_metrics() batch: {counter}, loss: {loss:0,.1f}")
+                #if self.verbose:
+                print(f"batch {counter}, loss {loss:0,.2f}")
                 train_num += y.shape[0]  # Why is this y.shape and not x.shape?... I guess they are the same row dims?
                 # Why are they multiplying by y.shape[0] here...
                 losses += loss.item() #* y.shape[0]
@@ -345,50 +351,3 @@ class Client(object):
             item_path = self.save_folder_name
         return torch.load(os.path.join(item_path, "client_" + str(self.ID) + "_" + item_name + ".pt"))
     
-    
-    ##############################################################################
-    def test_metrics_archive(self):
-        testloaderfull = self.load_test_data()
-        # self.model = self.load_model('model')
-        # self.model.to(self.device)
-        self.model.eval()
-
-        test_acc = 0
-        test_num = 0
-        y_prob = []
-        y_true = []
-        
-        with torch.no_grad():
-            for x, y in testloaderfull:
-                if type(x) == type([]):
-                    x[0] = x[0].to(self.device)
-                else:
-                    x = x.to(self.device)
-                y = y.to(self.device)
-                output = self.model(x)
-
-                test_acc += (torch.sum(torch.argmax(output, dim=1) == y)).item()
-                test_num += y.shape[0]
-
-                y_prob.append(output.detach().cpu().numpy())
-                nc = self.num_classes
-                if self.num_classes == 2:
-                    nc += 1
-                lb = label_binarize(y.detach().cpu().numpy(), classes=np.arange(nc))
-                if self.num_classes == 2:
-                    lb = lb[:, :2]
-                y_true.append(lb)
-
-        # self.model.cpu()
-        # self.save_model(self.model, 'model')
-
-        y_prob = np.concatenate(y_prob, axis=0)
-        y_true = np.concatenate(y_true, axis=0)
-
-        auc = metrics.roc_auc_score(y_true, y_prob, average='micro')
-        
-        return test_acc, test_num, auc
-
-    # @staticmethod
-    # def model_exists():
-    #     return os.path.exists(os.path.join("models", "server" + ".pt"))

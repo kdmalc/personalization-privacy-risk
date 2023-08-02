@@ -230,14 +230,24 @@ class Server(object):
                 if save_cost_func_comps:
                     print("cost_func_comps_log")
                     print(self.cost_func_comps_log)
-                    hf.create_dataset('cost_func_comps_log', data=self.cost_func_comps_log)
+                    print()
                     #hf.create_dataset('cost_func_comps_dict', data=self.cost_func_comps_dict)
-                print()
-                print(self.gradient_norm_log)
-                print()
+                    #hf.create_dataset('cost_func_comps_log', data=self.cost_func_comps_log)
+                    G1 = hf.create_group('cost_func_tuples_by_client')
+                    for idx, cost_func_comps in enumerate(self.cost_func_comps_log):
+                        name_str = 'ClientID' + str(idx)
+                        G1.create_dataset(name_str, data=cost_func_comps)
+                
                 if save_gradient:
-                    hf.create_dataset('gradient_norm_log', data=self.gradient_norm_log)
+                    print('gradient_norm_log')
+                    print(self.gradient_norm_log)
+                    print()
                     #hf.create_dataset('gradient_dict', data=self.gradient_dict)
+                    #hf.create_dataset('gradient_norm_log', data=self.gradient_norm_log)
+                    G2 = hf.create_group('gradient_norm_lists_by_client')
+                    for idx, grad_norm_list in enumerate(self.gradient_norm_log):
+                        name_str = 'ClientID' + str(idx)
+                        G2.create_dataset(name_str, data=grad_norm_list)
 
     def save_item(self, item, item_name):
         if not os.path.exists(self.save_folder_name):

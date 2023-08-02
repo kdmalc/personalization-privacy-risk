@@ -29,10 +29,10 @@ class clientAVG(Client):
         #    max_local_steps = np.random.randint(1, max_local_steps // 2)
 
         # WHICH OF THESE LOOPS IS EQUIVALENT TO MY EPOCHS...
+        print(f'Client{self.ID} Training')
         running_num_samples = 0
         for step in range(max_local_steps):  # I'm assuming this is gradient steps?... are local epochs the same as gd steps?
             for i, (x, y) in enumerate(trainloader):  # This is all the data in a given batch, I think? Can I just kill this... PITA
-                print(f"Step {step}, pair {i} in traindl: x.size(): {x.size()}")
                 if type(x) == type([]):
                     x[0] = x[0].to(self.device)
                 else:
@@ -61,12 +61,12 @@ class clientAVG(Client):
                         print("CLIENTAVG: User Effort term is None...")
                         t3 = -1
                     self.cost_func_comps_log.append((t1, t2, t3))
-                # I think loss.grad is always none (gradient is wrt the loss, loss is a leaf)
-                #if loss.grad==None:
-                #    #self.gradient_norm_log.append(loss.grad)#.detach().numpy())
-                #    pass
-                #else:
-                #    print("Gradient is not none!")
+                print(f"Step {step}, pair {i} in traindl; x.size(): {x.size()}; loss: {loss.item():0.2f}")
+                self.loss_log.append(loss.item())
+                #self.running_epoch_loss.append(loss.item() * x.size(0))  # From: running_epoch_loss.append(loss.item() * images.size(0))
+                running_num_samples += x.size(0)
+                self.optimizer.zero_grad()
+                loss.backward()
                 # Gradient norm
                 weight_grad = self.model.weight.grad
                 if weight_grad == None:
@@ -76,11 +76,6 @@ class clientAVG(Client):
                     #grad_norm = torch.linalg.norm(self.model.weight.grad, ord='fro')
                     grad_norm = np.linalg.norm(self.model.weight.grad.detach().numpy())
                     self.gradient_norm_log.append(grad_norm)
-                self.loss_log.append(loss.item())
-                #self.running_epoch_loss.append(loss.item() * x.size(0))  # From: running_epoch_loss.append(loss.item() * images.size(0))
-                running_num_samples += x.size(0)
-                self.optimizer.zero_grad()
-                loss.backward()
                 self.optimizer.step()
         #epoch_loss = self.running_epoch_loss / len(trainloader['train'])  # From: epoch_loss = running_epoch_loss / len(dataloaders['train'])
         #self.loss_log.append(epoch_loss)  
