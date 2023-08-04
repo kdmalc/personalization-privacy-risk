@@ -40,8 +40,34 @@ class clientAVG(Client):
                 y = y.to(self.device)
                 #if self.train_slow:
                 #    time.sleep(0.1 * np.abs(np.random.rand()))
+                
+                # Put/call def simulate_data_stream here?
+                '''
+                '''
+                
                 output = self.model(x)
-                #print(f"clientAVG ----> Training LOSS {i}")  # What is this even tellimg me lol
+                
+                
+                # This is the version that is in full_train_linregr_updates() which actually works
+                '''
+                y_pred = self.model(x)
+                # I don't think CPHSLoss2 even needs the lambdas...
+                loss_func = CPHSLoss2(lambdaF=self.lambdaF, lambdaD=self.lambdaD, lambdaE=self.lambdaE)
+                if y_pred.shape[0]!=y.shape[0]:
+                    ty_pred = torch.transpose(y_pred, 0, 1)
+                else:
+                    ty_pred = y_pred
+                t2_dec_regularizer = lambdasFDE[1]*(torch.linalg.matrix_norm((D))**2)
+                t3_user_regularizer = self.lambdaF*(torch.linalg.matrix_norm((emg_streamed_batch))**2)
+                loss = loss_func(ty_pred, y) + t2_dec_regularizer + t3_user_regularizer
+                # backward pass
+                loss.backward(retain_graph=True)
+                loss_log.append(loss.item())
+                # update weights
+                optimizer.step()
+                '''
+                
+
                 loss = self.loss(output, y, self.model)
                 if self.return_cost_func_comps:
                     self.cost_func_comps_log.append(loss[1:])

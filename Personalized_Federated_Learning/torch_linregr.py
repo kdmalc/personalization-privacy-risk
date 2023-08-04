@@ -120,7 +120,7 @@ def full_train_linregr_updates(model, full_trial_input_data, full_trial_labels, 
             if return_cost_func_comps:
                 #D = D.view(Nd, Ne)  #np.reshape(D,(Nd,Ne))             
                 ETerm_log.append(lambdasFDE[2]*(torch.linalg.matrix_norm((torch.matmul(model.weight, emg_streamed_batch) - V[:,1:]))**2))
-                DTerm_log.append(lambdasFDE[1]*(torch.linalg.matrix_norm((model.weight)**2)))
+                DTerm_log.append(lambdasFDE[1]*(torch.linalg.matrix_norm((model.weight))**2))
             # backward pass
             loss.backward(retain_graph=True)
             loss_log.append(loss.item())

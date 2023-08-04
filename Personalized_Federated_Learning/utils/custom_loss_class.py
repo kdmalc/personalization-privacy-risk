@@ -53,7 +53,7 @@ class CPHSLoss(torch.nn.modules.loss._Loss):
         Vplus = self.V[:,1:]
         
         # Performance
-        self.term1_error = self.lambdaE*(torch.linalg.matrix_norm(outputs[:,:-1] - Vplus)**2)
+        self.term1_error = self.lambdaE*(torch.linalg.matrix_norm((outputs[:,:-1] - Vplus))**2)
         # D Norm
         self.term2_ld_decnorm = self.lambdaD*(torch.linalg.matrix_norm(my_model.weight)**2)
         # F Norm

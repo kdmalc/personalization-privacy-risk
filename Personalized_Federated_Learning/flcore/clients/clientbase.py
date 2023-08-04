@@ -111,8 +111,13 @@ class Client(object):
         s0 = it.__next__()
         # self.max_training_update_upbound
         # I think this is wrong, implies it never advances the update? Didnt I handle that somewhere else tho...
-        s_temp = s0[0][0:self.update_ix[1],:]
-        p_reference = torch.transpose(s0[1][0:self.update_ix[1],:], 0, 1)
+        # Uhhh this is super wrong, should only be testing one update at a time???
+        #s_temp = s0[0][0:self.update_ix[1],:]
+        #p_reference = torch.transpose(s0[1][0:self.update_ix[1],:], 0, 1)
+        lb = self.update_ix[self.current_update]
+        ub = self.update_ix[self.current_update+1]
+        s_temp = s0[0][lb:ub,:]
+        p_reference = torch.transpose(s0[1][lb:ub,:], 0, 1)
 
         # First, normalize the entire s matrix
         if self.normalize_emg:
