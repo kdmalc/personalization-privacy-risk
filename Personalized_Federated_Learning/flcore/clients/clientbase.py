@@ -67,8 +67,7 @@ class Client(object):
         self.lambdaE = args.lambdaE
         self.current_update = args.starting_update
         self.dt = args.dt
-        self.normalize_emg = args.normalize_emg
-        self.normalize_V = args.normalize_V
+        self.normalize_data = args.normalize_data
         self.local_round = 0
         self.last_global_round = 0
         self.local_round_threshold = args.local_round_threshold
@@ -82,11 +81,12 @@ class Client(object):
         self.return_cost_func_comps = args.return_cost_func_comps
 
         # Before this I need to run the INIT update segmentation code...
-        init_dl = self.load_train_data()
-        self.simulate_data_streaming(init_dl)
+        #init_dl = self.load_train_data()
+        #self.simulate_data_streaming(init_dl)
         # ^ This func sets F, V, etc
         
-        self.loss = CPHSLoss(self.F, self.model.weight, self.V, self.F.size()[1], lambdaF=self.lambdaF, lambdaD=self.lambdaD, lambdaE=self.lambdaE, Nd=2, Ne=self.pca_channels, return_cost_func_comps=self.return_cost_func_comps)
+        #self.loss = CPHSLoss(self.F, self.model.weight, self.V, self.F.size()[1], lambdaF=self.lambdaF, lambdaD=self.lambdaD, lambdaE=self.lambdaE, Nd=2, Ne=self.pca_channels, return_cost_func_comps=self.return_cost_func_comps)
+        self.loss_func = CPHSLoss2(lambdaF=self.lambdaF, lambdaD=self.lambdaD, lambdaE=self.lambdaE)
         self.loss_log = []
         self.cost_func_comps_log = []
         self.gradient_norm_log = []
@@ -109,24 +109,21 @@ class Client(object):
         Not sure what purpose this serves anymore...'''
         it = iter(dl)
         s0 = it.__next__()
-        # self.max_training_update_upbound
-        # I think this is wrong, implies it never advances the update? Didnt I handle that somewhere else tho...
-        # Uhhh this is super wrong, should only be testing one update at a time???
-        #s_temp = s0[0][0:self.update_ix[1],:]
-        #p_reference = torch.transpose(s0[1][0:self.update_ix[1],:], 0, 1)
         lb = self.update_ix[self.current_update]
         ub = self.update_ix[self.current_update+1]
         s_temp = s0[0][lb:ub,:]
         p_reference = torch.transpose(s0[1][lb:ub,:], 0, 1)
 
-        # First, normalize the entire s matrix
-        if self.normalize_emg:
-            s_normed = s_temp / torch.linalg.norm(s_temp, ord='fro')
-            assert (torch.linalg.norm(s_normed, ord='fro')<1.2) and (torch.linalg.norm(s_normed, ord='fro')>0.8)
+        # First, normalize the entire input data
+        if self.normalize_data:
+            s_normed = s_temp / torch.linalg.norm(s_temp)
+            assert (torch.linalg.norm(s_normed)<1.2) and (torch.linalg.norm(s_normed)>0.8)
+            p_reference = p_reference/torch.linalg.norm(p_reference)
+            assert (torch.linalg.norm(p_reference)<1.2) and (torch.linalg.norm(p_reference)>0.8)
         else:
             s_normed = s_temp
         # Apply PCA if applicable
-        if self.pca_channels!=self.device_channels:  # 64 is the number of channels present on the recording armband
+        if self.pca_channels!=self.device_channels:
             pca = PCA(n_components=self.pca_channels)
             s = torch.transpose(torch.tensor(pca.fit_transform(s_normed), dtype=torch.float32), 0, 1)
         else:
@@ -134,12 +131,42 @@ class Client(object):
 
         self.F = s[:,:-1]
         v_actual =  torch.matmul(self.model.weight, s)
-        p_actual = torch.cumsum(v_actual, dim=1)*self.dt  # Numerical integration of v_actual to get p_actual
-        self.V = (p_reference - p_actual)*self.dt
-        if self.normalize_V:
-            self.V = self.V/torch.linalg.norm(self.V, ord='fro')
-            assert (torch.linalg.norm(self.V, ord='fro')<1.2) and (torch.linalg.norm(self.V, ord='fro')>0.8)
-        self.Y = p_reference[:, :-1]  # To match the input
+        #p_actual = torch.cumsum(v_actual, dim=1)*self.dt  # Numerical integration of v_actual to get p_actual
+        #self.V = (p_reference - p_actual)*self.dt  # I don't actually use V...
+        self.y_ref = p_reference[:, :-1]  # To match the input
+        
+    
+    def simulate_data_streaming_xy(self, x, y, test_data=False):
+        '''This function sets F and V which appear in the cost function. Not clear how this is needed in the current iteration.
+        Specifically: the loss function is its own class/object so it doesn't have access to these (F and V)
+        Furthermore using F and V can be entirely avoided on the basis of model.output
+        - V is set by passing in the labels, and F is multipled by 0 (lambdaF)
+        Not sure what purpose this serves anymore...'''
+        lb = self.update_ix[self.current_update]
+        ub = self.update_ix[self.current_update+1]
+        s_temp = x[lb:ub,:]
+        p_reference = torch.transpose(y[lb:ub,:], 0, 1)
+
+        # First, normalize the entire input data
+        if self.normalize_data:
+            s_normed = s_temp / torch.linalg.norm(s_temp)
+            assert (torch.linalg.norm(s_normed)<1.2) and (torch.linalg.norm(s_normed)>0.8)
+            p_reference = p_reference/torch.linalg.norm(p_reference)
+            assert (torch.linalg.norm(p_reference)<1.2) and (torch.linalg.norm(p_reference)>0.8)
+        else:
+            s_normed = s_temp
+        # Apply PCA if applicable
+        if self.pca_channels!=self.device_channels:
+            pca = PCA(n_components=self.pca_channels)
+            s = torch.transpose(torch.tensor(pca.fit_transform(s_normed), dtype=torch.float32), 0, 1)
+        else:
+            s = torch.transpose(s_normed, 0, 1)
+
+        self.F = s[:,:-1]
+        v_actual =  torch.matmul(self.model.weight, s)
+        #p_actual = torch.cumsum(v_actual, dim=1)*self.dt  # Numerical integration of v_actual to get p_actual
+        #self.V = (p_reference - p_actual)*self.dt  # I don't actually use V...
+        self.y_ref = p_reference[:, :-1]  # To match the input
 
 
     def _load_train_data(self):

@@ -32,77 +32,67 @@ class clientAVG(Client):
         print(f'Client{self.ID} Training')
         running_num_samples = 0
         for step in range(max_local_steps):  # I'm assuming this is gradient steps?... are local epochs the same as gd steps?
-            for i, (x, y) in enumerate(trainloader):  # This is all the data in a given batch, I think? Can I just kill this... PITA
-                if type(x) == type([]):
-                    x[0] = x[0].to(self.device)
-                else:
-                    x = x.to(self.device)
-                y = y.to(self.device)
+            for i, (x, y) in enumerate(trainloader):  # i currently have it set such that each tl only has 1 batch of 1200 (8/5/23)
+                # Put/call def simulate_data_stream here?
+                self.simulate_data_streaming_xy(x, y)
+
+                # Idk if this needs to happen if I'm just running it on cpu...
+                # ^ If so it would need to happen in simulate data
+                #if type(x) == type([]):
+                #    x[0] = x[0].to(self.device)
+                #else:
+                #    x = x.to(self.device)
+                #y = y.to(self.device)
                 #if self.train_slow:
                 #    time.sleep(0.1 * np.abs(np.random.rand()))
                 
-                # Put/call def simulate_data_stream here?
-                '''
-                '''
+                # reset gradient so it doesn't accumulate
+                optimizer.zero_grad()
+                # forward pass and loss
+                # D@s = predicted velocity
+                vel_pred = self.model(torch.transpose(self.F, 0, 1)) 
                 
-                output = self.model(x)
-                
-                
-                # This is the version that is in full_train_linregr_updates() which actually works
-                '''
-                y_pred = self.model(x)
-                # I don't think CPHSLoss2 even needs the lambdas...
-                loss_func = CPHSLoss2(lambdaF=self.lambdaF, lambdaD=self.lambdaD, lambdaE=self.lambdaE)
-                if y_pred.shape[0]!=y.shape[0]:
-                    ty_pred = torch.transpose(y_pred, 0, 1)
+                if vel_pred.shape[0]!=self.y_ref.shape[0]:
+                    tvel_pred = torch.transpose(vel_pred, 0, 1)
                 else:
-                    ty_pred = y_pred
-                t2_dec_regularizer = lambdasFDE[1]*(torch.linalg.matrix_norm((D))**2)
-                t3_user_regularizer = self.lambdaF*(torch.linalg.matrix_norm((emg_streamed_batch))**2)
-                loss = loss_func(ty_pred, y) + t2_dec_regularizer + t3_user_regularizer
-                # backward pass
-                loss.backward(retain_graph=True)
-                loss_log.append(loss.item())
-                # update weights
-                optimizer.step()
-                '''
+                    tvel_pred = y_prvel_preded
+                t1 = loss_func(tvel_pred, self.y_ref)
+                t2 = self.lambdaD*(torch.linalg.matrix_norm((self.model.weight))**2)
+                t3 = self.lambdaF*(torch.linalg.matrix_norm((self.F))**2)
+                if np.isnan(t1):
+                    raise ValueError("CLIENTAVG: Error term is NAN...")
+                    t1 = -1
+                if np.isnan(t2):
+                    raise ValueError("CLIENTAVG: Decoder Effort term is NAN...")
+                    t2 = -1
+                if np.isnan(t3):
+                    raise ValueError("CLIENTAVG: User Effort term is NAN...")
+                    t3 = -1
+                loss = t1 + t2 + t3
+                self.cost_func_comps_log = [(t1, t2, t3)]
                 
-
-                loss = self.loss(output, y, self.model)
-                if self.return_cost_func_comps:
-                    self.cost_func_comps_log.append(loss[1:])
-                    loss = loss[0]
-                else:
-                    # .item() ONLY WORKS WITH 1D TENSORS!!!
-                    t1 = self.loss.term1_error.item()
-                    t2 = self.loss.term2_ld_decnorm.item()
-                    t3 = self.loss.term3_lf_emgnorm.item()
-                    if np.isnan(t1):
-                        print("CLIENTAVG: Error term is None...")
-                        t1 = -1
-                    if np.isnan(t2):
-                        print("CLIENTAVG: Decoder Effort term is None...")
-                        t2 = -1
-                    if np.isnan(t3):
-                        print("CLIENTAVG: User Effort term is None...")
-                        t3 = -1
-                    self.cost_func_comps_log.append((t1, t2, t3))
-                print(f"Step {step}, pair {i} in traindl; x.size(): {x.size()}; loss: {loss.item():0.2f}")
-                self.loss_log.append(loss.item())
-                #self.running_epoch_loss.append(loss.item() * x.size(0))  # From: running_epoch_loss.append(loss.item() * images.size(0))
-                running_num_samples += x.size(0)
-                self.optimizer.zero_grad()
-                loss.backward()
+                # This would need to be changed if you switch to a sequential (not single layer) model
                 # Gradient norm
                 weight_grad = self.model.weight.grad
                 if weight_grad == None:
                     print("Weight gradient is None...")
                     self.gradient_norm_log.append(-1)
                 else:
-                    #grad_norm = torch.linalg.norm(self.model.weight.grad, ord='fro')
+                    #grad_norm = torch.linalg.norm(self.model.weight.grad, ord='fro') 
+                    # ^Equivalent to the below but its still a tensor
                     grad_norm = np.linalg.norm(self.model.weight.grad.detach().numpy())
                     self.gradient_norm_log.append(grad_norm)
-                self.optimizer.step()
+                
+                # backward pass
+                loss.backward(retain_graph=True)
+                loss_log.append(loss.item())
+                # update weights
+                optimizer.step()
+
+                print(f"Step {step}, pair {i} in traindl; x.size(): {x.size()}; loss: {loss.item():0.2f}")
+                #self.running_epoch_loss.append(loss.item() * x.size(0))  # From: running_epoch_loss.append(loss.item() * images.size(0))
+                #running_num_samples += x.size(0)
+
         #epoch_loss = self.running_epoch_loss / len(trainloader['train'])  # From: epoch_loss = running_epoch_loss / len(dataloaders['train'])
         #self.loss_log.append(epoch_loss)  
 

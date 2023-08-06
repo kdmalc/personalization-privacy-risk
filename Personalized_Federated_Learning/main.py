@@ -190,10 +190,8 @@ if __name__ == "__main__":
                         help="Number of recording channels with the used EMG device")
     parser.add_argument('-dt', "--dt", type=float, default=1/60,
                         help="Delta time, amount of time (sec?) between measurements")
-    parser.add_argument('-normalize_emg', "--normalize_emg", type=bool, default=False,
-                        help="Normalize the input EMG signals")
-    parser.add_argument('-normalize_V', "--normalize_V", type=bool, default=False,
-                        help="Normalize the V term in the cost function")
+    parser.add_argument('-normalize_data', "--normalize_data", type=bool, default=False,
+                        help="Normalize the input EMG signals and its labels. This is good practice.")
     parser.add_argument('-local_round_threshold', "--local_round_threshold", type=int, default=50,
                         help="Number of communication rounds per client until a client will advance to the next batch of streamed data")
     parser.add_argument('-debug_mode', "--debug_mode", type=bool, default=False,
@@ -263,8 +261,7 @@ if __name__ == "__main__":
     print("Testing split: {}".format(args.test_split_fraction))
     if args.dt!=1/60:
         print("dt: {}".format(args.dt))
-    print("Normalize EMG input: {}".format(args.normalize_emg))
-    print("Normalize V term: {}".format(args.normalize_V))
+    print("Normalize data: {}".format(args.normalize_data))
     print("Local round threshold: {}".format(args.local_round_threshold))
     print("In Debug Mode: {}".format(args.debug_mode))
     
