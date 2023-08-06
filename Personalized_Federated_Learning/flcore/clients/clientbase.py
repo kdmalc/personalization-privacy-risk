@@ -14,7 +14,8 @@ from sklearn import metrics
 from sklearn.decomposition import PCA
 
 #from flcore.pflniid_utils.data_utils import read_client_data
-from utils.custom_loss_class import CPHSLoss
+#from utils.custom_loss_class import CPHSLoss
+from utils.custom_loss_class2 import CPHSLoss2
 from utils.emg_dataset_class import *
 
 
@@ -301,7 +302,7 @@ class Client(object):
                     x = x.to(self.device)
                 y = y.to(self.device)
                 output = self.model(x)
-                loss = self.loss(output, y, self.model)
+                loss = self.loss_func(output, y)
                 # I don't think I do anything with the cost func comps here regardless...
                 if self.return_cost_func_comps:
                     loss = loss[0]
@@ -339,7 +340,7 @@ class Client(object):
                     x = x.to(self.device)
                 y = y.to(self.device)
                 output = self.model(x)
-                loss = self.loss(output, y, self.model)
+                loss = self.loss_func(output, y)
                 if self.return_cost_func_comps:
                     loss = loss[0]
                 #if self.verbose:

@@ -47,7 +47,7 @@ class clientAVG(Client):
                 #    time.sleep(0.1 * np.abs(np.random.rand()))
                 
                 # reset gradient so it doesn't accumulate
-                optimizer.zero_grad()
+                self.optimizer.zero_grad()
                 # forward pass and loss
                 # D@s = predicted velocity
                 vel_pred = self.model(torch.transpose(self.F, 0, 1)) 
@@ -55,22 +55,26 @@ class clientAVG(Client):
                 if vel_pred.shape[0]!=self.y_ref.shape[0]:
                     tvel_pred = torch.transpose(vel_pred, 0, 1)
                 else:
-                    tvel_pred = y_prvel_preded
-                t1 = loss_func(tvel_pred, self.y_ref)
+                    tvel_pred = vel_pred
+                t1 = self.loss_func(tvel_pred, self.y_ref)
                 t2 = self.lambdaD*(torch.linalg.matrix_norm((self.model.weight))**2)
                 t3 = self.lambdaF*(torch.linalg.matrix_norm((self.F))**2)
-                if np.isnan(t1):
+                #detach().numpy()
+                if np.isnan(t1.item()):
                     raise ValueError("CLIENTAVG: Error term is NAN...")
-                    t1 = -1
-                if np.isnan(t2):
+                if np.isnan(t2.item()):
                     raise ValueError("CLIENTAVG: Decoder Effort term is NAN...")
-                    t2 = -1
-                if np.isnan(t3):
+                if np.isnan(t3.item()):
                     raise ValueError("CLIENTAVG: User Effort term is NAN...")
-                    t3 = -1
                 loss = t1 + t2 + t3
-                self.cost_func_comps_log = [(t1, t2, t3)]
+                self.cost_func_comps_log = [(t1.item(), t2.item(), t3.item())]
                 
+                # backward pass
+                loss.backward(retain_graph=True)
+                self.loss_log.append(loss.item())
+                # update weights
+                self.optimizer.step()
+
                 # This would need to be changed if you switch to a sequential (not single layer) model
                 # Gradient norm
                 weight_grad = self.model.weight.grad
@@ -82,12 +86,6 @@ class clientAVG(Client):
                     # ^Equivalent to the below but its still a tensor
                     grad_norm = np.linalg.norm(self.model.weight.grad.detach().numpy())
                     self.gradient_norm_log.append(grad_norm)
-                
-                # backward pass
-                loss.backward(retain_graph=True)
-                loss_log.append(loss.item())
-                # update weights
-                optimizer.step()
 
                 print(f"Step {step}, pair {i} in traindl; x.size(): {x.size()}; loss: {loss.item():0.2f}")
                 #self.running_epoch_loss.append(loss.item() * x.size(0))  # From: running_epoch_loss.append(loss.item() * images.size(0))
