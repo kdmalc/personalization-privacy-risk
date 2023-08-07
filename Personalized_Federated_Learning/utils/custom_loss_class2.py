@@ -24,18 +24,15 @@ class CPHSLoss2(torch.nn.modules.loss._Loss):
         p_reference = torch.transpose(targets, 0, 1)
         p_actual = torch.cumsum(outputs, dim=1)*self.dt  # Numerical integration of v_actual to get p_actual
         self.V = (p_reference - p_actual)*self.dt
-        if self.normalize_V:
-            self.V = self.V/torch.linalg.norm(self.V, ord='fro')
-            assert (torch.linalg.norm(self.V, ord='fro')<1.2) and (torch.linalg.norm(self.V, ord='fro')>0.8)
         Vplus = self.V[:,1:]
         # Performance
         return self.lambdaE*(torch.linalg.matrix_norm(outputs[:,:-1] - Vplus)**2)
       
         
-    def update_FDV(self, F, D, V, learning_batch):
+    def update_FDV(self, F, D, V):
         print("update_FDV")
         self.F = F  # This isn't used currently
-        self.D = D.detach().clone()  # Why... detach().clone()?
-        self.V = V  # This doens't really need to be updated since it gets calculated but whatever
-        self.learning_batch = learning_batch
+        self.D = D  # Why was I using detach().clone() here on D?
+        self.V = V  
+        self.learning_batch = self.F.shape[0] # Idk if things need to be transposed or what... maybe it should be [1]
        

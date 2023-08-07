@@ -6,15 +6,10 @@ import torch.nn as nn
 import numpy as np
 import random
 import os
-import torch.nn.functional as F
 from torch.utils.data import DataLoader
-from sklearn.preprocessing import label_binarize
-from sklearn import metrics
 
 from sklearn.decomposition import PCA
-
-#from flcore.pflniid_utils.data_utils import read_client_data
-#from utils.custom_loss_class import CPHSLoss
+from  utils.processing_funcs import normalize_2D_tensor
 from utils.custom_loss_class2 import CPHSLoss2
 from utils.emg_dataset_class import *
 
@@ -101,62 +96,36 @@ class Client(object):
         )
         self.learning_rate_decay = args.learning_rate_decay
         
-        
-    def simulate_data_streaming(self, dl, test_data=False):
-        '''This function sets F and V which appear in the cost function. Not clear how this is needed in the current iteration.
-        Specifically: the loss function is its own class/object so it doesn't have access to these (F and V)
-        Furthermore using F and V can be entirely avoided on the basis of model.output
-        - V is set by passing in the labels, and F is multipled by 0 (lambdaF)
-        Not sure what purpose this serves anymore...'''
-        it = iter(dl)
-        s0 = it.__next__()
-        lb = self.update_ix[self.current_update]
-        ub = self.update_ix[self.current_update+1]
-        s_temp = s0[0][lb:ub,:]
-        p_reference = torch.transpose(s0[1][lb:ub,:], 0, 1)
-
-        # First, normalize the entire input data
-        if self.normalize_data:
-            s_normed = s_temp / torch.linalg.norm(s_temp)
-            assert (torch.linalg.norm(s_normed)<1.2) and (torch.linalg.norm(s_normed)>0.8)
-            p_reference = p_reference/torch.linalg.norm(p_reference)
-            assert (torch.linalg.norm(p_reference)<1.2) and (torch.linalg.norm(p_reference)>0.8)
-        else:
-            s_normed = s_temp
-        # Apply PCA if applicable
-        if self.pca_channels!=self.device_channels:
-            pca = PCA(n_components=self.pca_channels)
-            s = torch.transpose(torch.tensor(pca.fit_transform(s_normed), dtype=torch.float32), 0, 1)
-        else:
-            s = torch.transpose(s_normed, 0, 1)
-
-        self.F = s[:,:-1]
-        v_actual =  torch.matmul(self.model.weight, s)
-        #p_actual = torch.cumsum(v_actual, dim=1)*self.dt  # Numerical integration of v_actual to get p_actual
-        #self.V = (p_reference - p_actual)*self.dt  # I don't actually use V...
-        self.y_ref = p_reference[:, :-1]  # To match the input
-        
     
     def simulate_data_streaming_xy(self, x, y, test_data=False):
-        '''This function sets F and V which appear in the cost function. Not clear how this is needed in the current iteration.
+        '''
+        This function sets F (transformed input data) and V (Vplus used in cost func)
         Specifically: the loss function is its own class/object so it doesn't have access to these (F and V)
-        Furthermore using F and V can be entirely avoided on the basis of model.output
-        - V is set by passing in the labels, and F is multipled by 0 (lambdaF)
-        Not sure what purpose this serves anymore...'''
-        lb = self.update_ix[self.current_update]
-        ub = self.update_ix[self.current_update+1]
-        s_temp = x[lb:ub,:]
-        p_reference = torch.transpose(y[lb:ub,:], 0, 1)
+        I no longer believe using F and V can be entirely avoided on the basis of model.output
+        '''
+        #lb = self.update_ix[self.current_update]
+        #ub = self.update_ix[self.current_update+1]
+        s_temp = x  #x[lb:ub,:]
+        p_reference = torch.transpose(y, 0, 1)  #torch.transpose(y[lb:ub,:], 0, 1)
 
         # First, normalize the entire input data
         if self.normalize_data:
-            s_normed = s_temp / torch.linalg.norm(s_temp)
-            assert (torch.linalg.norm(s_normed)<1.2) and (torch.linalg.norm(s_normed)>0.8)
-            p_reference = p_reference/torch.linalg.norm(p_reference)
-            assert (torch.linalg.norm(p_reference)<1.2) and (torch.linalg.norm(p_reference)>0.8)
+            # This is really scaling not norming
+            s_normed = normalize_2D_tensor(s_temp)
+            p_reference = normalize_2D_tensor(p_reference)
+
+            # This code started returning norms that were < 0.0001 for some reason
+            #s_normed = s_temp / torch.linalg.norm(s_temp)
+            #assert (torch.linalg.norm(s_normed)<1.2) and (torch.linalg.norm(s_normed)>0.8)
+            #p_reference = p_reference/torch.linalg.norm(p_reference)
+            #assert (torch.linalg.norm(p_reference)<1.2) and (torch.linalg.norm(p_reference)>0.8)
+            #print(f"s_norm = {torch.linalg.norm(s_normed):0.3f}; p_ref norm = {torch.linalg.norm(p_reference):0.3f}")
+            # ^ I don't care about norms when scaling, actually. The code in this block was "norming" to be 1, idk why that wasn't working
         else:
             s_normed = s_temp
         # Apply PCA if applicable
+        ## Should I also normalize the output of PCA? I want the inputs and labels to be on the same scale/range... 
+        ### Does that need to be true after every transformation? Probably not...
         if self.pca_channels!=self.device_channels:
             pca = PCA(n_components=self.pca_channels)
             s = torch.transpose(torch.tensor(pca.fit_transform(s_normed), dtype=torch.float32), 0, 1)
@@ -165,12 +134,19 @@ class Client(object):
 
         self.F = s[:,:-1]
         v_actual =  torch.matmul(self.model.weight, s)
-        #p_actual = torch.cumsum(v_actual, dim=1)*self.dt  # Numerical integration of v_actual to get p_actual
-        #self.V = (p_reference - p_actual)*self.dt  # I don't actually use V...
+        p_actual = torch.cumsum(v_actual, dim=1)*self.dt  # Numerical integration of v_actual to get p_actual
+        self.V = (p_reference - p_actual)*self.dt  # I don't actually use V...
         self.y_ref = p_reference[:, :-1]  # To match the input
 
 
     def _load_train_data(self):
+        '''
+        This function actually loads the numpy data in, giving client access to its data (self variable). 
+        This should only be run once on startup (or when round=0).
+        Also does train/test split (default is holding out the last few updates)
+        DOES NOT set/make a train-/data-loader
+        '''
+
         if self.verbose:
             print(f"Client{self.ID} loading data file in [SHOULD ONLY RUN ONCE PER CLIENT]")
         # Load in client's data
@@ -198,37 +174,37 @@ class Client(object):
         # Set the number of examples (used to be done on init) --> ... THIS IS ABOUT TRAIN/TEST SPLIT
         self.train_samples = testsplit_upper_bound
         self.test_samples = self.cond_samples_npy.shape[0] - testsplit_upper_bound
-        # The below gets stuck in the debugger and just keeps running until you step over
         train_test_update_number_split = min(self.update_ix, key=lambda x:abs(x-testsplit_upper_bound))
         self.max_training_update_upbound = self.update_ix.index(train_test_update_number_split)
         self.test_split_idx = self.update_ix[self.max_training_update_upbound]
         
 
-    def load_train_data(self, batch_size=None):
+    def load_train_data(self, batch_size=None, eval=False):
         # Load full client dataasets
         if self.local_round == 0:
             self._load_train_data()   # Returns nothing, sets self variables
         # Do I really want this here...
-        self.local_round += 1
-        # Check if you need to advance the update
-        # ---> THIS IMPLIES THAT I AM CREATING A NEW TRAINING LOADER FOR EACH UPDATE... this is what I want actually I think
-        if (self.local_round>1) and (self.current_update < 16) and (self.local_round%self.local_round_threshold==0):
-            self.current_update += 1
-            print(f"Client{self.ID} advances to update {self.current_update}")
-        # Slice the full client dataset based on the current update number
-        if self.current_update < self.max_training_update_upbound:
-            self.update_lower_bound = self.update_ix[self.current_update]
-            self.update_upper_bound = self.update_ix[self.current_update+1]
-        else:
-            self.update_lower_bound = self.max_training_update_upbound - 1
-            self.update_upper_bound = self.max_training_update_upbound
+        if eval==False:
+            self.local_round += 1
+            # Check if you need to advance the update
+            # ---> THIS IMPLIES THAT I AM CREATING A NEW TRAINING LOADER FOR EACH UPDATE... this is what I want actually I think
+            if (self.local_round>1) and (self.current_update < 16) and (self.local_round%self.local_round_threshold==0):
+                self.current_update += 1
+                print(f"Client{self.ID} advances to update {self.current_update} on local round {self.local_round}")
+            # Slice the full client dataset based on the current update number
+            if self.current_update < self.max_training_update_upbound:
+                self.update_lower_bound = self.update_ix[self.current_update]
+                self.update_upper_bound = self.update_ix[self.current_update+1]
+            else:
+                self.update_lower_bound = self.max_training_update_upbound - 1
+                self.update_upper_bound = self.max_training_update_upbound
         # Set the Dataset Obj
         # Uhhhh is this creating a new one each time? As long as its not re-reading in the data it probably doesn't matter...
         #train_data = read_client_data(self.dataset, self.ID, self.current_update, is_train=True)  # Original code
         #CustomEMGDataset(emgs_block1[my_user][condition_idx,update_lower_bound:update_upper_bound,:], refs_block1[my_user][condition_idx,update_lower_bound:update_upper_bound,:])
         training_dataset_obj = CustomEMGDataset(self.cond_samples_npy[self.update_lower_bound:self.update_upper_bound,:], self.cond_labels_npy[self.update_lower_bound:self.update_upper_bound,:])
-        X_data = torch.Tensor(training_dataset_obj['x']).type(torch.float32)
-        y_data = torch.Tensor(training_dataset_obj['y']).type(torch.float32)
+        X_data = torch.tensor(training_dataset_obj['x'], dtype=torch.float32)
+        y_data = torch.tensor(training_dataset_obj['y'], dtype=torch.float32)
         training_data_for_dataloader = [(x, y) for x, y in zip(X_data, y_data)]
         
         if self.verbose:
@@ -293,7 +269,8 @@ class Client(object):
 
         running_test_loss = 0
         num_samples = 0
-        print(f'cb Client{self.ID} test_metrics()')
+        if self.verbose:
+            print(f'cb Client{self.ID} test_metrics()')
         with torch.no_grad():
             for i, (x, y) in enumerate(testloaderfull):
                 if type(x) == type([]):
@@ -308,8 +285,8 @@ class Client(object):
                     loss = loss[0]
                 test_loss = loss.item()  # Just get the actual loss function term
                 running_test_loss += test_loss
-                #if self.verbose:
-                print(f"batch {i}, loss {test_loss:0,.2f}")
+                if self.verbose:
+                    print(f"batch {i}, loss {test_loss:0,.2f}")
                 num_samples += x.size()[0]
             
         return running_test_loss, num_samples
@@ -321,7 +298,8 @@ class Client(object):
 
         if self.verbose:
             print("Client train_metrics()")
-        trainloader = self.load_train_data()
+        # ITS GOTTA BE SUPER INEFFIECIENT TO RECREATE A NEW TL FOR EACH CLIENT EACH ROUND FOR TRAIN EVAL...
+        trainloader = self.load_train_data(eval=True)
         # self.model = self.load_model('model')
         # self.model.to(self.device)
         #self.simulate_data_streaming(trainloader)  # ... idk if i need to be doing this ... hmmm
@@ -330,7 +308,8 @@ class Client(object):
         train_num = 0
         losses = 0
         counter = 0
-        print(f'cb Client{self.ID} train_metrics()')
+        if self.verbose:
+            print(f'cb Client{self.ID} train_metrics()')
         with torch.no_grad():
             for x, y in trainloader:
                 counter += 1
@@ -343,8 +322,8 @@ class Client(object):
                 loss = self.loss_func(output, y)
                 if self.return_cost_func_comps:
                     loss = loss[0]
-                #if self.verbose:
-                print(f"batch {counter}, loss {loss:0,.2f}")
+                if self.verbose:
+                    print(f"batch {counter}, loss {loss:0,.2f}")
                 train_num += y.shape[0]  # Why is this y.shape and not x.shape?... I guess they are the same row dims?
                 # Why are they multiplying by y.shape[0] here...
                 losses += loss.item() #* y.shape[0]

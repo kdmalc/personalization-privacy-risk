@@ -227,18 +227,18 @@ class Server(object):
                 hf.create_dataset('rs_test_loss', data=self.rs_test_loss)
                 hf.create_dataset('rs_train_loss', data=self.rs_train_loss)
                 if save_cost_func_comps:
-                    print("cost_func_comps_log")
-                    print(self.cost_func_comps_log)
-                    print()                    
+                    #print("cost_func_comps_log")
+                    #print(self.cost_func_comps_log)
+                    #print()                    
                     G1 = hf.create_group('cost_func_tuples_by_client')
                     for idx, cost_func_comps in enumerate(self.cost_func_comps_log):
                         name_str = 'ClientID' + str(idx)
                         G1.create_dataset(name_str, data=cost_func_comps)
                 
                 if save_gradient:
-                    print('gradient_norm_log')
-                    print(self.gradient_norm_log)
-                    print()
+                    #print('gradient_norm_log')
+                    #print(self.gradient_norm_log)
+                    #print()
                     G2 = hf.create_group('gradient_norm_lists_by_client')
                     for idx, grad_norm_list in enumerate(self.gradient_norm_log):
                         name_str = 'ClientID' + str(idx)
@@ -309,7 +309,6 @@ class Server(object):
             test_loss = stats[2]#*1.0  #It's already a float...
 
             if acc == None:
-                # Idk what rs is...
                 avg_test_loss = sum(test_loss)/len(test_loss)
                 self.rs_test_loss.append(avg_test_loss)
             else:
@@ -335,9 +334,6 @@ class Server(object):
 
             #assert(train_loss<1e5)
             print("Averaged Train Loss: {:.4f}".format(avg_train_loss))
-
-        # I don't think I still need this...
-        assert(type(self.rs_train_loss)==type(list()))
 
 
     def check_done(self, acc_lss, top_cnt=None, div_value=None):

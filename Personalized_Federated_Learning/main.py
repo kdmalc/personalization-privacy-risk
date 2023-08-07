@@ -44,7 +44,7 @@ def run(args):
 
         # Generate args.model
         if model_str == "LinearRegression":
-            args.model = torch.nn.Linear(args.pca_channels, 2)  #input_size, output_size
+            args.model = torch.nn.Linear(args.pca_channels, 2, args.linear_model_bias)  #input_size, output_size
         else:
             raise NotImplementedError
 
@@ -81,10 +81,21 @@ def run(args):
     print(f"\nAverage time cost: {round(np.average(time_list), 2)}s.")
       
     # Global average
-    #average_data(dataset=args.dataset, algorithm=args.algorithm, goal=args.goal, times=args.times)
-    # Idk what that is supposed to do.  Prints acc from some file.  Don't need it, acc isn't the same for my task
-    print("Server's rs_train_loss: ")
-    print(server.rs_train_loss)  # I think this is a list...
+    if args.algorithm != "Local":
+        average_data(dataset=args.dataset, algorithm=args.algorithm, goal=args.goal, times=args.times)
+
+        # Not sure what this comment went to lol
+        # Idk what that is supposed to do.  Prints acc from some file.  Don't need it, acc isn't the same for my task
+    
+    print("Server's round, rs_train_loss, rs_test_loss (averaged over clients): ")
+    #print(server.rs_train_loss)  # I think this is a list...
+    #print("Server's rs_test_loss (averaged over clients): ")
+    #print(server.rs_test_loss)
+    #assert( len(server.rs_train_loss) == len(server.rs_test_loss))
+    for i in range(len(server.rs_train_loss)):
+        print(f"Round {i}, Train Loss: {server.rs_train_loss[i]:0.2f}, Test Loss: {server.rs_test_loss[i]:0.2f}")
+        if i==(len(server.rs_train_loss)-1):
+            print(f"Final eval ({i+1}), Test Loss: {server.rs_test_loss[i+1]:0.2f}")
 
     print("All done!")
 
@@ -108,14 +119,14 @@ if __name__ == "__main__":
     #parser.add_argument('-nb', "--num_classes", type=int, default=10)  # Not doing classification...
     parser.add_argument('-m', "--model", type=str, default="LinearRegression")  # KAI: Changed the default to Linear Regression
     # I have little confidence in this batch size being correct...
-    parser.add_argument('-lbs', "--batch_size", type=int, default=1200)  # Setting it to a full update would be 1300ish... how many batches does it run? In one epoch? Not even sure where that is set
+    parser.add_argument('-lbs', "--batch_size", type=int, default=1202)  # Setting it to a full update would be 1300ish... how many batches does it run? In one epoch? Not even sure where that is set
     # The 1300 and the batch size are 2 separate things...
     # I want to restrict the given dataset to just the 1300, but then iterate in batches... or do I since we don't have that much data and can probably just use all the data at once? Make batch size match the update size? ...
-    parser.add_argument('-lr', "--local_learning_rate", type=float, default=0.005,
+    parser.add_argument('-lr', "--local_learning_rate", type=float, default=1,  #0.005
                         help="Local learning rate")
     parser.add_argument('-ld', "--learning_rate_decay", type=bool, default=False)
     parser.add_argument('-ldg', "--learning_rate_decay_gamma", type=float, default=0.99)
-    parser.add_argument('-gr', "--global_rounds", type=int, default=5)  # KAI: Switched to 5 down from 2000
+    parser.add_argument('-gr', "--global_rounds", type=int, default=100)  # KAI: Switched to 100 down from 2000
     parser.add_argument('-ls', "--local_epochs", type=int, default=1, 
                         help="Multiple update steps in one local epoch.")  # KAI: I think it was 1 originally.  I'm gonna keep it there.  Does this mean I can set batchsize to 1300 and cook? Is my setup capable or running multiple epochs? Implicitly I was doing 1 epoch before, using the full update data I believe...
     parser.add_argument('-algo', "--algorithm", type=str, default="Local") #Local #FedAvg
@@ -182,7 +193,7 @@ if __name__ == "__main__":
                         help="Penalty term for the decoder norm (interface effort)")
     parser.add_argument('-lambdaE', "--lambdaE", type=float, default=1e-4,
                         help="Penalty term on performance error norm")
-    parser.add_argument('-starting_update', "--starting_update", type=int, default=0,
+    parser.add_argument('-starting_update', "--starting_update", type=int, default=10,
                         help="Which update to start on (for CPHS Simulation). Use 0 or 10.")
     parser.add_argument('-test_split_fraction', "--test_split_fraction", type=float, default=0.2,
                         help="Fraction of data to use for testing")
@@ -190,7 +201,7 @@ if __name__ == "__main__":
                         help="Number of recording channels with the used EMG device")
     parser.add_argument('-dt', "--dt", type=float, default=1/60,
                         help="Delta time, amount of time (sec?) between measurements")
-    parser.add_argument('-normalize_data', "--normalize_data", type=bool, default=False,
+    parser.add_argument('-normalize_data', "--normalize_data", type=bool, default=True,
                         help="Normalize the input EMG signals and its labels. This is good practice.")
     parser.add_argument('-local_round_threshold', "--local_round_threshold", type=int, default=50,
                         help="Number of communication rounds per client until a client will advance to the next batch of streamed data")
@@ -204,10 +215,15 @@ if __name__ == "__main__":
                         help="Print out a bunch of extra stuff")
     parser.add_argument('-slow_clients_bool', "--slow_clients_bool", type=bool, default=False,
                         help="Control whether or not to have ANY slow clients")
-    parser.add_argument('-return_cost_func_comps', "--return_cost_func_comps", type=bool, default=False, #True
+    parser.add_argument('-return_cost_func_comps', "--return_cost_func_comps", type=bool, default=False,  # They're basically returned by default now
                         help="Return Loss, Error, DTerm, FTerm from loss class")
     parser.add_argument('-test_split_users', "--test_split_users", type=bool, default=False,
                         help="Split testing data by holding out some users (fraction held out determined by test_split_fraction)")
+    parser.add_argument('-linear_model_bias', "--linear_model_bias", type=bool, default=False,
+                        help="Boolean determining whether to use an additive bias. Note that previous 599 approach had no additive bias.")
+    # This one is not integrated yet
+    parser.add_argument('-run_train_metrics', "--run_train_metrics", type=int, default=True,
+                        help="Evaluate every client on the training data")  # I don't think this matters for local, since every client is being run anyways?
 
     args = parser.parse_args()
 

@@ -28,9 +28,6 @@ class CPHSLoss(torch.nn.modules.loss._Loss):
         p_reference = torch.transpose(targets, 0, 1)
         p_actual = torch.cumsum(outputs, dim=1)*self.dt  # Numerical integration of v_actual to get p_actual
         self.V = (p_reference - p_actual)*self.dt
-        if self.normalize_V:
-            self.V = self.V/torch.linalg.norm(self.V, ord='fro')
-            assert (torch.linalg.norm(self.V, ord='fro')<1.2) and (torch.linalg.norm(self.V, ord='fro')>0.8)
         Vplus = self.V[:,1:]
         # Performance
         return self.lambdaE*(torch.linalg.matrix_norm(outputs[:,:-1] - Vplus)**2)

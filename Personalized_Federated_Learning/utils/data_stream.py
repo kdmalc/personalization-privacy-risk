@@ -1,5 +1,6 @@
 # This is just a referene, verbatim code pulled from my fl_sim_classes
 
+'''
 def simulate_data_stream(self, streaming_method=True):
     if streaming_method:
         streaming_method = self.data_stream
@@ -128,3 +129,4 @@ def simulate_data_stream(self, streaming_method=True):
             # ^Even though it is evaluated at the mixed dec... not sure
             # For V that is used with mixed I think it should actually be mixed.  Makes more sense
             self.Vmixed = (p_reference - np.cumsum(self.mixed_w@s, axis=1)*self.dt)*self.dt
+'''

@@ -26,15 +26,13 @@ class CustomEMGDataset(torch.utils.data.Dataset):
         
         final_idx = update_ix[-2] if skip_last_update else update_ix[-1]
         # conver to torch dtypes
-        self.dataset=torch.tensor(emg_input).float()[:final_idx, :]
-        self.labels=torch.tensor(vel_labels).long()[:final_idx, :]  #.reshape(-1)
-        # reshape(-1) after vel_labels would reshape it to a 1D tensor
-        ## Used for classification but not 2D output regression
+        self.dataset = torch.tensor(emg_input, dtype=torch.float32)[:final_idx, :]
+        self.labels = torch.tensor(vel_labels, dtype=torch.float32)[:final_idx, :]
         
         # Assuming live is False... but that's a whole different refactor lol
         # Idk if I even need this actually
-        self.init_data = self.dataset[starting_update:starting_update+1, :]
-        self.init_labels = self.labels[starting_update:starting_update+1, :]
+        #self.init_data = self.dataset[starting_update:starting_update+1, :]
+        #self.init_labels = self.labels[starting_update:starting_update+1, :]
     
     # This returns the total amount of samples in your Dataset
     def __len__(self):
@@ -46,9 +44,9 @@ class CustomEMGDataset(torch.utils.data.Dataset):
         # It appears that I am only using x/y as the inputs for idx anyways...
         if type(idx)==int:
             return self.dataset[idx], self.labels[idx]
-        elif (idx.lower()=='x') or ('train' in idx.lower()):
+        elif (idx.lower()=='x'): # or ('train' in idx.lower()):
             return self.dataset
-        elif (idx.lower()=='y') or ('test' in idx.lower()):
+        elif (idx.lower()=='y'): # or ('test' in idx.lower()):
             return self.labels
         else:
             raise("Not supposed to run")

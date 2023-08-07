@@ -2,7 +2,6 @@
 
 from flcore.clients.clientavg import clientAVG
 from flcore.servers.serverbase import Server
-#from threading import Thread
 import torch
 import os
 
@@ -23,9 +22,9 @@ class Local(Server):
 
     def train(self):
         self.selected_clients = self.clients
-        with torch.no_grad():
-            # subscript global_model with [0] if it is sequential instead of linear model --> does that return just the first layer then?
-            self.global_model.weight.fill_(0)
+        #with torch.no_grad():
+        #    # subscript global_model with [0] if it is sequential instead of linear model --> does that return just the first layer then?
+        #    self.global_model.weight.fill_(0)
         
         for i in range(self.global_rounds+1):
             if i%self.eval_gap == 0:
@@ -35,23 +34,16 @@ class Local(Server):
                     self.evaluate()  # I don't understand why train_metrics() is used at all? Need it to log stuff later tho...
 
                     #print(f"len: {len(self.rs_train_loss[-1])}")
-                    if type(self.rs_train_loss[-1]) in [int, float]:
-                        print(f"rs_train_loss: {self.rs_train_loss[-1]}")
-                    else:
-                        print(f"len: {len(self.rs_train_loss[-1])}")
+                    #if type(self.rs_train_loss[-1]) in [int, float]:
+                    #    print(f"rs_train_loss: {self.rs_train_loss[-1]}")
+                    #else:
+                    #    print(f"len: {len(self.rs_train_loss[-1])}")
                     print()
 
-            #self.selected_clients = self.select_clients()  # FOR LOCAL WE CAN JUST RUN ALL CLIENTS AT ONCE SINCE WE ARE NOT AGGREGATING
-            #print(f"Selected client IDs: {[client.ID for client in self.selected_clients]}")
             #print("CLIENT TRAINING")
             for client in self.selected_clients:
                 client.train()
-                print(f"Client{client.ID} round {i} loss: {client.loss_log[-1]:0,.3f}")
-
-            # threads = [Thread(target=client.train)
-            #            for client in self.selected_clients]
-            # [t.start() for t in threads]
-            # [t.join() for t in threads]
+                print(f"SL: Client{client.ID} round {i} loss: {client.loss_log[-1]:0,.5f}")
 
             print()
 
