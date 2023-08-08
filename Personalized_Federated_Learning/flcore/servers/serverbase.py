@@ -10,7 +10,6 @@ import random
 #import pickle
 from datetime import datetime
 
-from flcore.pflniid_utils.data_utils import read_client_data
 #from flcore.pflniid_utils.dlg import DLG
 #from utils import node_creator
 
@@ -24,7 +23,7 @@ class Server(object):
         self.global_rounds = args.global_rounds
         self.local_epochs = args.local_epochs
         self.batch_size = args.batch_size
-        self.learning_rate = args.local_learning_rate
+        self.local_learning_rate = args.local_learning_rate
         self.global_model = copy.deepcopy(args.model)
         self.num_clients = args.num_clients
         self.join_ratio = args.join_ratio
@@ -87,6 +86,19 @@ class Server(object):
         self.test_split_each_update = args.test_split_each_update
         self.verbose = args.verbose
         self.slow_clients_bool = args.slow_clients_bool
+        self.run_train_metrics = args.run_train_metrics
+        self.result_path = r"C:\Users\kdmen\Desktop\Research\personalization-privacy-risk\Personalized_Federated_Learning\results\mdHM_" 
+        # Not used on server but saved when logging
+        self.pca_channels = args.pca_channels
+        self.device_channels = args.device_channels
+        self.lambdaF = args.lambdaF
+        self.lambdaD = args.lambdaD
+        self.lambdaE = args.lambdaE
+        self.normalize_data = args.normalize_data
+        self.local_round_threshold = args.local_round_threshold
+        self.test_split_users = args.test_split_users
+        self.learning_rate_decay = args.learning_rate_decay
+        self.learning_rate_decay_gamma = args.learning_rate_decay_gamma
 
     def set_clients(self, clientObj):  
         if self.verbose:
@@ -208,37 +220,62 @@ class Server(object):
     def save_results(self, save_cost_func_comps=False, save_gradient=False):
         algo = self.dataset + "_" + self.algorithm
 
-        # Is this path wrt serverbase.py or main.py...
         # get current date and time
         current_datetime = datetime.now().strftime("%m-%d_%H-%M")
         # convert datetime obj to string
         str_current_datetime = str(current_datetime)
 
-        result_path = "../results/mdHM_" + str_current_datetime + "_"
-        if not os.path.exists(result_path):
-            os.makedirs(result_path)
+        trial_result_path = self.result_path + str_current_datetime
+        if not os.path.exists(trial_result_path):
+            os.makedirs(trial_result_path)
 
-        if (len(self.rs_train_loss)):  # rs_train_acc
-            algo = algo + "_" + self.goal + "_" + str(self.times)
-            file_path = result_path + "{}.h5".format(algo)
+        param_log_str = (
+            "\nBASE\n"
+            f"algorithm = {self.algorithm}\n"
+            f"model = {self.global_model}\n"
+            f"condition_number = {self.condition_number}\n"
+            f"device_channels = {self.device_channels}\n"
+            "\nMODEL HYPERPARAMETERS\n"
+            f"lambdaF = {self.lambdaF}\n"
+            f"lambdaD = {self.lambdaD}\n"
+            f"lambdaE = {self.lambdaE}\n"
+            f"global_rounds = {self.global_rounds}\n"
+            f"local_epochs = {self.local_epochs}\n"
+            f"batch_size = {self.batch_size}\n"
+            f"batch_num_per_client = {self.batch_num_per_client}\n"
+            f"local_learning_rate = {self.local_learning_rate}\n"
+            f"learning_rate_decay = {self.learning_rate_decay}\n"
+            f"learning_rate_decay_gamma = {self.learning_rate_decay_gamma}\n"
+            f"pca_channels = {self.pca_channels}\n"
+            f"normalize_data = {self.normalize_data}\n"
+            "\FEDERATED LEARNING PARAMS\n"
+            f"starting_update = {self.args.starting_update}\n"
+            f"local_round_threshold = {self.local_round_threshold}\n"
+            "\nTESTING\n"
+            f"test_split_fraction = {self.test_split_fraction}\n"
+            f"test_split_each_update = {self.test_split_each_update}\n"
+            f"test_split_users = {self.test_split_users}\n"
+            f"run_train_metrics = {self.run_train_metrics}")
+        with open(trial_result_path+r'\param_log.txt', 'w') as file:
+            file.write(param_log_str)
+
+        if (len(self.rs_train_loss))!=0 or self.use_train_metrics==False:  # Idk why this is condition...
+            algo = algo + "_" + self.goal# + "_" + str(self.times)  # IDk what self.times represents...
+            file_path = trial_result_path + r"\{}.h5".format(algo)
             print("File path: " + file_path)
 
             with h5py.File(file_path, 'w') as hf:
                 hf.create_dataset('rs_test_loss', data=self.rs_test_loss)
                 hf.create_dataset('rs_train_loss', data=self.rs_train_loss)
                 if save_cost_func_comps:
-                    #print("cost_func_comps_log")
-                    #print(self.cost_func_comps_log)
-                    #print()                    
+                    #print(f'cost_func_comps_log: \n {self.cost_func_comps_log}\n')                   
                     G1 = hf.create_group('cost_func_tuples_by_client')
                     for idx, cost_func_comps in enumerate(self.cost_func_comps_log):
                         name_str = 'ClientID' + str(idx)
                         G1.create_dataset(name_str, data=cost_func_comps)
                 
                 if save_gradient:
-                    #print('gradient_norm_log')
-                    #print(self.gradient_norm_log)
-                    #print()
+                    #print(f'gradient_norm_log: \n {self.gradient_norm_log}\n')
                     G2 = hf.create_group('gradient_norm_lists_by_client')
                     for idx, grad_norm_list in enumerate(self.gradient_norm_log):
                         name_str = 'ClientID' + str(idx)
@@ -246,6 +283,7 @@ class Server(object):
 
     def save_item(self, item, item_name):
         if not os.path.exists(self.save_folder_name):
+            print(f"SB save_item() made directory! {self.save_folder_name}")
             os.makedirs(self.save_folder_name)
         torch.save(item, os.path.join(self.save_folder_name, "server_" + item_name + ".pt"))
 
@@ -405,19 +443,6 @@ class Server(object):
         # self.save_item(items, f'DLG_{R}')
 
     def set_new_clients(self, clientObj):
-        #print("---------------> Serverbase set_new_clients: still using read_client_data and lengths...")
-        #for i in range(self.num_clients, self.num_clients + self.num_new_clients):
-        #    train_data = read_client_data(self.dataset, i, self.global_update, is_train=True)
-        #   test_data = read_client_data(self.dataset, i, self.global_update, is_train=False)
-        #    client = clientObj(self.args, 
-        #                    ID=i, 
-        #                    train_samples=len(train_data), 
-        #                    test_samples=len(test_data), 
-        #                    train_slow=False, 
-        #                    send_slow=False)
-        #    self.new_clients.append(client)
-        #if self.verbose:
-        #    print("ServerBase set_new_clients (SBSNC)")
         if self.num_new_clients==0:
             pass
         else:

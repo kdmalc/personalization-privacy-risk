@@ -56,25 +56,30 @@ class Client(object):
         self.dp_sigma = args.dp_sigma
         
         # My additional parameters
+        ## Params that get logged
         self.pca_channels = args.pca_channels
         self.device_channels = args.device_channels
         self.lambdaF = args.lambdaF
         self.lambdaD = args.lambdaD
         self.lambdaE = args.lambdaE
-        self.current_update = args.starting_update
-        self.dt = args.dt
         self.normalize_data = args.normalize_data
-        self.local_round = 0
-        self.last_global_round = 0
         self.local_round_threshold = args.local_round_threshold
-        self.update_ix=[0,  1200,  2402,  3604,  4806,  6008,  7210,  8412,  9614, 10816, 12018, 13220, 14422, 15624, 16826, 18028, 19230, 20432, 20769]
         self.test_split_fraction = args.test_split_fraction
         self.test_split_each_update = args.test_split_each_update
         self.test_split_users = args.test_split_users
+        self.learning_rate_decay = args.learning_rate_decay
+        self.learning_rate_decay_gamma = args.learning_rate_decay_gamma
+        ## Not logged params
+        self.current_update = args.starting_update # This is logged by a different var in the server
+        self.dt = args.dt
+        self.local_round = 0
+        self.last_global_round = 0
+        self.update_ix=[0,  1200,  2402,  3604,  4806,  6008,  7210,  8412,  9614, 10816, 12018, 13220, 14422, 15624, 16826, 18028, 19230, 20432, 20769]
         assert (not (self.test_split_users and self.test_split_each_update)), "test_split_users and test_split_each_update cannot both be true (contradictory test conditions)"
         self.condition_number = args.condition_number
         self.verbose = args.verbose
         self.return_cost_func_comps = args.return_cost_func_comps
+        self.run_train_metrics = args.run_train_metrics
 
         # Before this I need to run the INIT update segmentation code...
         #init_dl = self.load_train_data()
@@ -278,11 +283,21 @@ class Client(object):
                 else:
                     x = x.to(self.device)
                 y = y.to(self.device)
-                output = self.model(x)
-                loss = self.loss_func(output, y)
-                # I don't think I do anything with the cost func comps here regardless...
-                if self.return_cost_func_comps:
-                    loss = loss[0]
+
+                self.simulate_data_streaming_xy(x, y)
+                # D@s = predicted velocity
+                vel_pred = self.model(torch.transpose(self.F, 0, 1)) 
+                
+                if vel_pred.shape[0]!=self.y_ref.shape[0]:
+                    tvel_pred = torch.transpose(vel_pred, 0, 1)
+                else:
+                    tvel_pred = vel_pred
+                t1 = self.loss_func(tvel_pred, self.y_ref)
+                t2 = self.lambdaD*(torch.linalg.matrix_norm((self.model.weight))**2)
+                t3 = self.lambdaF*(torch.linalg.matrix_norm((self.F))**2)
+                loss = t1 + t2 + t3
+
+                ####################################
                 test_loss = loss.item()  # Just get the actual loss function term
                 running_test_loss += test_loss
                 if self.verbose:
@@ -307,24 +322,29 @@ class Client(object):
 
         train_num = 0
         losses = 0
-        counter = 0
         if self.verbose:
             print(f'cb Client{self.ID} train_metrics()')
         with torch.no_grad():
-            for x, y in trainloader:
-                counter += 1
+            for i, (x, y) in enumerate(trainloader):
                 if type(x) == type([]):
                     x[0] = x[0].to(self.device)
                 else:
                     x = x.to(self.device)
                 y = y.to(self.device)
-                output = self.model(x)
-                loss = self.loss_func(output, y)
-                if self.return_cost_func_comps:
-                    loss = loss[0]
+
+                self.simulate_data_streaming_xy(x, y)
+                vel_pred = self.model(torch.transpose(self.F, 0, 1)) 
+                if vel_pred.shape[0]!=self.y_ref.shape[0]:
+                    tvel_pred = torch.transpose(vel_pred, 0, 1)
+                else:
+                    tvel_pred = vel_pred
+                t1 = self.loss_func(tvel_pred, self.y_ref)
+                t2 = self.lambdaD*(torch.linalg.matrix_norm((self.model.weight))**2)
+                t3 = self.lambdaF*(torch.linalg.matrix_norm((self.F))**2)
+                loss = t1 + t2 + t3
                 if self.verbose:
-                    print(f"batch {counter}, loss {loss:0,.2f}")
-                train_num += y.shape[0]  # Why is this y.shape and not x.shape?... I guess they are the same row dims?
+                    print(f"batch {i}, loss {loss:0,.2f}")
+                train_num += self.y_ref.shape[0]  # Why is this y.shape and not x.shape?... I guess they are the same row dims?
                 # Why are they multiplying by y.shape[0] here...
                 losses += loss.item() #* y.shape[0]
 

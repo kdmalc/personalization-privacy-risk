@@ -2,7 +2,7 @@
 
 from flcore.clients.clientavg import clientAVG
 from flcore.servers.serverbase import Server
-import torch
+from datetime import datetime
 import os
 
 
@@ -31,7 +31,7 @@ class Local(Server):
                 print(f"\n-------------Round number: {i}-------------")
                 if i!=0:
                     print("\nEvaluate personalized models")
-                    self.evaluate()  # I don't understand why train_metrics() is used at all? Need it to log stuff later tho...
+                    self.evaluate(train=self.run_train_metrics)  # I don't understand why train_metrics() is used at all? Need it to log stuff later tho...
 
                     #print(f"len: {len(self.rs_train_loss[-1])}")
                     #if type(self.rs_train_loss[-1]) in [int, float]:
@@ -64,9 +64,17 @@ class Local(Server):
             self.cost_func_comps_log.append(client.cost_func_comps_log)
             self.gradient_norm_log.append(client.gradient_norm_log)
 
+        # get current date and time
+        current_datetime = datetime.now().strftime("%m-%d_%H-%M")
+        # convert datetime obj to string
+        str_current_datetime = str(current_datetime)
         self.save_results(save_cost_func_comps=True, save_gradient=True)
-        model_path = os.path.join("models", self.dataset)
-        model_path = os.path.join(model_path, "Local")
+        model_path = os.path.join("models", self.dataset, "Local", str(current_datetime))
+
+        trial_result_path = self.result_path + str_current_datetime
+        if not os.path.exists(trial_result_path):
+            os.makedirs(trial_result_path)
+
         for client in self.clients:
             client.save_item(client.model, 'local_client_model', item_path=model_path)
         # No idea where this global model is coming from? Why did they save it...

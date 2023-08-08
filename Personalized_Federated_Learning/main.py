@@ -92,10 +92,15 @@ def run(args):
     #print("Server's rs_test_loss (averaged over clients): ")
     #print(server.rs_test_loss)
     #assert( len(server.rs_train_loss) == len(server.rs_test_loss))
-    for i in range(len(server.rs_train_loss)):
-        print(f"Round {i}, Train Loss: {server.rs_train_loss[i]:0.2f}, Test Loss: {server.rs_test_loss[i]:0.2f}")
-        if i==(len(server.rs_train_loss)-1):
-            print(f"Final eval ({i+1}), Test Loss: {server.rs_test_loss[i+1]:0.2f}")
+    if args.run_train_metrics:
+        for i in range(len(server.rs_train_loss)):
+            print(f"Round {i}, Train Loss: {server.rs_train_loss[i]:0.2f}, Test Loss: {server.rs_test_loss[i]:0.2f}")
+            if i==(len(server.rs_train_loss)-1):
+                print(f"Final eval ({i+1}), Test Loss: {server.rs_test_loss[i+1]:0.2f}")
+    else:
+        for i in range(len(server.rs_test_loss)):
+            print(f"Round {i}, Test Loss: {server.rs_test_loss[i]:0.2f}")
+
 
     print("All done!")
 
@@ -185,7 +190,8 @@ if __name__ == "__main__":
     parser.add_argument('-slr', "--server_learning_rate", type=float, default=1.0)
     
     # SECTION: Kai's additional args
-    parser.add_argument('-pca_channels', "--pca_channels", type=int, default=64,
+    # PCA should probably be broken into 2 since 64 channels is device specific
+    parser.add_argument('-pca_channels', "--pca_channels", type=int, default=64, #64
                         help="Number of principal components. 64 means do not use any PCA")
     parser.add_argument('-lambdaF', "--lambdaF", type=float, default=0.0,
                         help="Penalty term for user EMG input (user effort)")
