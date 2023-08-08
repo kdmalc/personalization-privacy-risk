@@ -70,19 +70,12 @@ class Server(object):
         self.fine_tuning_epoch = args.fine_tuning_epoch
         
         # Kai's additional params
+        self.ndp = args.num_decimal_points
         self.global_round = 0
         self.test_split_fraction = args.test_split_fraction
         self.condition_number = args.condition_number
         self.debug_mode = args.debug_mode
         self.global_update = args.starting_update
-        # No idea what the point of this was...
-        #if self.debug_mode:
-        #    self.all_user_keys = ['METACPHS_S106', 'METACPHS_S107', 'METACPHS_S108', 'METACPHS_S109', 'METACPHS_S110', 'METACPHS_S111', 'METACPHS_S112', 'METACPHS_S113', 'METACPHS_S114', 'METACPHS_S115', 'METACPHS_S116', 'METACPHS_S117', 'METACPHS_S118', 'METACPHS_S119']
-        #    if self.dataset.upper()=='CPHS':
-        #        with open(r"C:\Users\kdmen\Desktop\Research\personalization-privacy-risk\Data\continuous_full_data_block1.pickle", 'rb') as handle:
-        #            self.all_labels, _, _, _, self.all_emg, _, _, _, _, _, _ = pickle.load(handle)
-        #    else:
-        #        raise ValueError("Dataset not supported")
         self.test_split_each_update = args.test_split_each_update
         self.verbose = args.verbose
         self.slow_clients_bool = args.slow_clients_bool
@@ -230,7 +223,7 @@ class Server(object):
             os.makedirs(trial_result_path)
 
         param_log_str = (
-            "\nBASE\n"
+            "BASE\n"
             f"algorithm = {self.algorithm}\n"
             f"model = {self.global_model}\n"
             f"condition_number = {self.condition_number}\n"
@@ -248,7 +241,7 @@ class Server(object):
             f"learning_rate_decay_gamma = {self.learning_rate_decay_gamma}\n"
             f"pca_channels = {self.pca_channels}\n"
             f"normalize_data = {self.normalize_data}\n"
-            "\FEDERATED LEARNING PARAMS\n"
+            "\nFEDERATED LEARNING PARAMS\n"
             f"starting_update = {self.args.starting_update}\n"
             f"local_round_threshold = {self.local_round_threshold}\n"
             "\nTESTING\n"

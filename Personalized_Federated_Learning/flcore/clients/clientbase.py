@@ -80,6 +80,7 @@ class Client(object):
         self.verbose = args.verbose
         self.return_cost_func_comps = args.return_cost_func_comps
         self.run_train_metrics = args.run_train_metrics
+        self.ndp = args.num_decimal_points
 
         # Before this I need to run the INIT update segmentation code...
         #init_dl = self.load_train_data()
@@ -108,24 +109,15 @@ class Client(object):
         Specifically: the loss function is its own class/object so it doesn't have access to these (F and V)
         I no longer believe using F and V can be entirely avoided on the basis of model.output
         '''
-        #lb = self.update_ix[self.current_update]
-        #ub = self.update_ix[self.current_update+1]
-        s_temp = x  #x[lb:ub,:]
-        p_reference = torch.transpose(y, 0, 1)  #torch.transpose(y[lb:ub,:], 0, 1)
+
+        s_temp = x
+        p_reference = torch.transpose(y, 0, 1)
 
         # First, normalize the entire input data
         if self.normalize_data:
             # This is really scaling not norming
             s_normed = normalize_2D_tensor(s_temp)
             p_reference = normalize_2D_tensor(p_reference)
-
-            # This code started returning norms that were < 0.0001 for some reason
-            #s_normed = s_temp / torch.linalg.norm(s_temp)
-            #assert (torch.linalg.norm(s_normed)<1.2) and (torch.linalg.norm(s_normed)>0.8)
-            #p_reference = p_reference/torch.linalg.norm(p_reference)
-            #assert (torch.linalg.norm(p_reference)<1.2) and (torch.linalg.norm(p_reference)>0.8)
-            #print(f"s_norm = {torch.linalg.norm(s_normed):0.3f}; p_ref norm = {torch.linalg.norm(p_reference):0.3f}")
-            # ^ I don't care about norms when scaling, actually. The code in this block was "norming" to be 1, idk why that wasn't working
         else:
             s_normed = s_temp
         # Apply PCA if applicable

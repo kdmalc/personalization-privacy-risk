@@ -1,4 +1,3 @@
-
 BASE
 algorithm = Local
 model = Linear(in_features=64, out_features=2, bias=False)
@@ -18,7 +17,8 @@ learning_rate_decay = False
 learning_rate_decay_gamma = 0.99
 pca_channels = 64
 normalize_data = True
-\FEDERATED LEARNING PARAMS
+
+FEDERATED LEARNING PARAMS
 starting_update = 10
 local_round_threshold = 50
 

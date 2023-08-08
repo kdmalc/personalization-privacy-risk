@@ -191,33 +191,34 @@ if __name__ == "__main__":
     
     # SECTION: Kai's additional args
     # PCA should probably be broken into 2 since 64 channels is device specific
-    parser.add_argument('-pca_channels', "--pca_channels", type=int, default=64, #64
+    parser.add_argument('-pca_ch', "--pca_channels", type=int, default=64, #64
                         help="Number of principal components. 64 means do not use any PCA")
-    parser.add_argument('-lambdaF', "--lambdaF", type=float, default=0.0,
+    parser.add_argument('-lF', "--lambdaF", type=float, default=0.0,
                         help="Penalty term for user EMG input (user effort)")
-    parser.add_argument('-lambdaD', "--lambdaD", type=float, default=1e-3,
+    parser.add_argument('-lD', "--lambdaD", type=float, default=1e-3,
                         help="Penalty term for the decoder norm (interface effort)")
-    parser.add_argument('-lambdaE', "--lambdaE", type=float, default=1e-4,
+    parser.add_argument('-lE', "--lambdaE", type=float, default=1e-4,
                         help="Penalty term on performance error norm")
-    parser.add_argument('-starting_update', "--starting_update", type=int, default=10,
+    parser.add_argument('-stup', "--starting_update", type=int, default=10,
                         help="Which update to start on (for CPHS Simulation). Use 0 or 10.")
     parser.add_argument('-test_split_fraction', "--test_split_fraction", type=float, default=0.2,
                         help="Fraction of data to use for testing")
-    parser.add_argument('-device_channels', "--device_channels", type=int, default=64,
+    parser.add_argument('-device_ch', "--device_channels", type=int, default=64,
                         help="Number of recording channels with the used EMG device")
     parser.add_argument('-dt', "--dt", type=float, default=1/60,
                         help="Delta time, amount of time (sec?) between measurements")
     parser.add_argument('-normalize_data', "--normalize_data", type=bool, default=True,
                         help="Normalize the input EMG signals and its labels. This is good practice.")
-    parser.add_argument('-local_round_threshold', "--local_round_threshold", type=int, default=50,
+    parser.add_argument('-lrt', "--local_round_threshold", type=int, default=50,
                         help="Number of communication rounds per client until a client will advance to the next batch of streamed data")
+    # I think I depreciated debug_mode, double check it's removed
     parser.add_argument('-debug_mode', "--debug_mode", type=bool, default=False,
                         help="In debug mode, the code is run to minimize overhead time in order to debug as fast as possible.  Namely, the data is held at the server to decrease init time, and communication delays are ignored.")
-    parser.add_argument('-condition_number', "--condition_number", type=int, default=1,
+    parser.add_argument('-con_num', "--condition_number", type=int, default=1,
                         help="Which condition number (trial) to train on")
     parser.add_argument('-test_split_each_update', "--test_split_each_update", type=bool, default=False,
                         help="Implement train/test split within each update or on the entire dataset")
-    parser.add_argument('-verbose', "--verbose", type=bool, default=False,
+    parser.add_argument('-v', "--verbose", type=bool, default=False,
                         help="Print out a bunch of extra stuff")
     parser.add_argument('-slow_clients_bool', "--slow_clients_bool", type=bool, default=False,
                         help="Control whether or not to have ANY slow clients")
@@ -225,10 +226,13 @@ if __name__ == "__main__":
                         help="Return Loss, Error, DTerm, FTerm from loss class")
     parser.add_argument('-test_split_users', "--test_split_users", type=bool, default=False,
                         help="Split testing data by holding out some users (fraction held out determined by test_split_fraction)")
-    parser.add_argument('-linear_model_bias', "--linear_model_bias", type=bool, default=False,
+    parser.add_argument('-lm_bias', "--linear_model_bias", type=bool, default=False,
                         help="Boolean determining whether to use an additive bias. Note that previous 599 approach had no additive bias.")
+    # Idk if this will work actually? :0.self.ndpf won't work, I don't think...
+    parser.add_argument('-ndp', "--num_decimal_points", type=int, default=5,
+                        help="Number of decimal points to use when format printing.")
     # This one is not integrated yet
-    parser.add_argument('-run_train_metrics', "--run_train_metrics", type=int, default=True,
+    parser.add_argument('-rtm', "--run_train_metrics", type=bool, default=True,
                         help="Evaluate every client on the training data")  # I don't think this matters for local, since every client is being run anyways?
 
     args = parser.parse_args()
