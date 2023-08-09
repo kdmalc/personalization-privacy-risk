@@ -10,7 +10,7 @@ from flcore.clients.clientbase import Client
 from sklearn import metrics
 
 class clientAPFL(Client):
-    def __init__(self, args, id, train_samples, test_samples, **kwargs):
+    def __init__(self, args, ID, train_samples, test_samples, **kwargs):
         super().__init__(args, id, train_samples, test_samples, **kwargs)
 
         self.alpha = args.alpha
@@ -39,31 +39,13 @@ class clientAPFL(Client):
                 print(f"Step {step}, batch {i}")
                 self.cphs_training_subroutine(x, y)
 
-                # Assert that the dataloader data corresponds to the correct update data
-                # I think trainloader is fine so I can turn it off once tl has been verified
-                self.assert_tl_samples_match_npy(x, y)
-                
-                # Simulate datastreaming, eg set s, F and V
-                self.simulate_data_streaming_xy(x, y)
-
-                if type(x) == type([]):
-                    x[0] = x[0].to(self.device)
-                else:
-                    x = x.to(self.device)
-                y = y.to(self.device)
-                if self.train_slow:
-                    time.sleep(0.1 * np.abs(np.random.rand()))
-
-                # Original clientapfl training:
-                #output = self.model(x)
-                #loss = self.loss(output, y, self.model)
-                #self.optimizer.zero_grad()
-                #loss.backward()
-                #self.optimizer.step()
-
-                # This also probably needs a rewrite
-                output_per = self.model_per(x)
-                loss_per = self.loss(output_per, y)
+                output_per = self.model_per(torch.transpose(self.F, 0, 1))
+                if output_per.shape[0]!=self.y_ref.shape[0]:
+                    output_per = torch.transpose(output_per, 0, 1)
+                t1 = self.loss_func(output_per, self.y_ref)
+                t2 = self.lambdaD*(torch.linalg.matrix_norm((self.model_per.weight))**2)
+                t3 = self.lambdaF*(torch.linalg.matrix_norm((self.F))**2)
+                loss_per = t1 + t2 + t3
                 self.optimizer_per.zero_grad()
                 loss_per.backward()
                 self.optimizer_per.step()
@@ -96,33 +78,32 @@ class clientAPFL(Client):
         testloaderfull = self.load_test_data()
         self.model_per.eval()
 
-        test_acc = 0
-        test_num = 0
-        y_prob = []
-        y_true = []
-        
+        running_test_loss = 0
+        num_samples = 0
         with torch.no_grad():
-            for x, y in testloaderfull:
+            for i, (x, y) in enumerate(testloaderfull):
                 if type(x) == type([]):
                     x[0] = x[0].to(self.device)
                 else:
                     x = x.to(self.device)
                 y = y.to(self.device)
-                output = self.model_per(x)
 
-                test_acc += (torch.sum(torch.argmax(output, dim=1) == y)).item()
-                test_num += y.shape[0]
-
-                y_prob.append(output.detach().cpu().numpy())
-                # KAI: UPDATE THIS FOR REGRESSION!
-                #y_true.append(label_binarize(y.detach().cpu().numpy(), classes=np.arange(self.num_classes)))
-
-        y_prob = np.concatenate(y_prob, axis=0)
-        y_true = np.concatenate(y_true, axis=0)
-
-        auc = metrics.roc_auc_score(y_true, y_prob, average='micro')
+                self.simulate_data_streaming_xy(x, y)
+                # D@s = predicted velocity
+                output = self.model_per(torch.transpose(self.F, 0, 1))
+                if output.shape[0]!=self.y_ref.shape[0]:
+                    output = torch.transpose(output, 0, 1)
+                t1 = self.loss_func(output, self.y_ref)
+                t2 = self.lambdaD*(torch.linalg.matrix_norm((self.model_per.weight))**2)
+                t3 = self.lambdaF*(torch.linalg.matrix_norm((self.F))**2)
+                loss = t1 + t2 + t3
+                test_loss = loss.item()  # Just get the actual loss function term
+                running_test_loss += test_loss
+                if self.verbose:
+                    print(f"batch {i}, loss {test_loss:0,.5f}")
+                num_samples += x.size()[0]
+        return running_test_loss, num_samples
         
-        return test_acc, test_num, auc
 
     def train_metrics(self):
         trainloader = self.load_train_data()
@@ -137,8 +118,16 @@ class clientAPFL(Client):
                 else:
                     x = x.to(self.device)
                 y = y.to(self.device)
-                output_per = self.model_per(x)
-                loss_per = self.loss(output_per, y)
+
+                self.simulate_data_streaming_xy(x, y)
+                # D@s = predicted velocity
+                output_per = self.model_per(torch.transpose(self.F, 0, 1))
+                if output_per.shape[0]!=self.y_ref.shape[0]:
+                    output_per = torch.transpose(output_per, 0, 1)
+                t1 = self.loss_func(output_per, self.y_ref)
+                t2 = self.lambdaD*(torch.linalg.matrix_norm((self.model_per.weight))**2)
+                t3 = self.lambdaF*(torch.linalg.matrix_norm((self.F))**2)
+                loss_per = t1 + t2 + t3
                 train_num += y.shape[0]
                 losses += loss_per.item() * y.shape[0]
 

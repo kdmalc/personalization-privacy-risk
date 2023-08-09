@@ -98,9 +98,6 @@ class Client(object):
         
     
     def cphs_training_subroutine(self, x, y):
-        '''Validate this!!!'''
-        # Honestly doesn't need step or i passed in...
-
         # Assert that the dataloader data corresponds to the correct update data
         # I think trainloader is fine so I can turn it off once tl has been verified
         self.assert_tl_samples_match_npy(x, y)
@@ -350,6 +347,7 @@ class Client(object):
                 vel_pred = self.model(torch.transpose(self.F, 0, 1)) 
                 
                 if vel_pred.shape[0]!=self.y_ref.shape[0]:
+                    print("TRANSPOSING")
                     tvel_pred = torch.transpose(vel_pred, 0, 1)
                 else:
                     tvel_pred = vel_pred
@@ -362,7 +360,7 @@ class Client(object):
                 test_loss = loss.item()  # Just get the actual loss function term
                 running_test_loss += test_loss
                 if self.verbose:
-                    print(f"batch {i}, loss {test_loss:0,.2f}")
+                    print(f"batch {i}, loss {test_loss:0,.5f}")
                 num_samples += x.size()[0]
             
         return running_test_loss, num_samples

@@ -39,22 +39,20 @@ class APFL(Server):
             #    self.call_dlg(i)
             self.aggregate_parameters()
 
-            if self.auto_break and self.check_done(acc_lss=[self.rs_test_acc], top_cnt=self.top_cnt):
+            if self.auto_break and self.check_done(acc_lss=[self.rs_test_loss], top_cnt=self.top_cnt):
                 break
 
-        print("\nBest accuracy.")
-        # self.print_(max(self.rs_test_acc), max(
-        #     self.rs_train_acc), min(self.rs_train_loss))
-        print(max(self.rs_test_acc))
+        print("\nBest loss.")
+        print(min(self.rs_test_loss))
 
         self.save_results()
 
         #####################################################
         # Uhhhh I don't think my dataset can do this...
         ## Maybe I should implement the user test split in addition here?
-        self.eval_new_clients = True
-        self.set_new_clients(clientAPFL)
-        print(f"\n-------------Fine tuning round-------------")
-        print("\nEvaluate new clients")
-        self.evaluate()
+        #self.eval_new_clients = True
+        #self.set_new_clients(clientAPFL)
+        #print(f"\n-------------Fine tuning round-------------")
+        #print("\nEvaluate new clients")
+        self.evaluate(train=False)
         #####################################################

@@ -126,7 +126,7 @@ if __name__ == "__main__":
     parser.add_argument('-gr', "--global_rounds", type=int, default=100)  # KAI: Originally was 2000
     parser.add_argument('-ls', "--local_epochs", type=int, default=1, 
                         help="Multiple update steps in one local epoch.")  # KAI: I think it was 1 originally.  I'm gonna keep it there.  Does this mean I can set batchsize to 1300 and cook? Is my setup capable or running multiple epochs? Implicitly I was doing 1 epoch before, using the full update data I believe...
-    parser.add_argument('-algo', "--algorithm", type=str, default="Local") #Local #FedAvg
+    parser.add_argument('-algo', "--algorithm", type=str, default="APFL") #Local #FedAvg #APFL
     parser.add_argument('-jr', "--join_ratio", type=float, default=0.2,
                         help="Ratio of clients per round")
     parser.add_argument('-rjr', "--random_join_ratio", type=bool, default=False,
