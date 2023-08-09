@@ -36,8 +36,8 @@ class clientAVG(Client):
                 # Assert that the dataloader data corresponds to the correct update data
                 # I think trainloader is fine so you can turn it off once tl has been verified
                 #'''
-                nondl_x = np.round(self.cond_samples_npy[self.update_ix[self.current_update]:self.update_ix[self.current_update+1]], 4)
-                nondl_y = np.round(self.cond_labels_npy[self.update_ix[self.current_update]:self.update_ix[self.current_update+1]], 4)
+                nondl_x = np.round(self.cond_samples_npy[self.update_lower_bound:self.update_upper_bound], 4)
+                nondl_y = np.round(self.cond_labels_npy[self.update_lower_bound:self.update_upper_bound], 4)
                 if (sum(sum(x[:5]-nondl_x[:5]))>0.01):  # 0.01 randomly chosen arbitarily small threshold
                     # ^Client11 fails when threshold is < 0.002, idk why there is any discrepancy
                     # ^All numbers are positive so anything <1 is just rounding as far as I'm concerned
@@ -79,12 +79,15 @@ class clientAVG(Client):
                 t1 = self.loss_func(tvel_pred, self.y_ref)
                 t2 = self.lambdaD*(torch.linalg.matrix_norm((self.model.weight))**2)
                 t3 = self.lambdaF*(torch.linalg.matrix_norm((self.F))**2)
+                # It's working right now so I'll turn this off for the slight speed boost
+                '''
                 if np.isnan(t1.item()):
                     raise ValueError("CLIENTAVG: Error term is NAN...")
                 if np.isnan(t2.item()):
                     raise ValueError("CLIENTAVG: Decoder Effort term is NAN...")
                 if np.isnan(t3.item()):
                     raise ValueError("CLIENTAVG: User Effort term is NAN...")
+                '''
                 loss = t1 + t2 + t3
                 self.cost_func_comps_log = [(t1.item(), t2.item(), t3.item())]
                 

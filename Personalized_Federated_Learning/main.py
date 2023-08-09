@@ -94,12 +94,12 @@ def run(args):
     #assert( len(server.rs_train_loss) == len(server.rs_test_loss))
     if args.run_train_metrics:
         for i in range(len(server.rs_train_loss)):
-            print(f"Round {i}, Train Loss: {server.rs_train_loss[i]:0.2f}, Test Loss: {server.rs_test_loss[i]:0.2f}")
+            print(f"Round {i}, Train Loss: {server.rs_train_loss[i]:0.5f}, Test Loss: {server.rs_test_loss[i]:0.5f}")
             if i==(len(server.rs_train_loss)-1):
-                print(f"Final eval ({i+1}), Test Loss: {server.rs_test_loss[i+1]:0.2f}")
+                print(f"Final eval ({i+1}), Test Loss: {server.rs_test_loss[i+1]:0.5f}")
     else:
         for i in range(len(server.rs_test_loss)):
-            print(f"Round {i}, Test Loss: {server.rs_test_loss[i]:0.2f}")
+            print(f"Round {i}, Test Loss: {server.rs_test_loss[i]:0.5f}")
 
 
     print("All done!")
@@ -131,7 +131,7 @@ if __name__ == "__main__":
                         help="Local learning rate")
     parser.add_argument('-ld', "--learning_rate_decay", type=bool, default=False)
     parser.add_argument('-ldg', "--learning_rate_decay_gamma", type=float, default=0.99)
-    parser.add_argument('-gr', "--global_rounds", type=int, default=100)  # KAI: Switched to 100 down from 2000
+    parser.add_argument('-gr', "--global_rounds", type=int, default=1000)  # KAI: Originally was 2000
     parser.add_argument('-ls', "--local_epochs", type=int, default=1, 
                         help="Multiple update steps in one local epoch.")  # KAI: I think it was 1 originally.  I'm gonna keep it there.  Does this mean I can set batchsize to 1300 and cook? Is my setup capable or running multiple epochs? Implicitly I was doing 1 epoch before, using the full update data I believe...
     parser.add_argument('-algo', "--algorithm", type=str, default="Local") #Local #FedAvg
@@ -201,8 +201,14 @@ if __name__ == "__main__":
                         help="Penalty term on performance error norm")
     parser.add_argument('-stup', "--starting_update", type=int, default=10,
                         help="Which update to start on (for CPHS Simulation). Use 0 or 10.")
+    ## Test Split Related
     parser.add_argument('-test_split_fraction', "--test_split_fraction", type=float, default=0.2,
                         help="Fraction of data to use for testing")
+    parser.add_argument('-test_split_each_update', "--test_split_each_update", type=bool, default=False,
+                        help="Implement train/test split within each update or on the entire dataset")
+    parser.add_argument('-test_split_users', "--test_split_users", type=bool, default=False,
+                        help="Split testing data by holding out some users (fraction held out determined by test_split_fraction)")
+    ##
     parser.add_argument('-device_ch', "--device_channels", type=int, default=64,
                         help="Number of recording channels with the used EMG device")
     parser.add_argument('-dt', "--dt", type=float, default=1/60,
@@ -216,16 +222,12 @@ if __name__ == "__main__":
                         help="In debug mode, the code is run to minimize overhead time in order to debug as fast as possible.  Namely, the data is held at the server to decrease init time, and communication delays are ignored.")
     parser.add_argument('-con_num', "--condition_number", type=int, default=1,
                         help="Which condition number (trial) to train on")
-    parser.add_argument('-test_split_each_update', "--test_split_each_update", type=bool, default=False,
-                        help="Implement train/test split within each update or on the entire dataset")
     parser.add_argument('-v', "--verbose", type=bool, default=False,
                         help="Print out a bunch of extra stuff")
     parser.add_argument('-slow_clients_bool', "--slow_clients_bool", type=bool, default=False,
                         help="Control whether or not to have ANY slow clients")
     parser.add_argument('-return_cost_func_comps', "--return_cost_func_comps", type=bool, default=False,  # They're basically returned by default now
                         help="Return Loss, Error, DTerm, FTerm from loss class")
-    parser.add_argument('-test_split_users', "--test_split_users", type=bool, default=False,
-                        help="Split testing data by holding out some users (fraction held out determined by test_split_fraction)")
     parser.add_argument('-lm_bias', "--linear_model_bias", type=bool, default=False,
                         help="Boolean determining whether to use an additive bias. Note that previous 599 approach had no additive bias.")
     # Idk if this will work actually? :0.self.ndpf won't work, I don't think...

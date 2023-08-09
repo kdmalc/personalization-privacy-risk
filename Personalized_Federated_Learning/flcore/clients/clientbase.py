@@ -81,13 +81,7 @@ class Client(object):
         self.return_cost_func_comps = args.return_cost_func_comps
         self.run_train_metrics = args.run_train_metrics
         self.ndp = args.num_decimal_points
-
-        # Before this I need to run the INIT update segmentation code...
-        #init_dl = self.load_train_data()
-        #self.simulate_data_streaming(init_dl)
-        # ^ This func sets F, V, etc
         
-        #self.loss = CPHSLoss(self.F, self.model.weight, self.V, self.F.size()[1], lambdaF=self.lambdaF, lambdaD=self.lambdaD, lambdaE=self.lambdaE, Nd=2, Ne=self.pca_channels, return_cost_func_comps=self.return_cost_func_comps)
         self.loss_func = CPHSLoss2(lambdaF=self.lambdaF, lambdaD=self.lambdaD, lambdaE=self.lambdaE)
         self.loss_log = []
         self.cost_func_comps_log = []
@@ -157,12 +151,12 @@ class Client(object):
         # Split data into train and test sets
         if self.test_split_users:
             # NOT FINISHED YET
+            raise ValueError("test_split_users not supported yet.  Stat hetero concern")
             # Randomly pick the test_split_fraction of users to be completely held out of training to be used for testing
             num_test_users = round(len(self.clients)*self.test_split_fraction)
             # Pick/sample num_test_users from self.clients to be removed and put into self.testing_clients
             self.testing_clients = [self.clients.pop(random.randrange(len(self.clients))) for _ in range(num_test_users)]
-            # Hmmm this requires a full rewrite of the code... 
-            raise ValueError("test_split_users is not fully supported yet")
+            # ^Hmmm this requires a full rewrite of the code... 
         elif self.test_split_each_update:
             # Idk this might actually be supported just in a different function. I'm not sure. Don't plan on using it rn so who cares
             raise ValueError("test_split_each_update not supported yet.  Idk if this is necessary to add")
@@ -185,7 +179,7 @@ class Client(object):
             self.local_round += 1
             # Check if you need to advance the update
             # ---> THIS IMPLIES THAT I AM CREATING A NEW TRAINING LOADER FOR EACH UPDATE... this is what I want actually I think
-            if (self.local_round>1) and (self.current_update < 16) and (self.local_round%self.local_round_threshold==0):
+            if (self.local_round%self.local_round_threshold==0) and (self.local_round>1) and (self.current_update < self.max_training_update_upbound):
                 self.current_update += 1
                 print(f"Client{self.ID} advances to update {self.current_update} on local round {self.local_round}")
             # Slice the full client dataset based on the current update number
@@ -193,8 +187,9 @@ class Client(object):
                 self.update_lower_bound = self.update_ix[self.current_update]
                 self.update_upper_bound = self.update_ix[self.current_update+1]
             else:
-                self.update_lower_bound = self.max_training_update_upbound - 1
-                self.update_upper_bound = self.max_training_update_upbound
+                self.update_lower_bound = self.update_ix[self.max_training_update_upbound - 1]
+                self.update_upper_bound = self.update_ix[self.max_training_update_upbound]
+
         # Set the Dataset Obj
         # Uhhhh is this creating a new one each time? As long as its not re-reading in the data it probably doesn't matter...
         #train_data = read_client_data(self.dataset, self.ID, self.current_update, is_train=True)  # Original code
