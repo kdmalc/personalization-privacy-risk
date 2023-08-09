@@ -36,6 +36,9 @@ class clientAPFL(Client):
 
         for step in range(max_local_steps):
             for i, (x, y) in enumerate(trainloader):
+                print(f"Step {step}, batch {i}")
+                self.cphs_training_subroutine(x, y)
+
                 # Assert that the dataloader data corresponds to the correct update data
                 # I think trainloader is fine so I can turn it off once tl has been verified
                 self.assert_tl_samples_match_npy(x, y)

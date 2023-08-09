@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-import copy
+#import copy
 import torch
 import argparse
 import os
@@ -8,12 +8,6 @@ import warnings
 import numpy as np
 import logging
 
-# Run setup.py so that you can import different modules
-#os.popen('setup.sh')
-# https://stackoverflow.com/questions/42900259/running-sh-file-from-python-script/42900528
-# Is path required?  This one is in the same directory so I think it's fine
-# ^ It runs but it runs in parallel so that the Python outpaces it... that seems wrong to me...
-# Also only needs to be run on start up, not each time you run main
 
 from flcore.servers.serveravg import FedAvg
 #from flcore.servers.serverpFedMe import pFedMe  # Didn't save this file, need to retrieve it from fork

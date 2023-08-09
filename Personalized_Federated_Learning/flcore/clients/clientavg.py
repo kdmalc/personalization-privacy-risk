@@ -33,6 +33,10 @@ class clientAVG(Client):
         #running_num_samples = 0
         for step in range(max_local_steps):  # I'm assuming this is gradient steps?... are local epochs the same as gd steps?
             for i, (x, y) in enumerate(trainloader):  # i currently have it set such that each tl only has 1 batch of 1200 (8/5/23)
+                print(f"Step {step}, batch {i}")
+                self.cphs_training_subroutine(x, y)
+                
+                '''
                 # Assert that the dataloader data corresponds to the correct update data
                 # I think trainloader is fine so I can turn it off once tl has been verified
                 self.assert_tl_samples_match_npy(x, y)
@@ -65,14 +69,12 @@ class clientAVG(Client):
                 t2 = self.lambdaD*(torch.linalg.matrix_norm((self.model.weight))**2)
                 t3 = self.lambdaF*(torch.linalg.matrix_norm((self.F))**2)
                 # It's working right now so I'll turn this off for the slight speed boost
-                '''
-                if np.isnan(t1.item()):
-                    raise ValueError("CLIENTAVG: Error term is NAN...")
-                if np.isnan(t2.item()):
-                    raise ValueError("CLIENTAVG: Decoder Effort term is NAN...")
-                if np.isnan(t3.item()):
-                    raise ValueError("CLIENTAVG: User Effort term is NAN...")
-                '''
+                #if np.isnan(t1.item()):
+                #    raise ValueError("CLIENTAVG: Error term is NAN...")
+                #if np.isnan(t2.item()):
+                #    raise ValueError("CLIENTAVG: Decoder Effort term is NAN...")
+                #if np.isnan(t3.item()):
+                #    raise ValueError("CLIENTAVG: User Effort term is NAN...")
                 loss = t1 + t2 + t3
                 self.cost_func_comps_log = [(t1.item(), t2.item(), t3.item())]
                 
@@ -99,6 +101,7 @@ class clientAVG(Client):
                 #print(f"Model ID / Object: {id(self.model)}; {self.model}") --> #They all appear to be different...
                 #self.running_epoch_loss.append(loss.item() * x.size(0))  # From: running_epoch_loss.append(loss.item() * images.size(0))
                 #running_num_samples += x.size(0)
+                '''
 
         #epoch_loss = self.running_epoch_loss / len(trainloader['train'])  # From: epoch_loss = running_epoch_loss / len(dataloaders['train'])
         #self.loss_log.append(epoch_loss)  

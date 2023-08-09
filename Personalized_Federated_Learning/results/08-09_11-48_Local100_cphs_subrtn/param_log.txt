@@ -1,5 +1,5 @@
 BASE
-algorithm = FedAvg
+algorithm = Local
 model = Linear(in_features=64, out_features=2, bias=False)
 condition_number = 1
 device_channels = 64
@@ -8,7 +8,7 @@ MODEL HYPERPARAMETERS
 lambdaF = 0.0
 lambdaD = 0.001
 lambdaE = 0.0001
-global_rounds = 10
+global_rounds = 100
 local_epochs = 1
 batch_size = 1202
 batch_num_per_client = 2

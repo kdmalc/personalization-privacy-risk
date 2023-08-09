@@ -97,7 +97,7 @@ class Client(object):
         self.learning_rate_decay = args.learning_rate_decay
         
     
-    def clf_training_subroutine(self, step, i, x, y):
+    def cphs_training_subroutine(self, x, y):
         '''Validate this!!!'''
         # Honestly doesn't need step or i passed in...
 
@@ -118,8 +118,9 @@ class Client(object):
         #if self.train_slow:
         #    time.sleep(0.1 * np.abs(np.random.rand()))
         
-        # reset gradient so it doesn't accumulate
-        self.optimizer.zero_grad()
+        if self.algorithm!='APFL':
+            # reset gradient so it doesn't accumulate
+            self.optimizer.zero_grad()
 
         # forward pass and loss
         # D@s = predicted velocity
@@ -143,6 +144,9 @@ class Client(object):
         '''
         loss = t1 + t2 + t3
         self.cost_func_comps_log = [(t1.item(), t2.item(), t3.item())]
+
+        if self.algorithm=='APFL':
+            self.optimizer.zero_grad()
         
         # backward pass
         #loss.backward(retain_graph=True)
@@ -163,7 +167,7 @@ class Client(object):
         # update weights
         self.optimizer.step()
 
-        print(f"Step {step}, pair {i} in traindl; update {self.current_update}; x.size(): {x.size()}; loss: {loss.item():0.5f}")
+        print(f"Client{self.ID}; update {self.current_update}; x.size(): {x.size()}; loss: {loss.item():0.5f}")
         #print(f"Model ID / Object: {id(self.model)}; {self.model}") --> #They all appear to be different...
         #self.running_epoch_loss.append(loss.item() * x.size(0))  # From: running_epoch_loss.append(loss.item() * images.size(0))
         #running_num_samples += x.size(0)
@@ -263,9 +267,7 @@ class Client(object):
                 self.update_upper_bound = self.update_ix[self.max_training_update_upbound]
 
         # Set the Dataset Obj
-        # Uhhhh is this creating a new one each time? As long as its not re-reading in the data it probably doesn't matter...
-        #train_data = read_client_data(self.dataset, self.ID, self.current_update, is_train=True)  # Original code
-        #CustomEMGDataset(emgs_block1[my_user][condition_idx,update_lower_bound:update_upper_bound,:], refs_block1[my_user][condition_idx,update_lower_bound:update_upper_bound,:])
+        # Creates a new TL each time, but doesn't have to re-read in the data. May not be optimal
         training_dataset_obj = CustomEMGDataset(self.cond_samples_npy[self.update_lower_bound:self.update_upper_bound,:], self.cond_labels_npy[self.update_lower_bound:self.update_upper_bound,:])
         X_data = torch.tensor(training_dataset_obj['x'], dtype=torch.float32)
         y_data = torch.tensor(training_dataset_obj['y'], dtype=torch.float32)
