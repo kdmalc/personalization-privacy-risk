@@ -7,7 +7,6 @@ import numpy as np
 import time
 from flcore.clients.clientbase import Client
 
-from sklearn.preprocessing import label_binarize
 from sklearn import metrics
 
 class clientAPFL(Client):
@@ -36,9 +35,14 @@ class clientAPFL(Client):
             max_local_steps = np.random.randint(1, max_local_steps // 2)
 
         for step in range(max_local_steps):
-            # Is this training over the same data over and over again for each step?
-            # If mine only allows one __next__() then I can't fine-tune like this...
             for i, (x, y) in enumerate(trainloader):
+                # Assert that the dataloader data corresponds to the correct update data
+                # I think trainloader is fine so I can turn it off once tl has been verified
+                self.assert_tl_samples_match_npy(x, y)
+                
+                # Simulate datastreaming, eg set s, F and V
+                self.simulate_data_streaming_xy(x, y)
+
                 if type(x) == type([]):
                     x[0] = x[0].to(self.device)
                 else:
@@ -46,12 +50,15 @@ class clientAPFL(Client):
                 y = y.to(self.device)
                 if self.train_slow:
                     time.sleep(0.1 * np.abs(np.random.rand()))
-                output = self.model(x)
-                loss = self.loss(output, y, self.model)
-                self.optimizer.zero_grad()
-                loss.backward()
-                self.optimizer.step()
 
+                # Original clientapfl training:
+                #output = self.model(x)
+                #loss = self.loss(output, y, self.model)
+                #self.optimizer.zero_grad()
+                #loss.backward()
+                #self.optimizer.step()
+
+                # This also probably needs a rewrite
                 output_per = self.model_per(x)
                 loss_per = self.loss(output_per, y)
                 self.optimizer_per.zero_grad()

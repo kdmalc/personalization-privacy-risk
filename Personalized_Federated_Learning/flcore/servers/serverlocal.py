@@ -22,15 +22,12 @@ class Local(Server):
 
     def train(self):
         self.selected_clients = self.clients
-        #with torch.no_grad():
-        #    # subscript global_model with [0] if it is sequential instead of linear model --> does that return just the first layer then?
-        #    self.global_model.weight.fill_(0)
         
         for i in range(self.global_rounds+1):
             if i%self.eval_gap == 0:
                 print(f"\n-------------Round number: {i}-------------")
                 if i!=0:
-                    print("\nEvaluate personalized models")
+                    #print("\nEvaluate personalized models")
                     self.evaluate(train=self.run_train_metrics)  # I don't understand why train_metrics() is used at all? Need it to log stuff later tho...
 
                     #print(f"len: {len(self.rs_train_loss[-1])}")
@@ -55,12 +52,7 @@ class Local(Server):
         print("\nBest Loss.")
         print(min(self.rs_test_loss))
 
-        # So how do I do this given that not all clients will have trained and thus some of these will be empty...
-        # No this is post training so they should all be filled, just different lengths...
-        # OHH my problem is that since I am only running for 5 training rounds some clients haven't trained at all lol
         for idx, client in enumerate(self.clients):
-            #self.cost_func_comps_dict[idx] = client.cost_func_comps_log
-            #self.gradient_dict[idx] = client.gradient_norm_log
             self.cost_func_comps_log.append(client.cost_func_comps_log)
             self.gradient_norm_log.append(client.gradient_norm_log)
 

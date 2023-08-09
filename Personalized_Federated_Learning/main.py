@@ -82,11 +82,9 @@ def run(args):
       
     # Global average
     if args.algorithm != "Local":
-        average_data(dataset=args.dataset, algorithm=args.algorithm, goal=args.goal, times=args.times)
-
-        # Not sure what this comment went to lol
-        # Idk what that is supposed to do.  Prints acc from some file.  Don't need it, acc isn't the same for my task
-    
+        average_data(server.trial_result_path, dataset=args.dataset, algorithm=args.algorithm, goal=args.goal, times=args.times)
+        # Not super sure what it is averaging over (the last 10 rounds? Not sure...)
+        
     print("Server's round, rs_train_loss, rs_test_loss (averaged over clients): ")
     #print(server.rs_train_loss)  # I think this is a list...
     #print("Server's rs_test_loss (averaged over clients): ")
@@ -131,10 +129,10 @@ if __name__ == "__main__":
                         help="Local learning rate")
     parser.add_argument('-ld', "--learning_rate_decay", type=bool, default=False)
     parser.add_argument('-ldg', "--learning_rate_decay_gamma", type=float, default=0.99)
-    parser.add_argument('-gr', "--global_rounds", type=int, default=1000)  # KAI: Originally was 2000
+    parser.add_argument('-gr', "--global_rounds", type=int, default=100)  # KAI: Originally was 2000
     parser.add_argument('-ls', "--local_epochs", type=int, default=1, 
                         help="Multiple update steps in one local epoch.")  # KAI: I think it was 1 originally.  I'm gonna keep it there.  Does this mean I can set batchsize to 1300 and cook? Is my setup capable or running multiple epochs? Implicitly I was doing 1 epoch before, using the full update data I believe...
-    parser.add_argument('-algo', "--algorithm", type=str, default="Local") #Local #FedAvg
+    parser.add_argument('-algo', "--algorithm", type=str, default="FedAvg") #Local #FedAvg
     parser.add_argument('-jr', "--join_ratio", type=float, default=0.2,
                         help="Ratio of clients per round")
     parser.add_argument('-rjr', "--random_join_ratio", type=bool, default=False,

@@ -34,23 +34,8 @@ class clientAVG(Client):
         for step in range(max_local_steps):  # I'm assuming this is gradient steps?... are local epochs the same as gd steps?
             for i, (x, y) in enumerate(trainloader):  # i currently have it set such that each tl only has 1 batch of 1200 (8/5/23)
                 # Assert that the dataloader data corresponds to the correct update data
-                # I think trainloader is fine so you can turn it off once tl has been verified
-                #'''
-                nondl_x = np.round(self.cond_samples_npy[self.update_lower_bound:self.update_upper_bound], 4)
-                nondl_y = np.round(self.cond_labels_npy[self.update_lower_bound:self.update_upper_bound], 4)
-                if (sum(sum(x[:5]-nondl_x[:5]))>0.01):  # 0.01 randomly chosen arbitarily small threshold
-                    # ^Client11 fails when threshold is < 0.002, idk why there is any discrepancy
-                    # ^All numbers are positive so anything <1 is just rounding as far as I'm concerned
-                    print(f"clientavg: TRAINLOADER DOESN'T MATCH EXPECTED!! (@ update {self.current_update}, with x.size={x.size()})")
-                    print(f"Summed difference: {sum(sum(x[:5]-nondl_x[:5]))}")
-                    print(f"Trainloader x first 10 entries of channel 0: {x[:10, 0]}") 
-                    print(f"cond_samples_npy first 10 entries of channel 0: {nondl_x[:10, 0]}") 
-                    print()
-                    print(f"Trainloader y first 10 entries of channel 0: {y[:10, 0]}") 
-                    print(f"cond_labels_npy first 10 entries of channel 0: {nondl_y[:10, 0]}") 
-                    raise ValueError("Trainloader may not be working as anticipated")
-                #assert(sum(sum(x[:5]-self.cond_labels_npy[self.update_ix[self.current_update]:self.update_ix[self.current_update+1]][:5]))==0) 
-                #'''
+                # I think trainloader is fine so I can turn it off once tl has been verified
+                self.assert_tl_samples_match_npy(x, y)
                 
                 # Simulate datastreaming, eg set s, F and V
                 self.simulate_data_streaming_xy(x, y)

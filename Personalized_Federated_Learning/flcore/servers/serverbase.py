@@ -48,9 +48,7 @@ class Server(object):
 
         self.rs_test_loss = []
         self.rs_train_loss = []
-        # Can't save dicts to HD5F files...
-        #self.cost_func_comps_dict = dict()
-        #self.gradient_dict = dict()
+        # Can't save dicts to HD5F files so use nested lists for now I guess
         self.cost_func_comps_log = []
         self.gradient_norm_log = []
 
@@ -109,13 +107,11 @@ class Server(object):
                                 send_slow=send_slow)
             
             self.clients.append(client)
-            
+            client.load_train_data(client_init=True)
 
     # random select slow clients
     def select_slow_clients(self, slow_rate):
-        # I never updated this but it is run in serverlocal for some reason idk
-        #raise ValueError("select_slow_clients() has not been updated yet.")
-        slow_clients = [False for i in range(self.num_clients)]
+        slow_clients = [False for _ in range(self.num_clients)]
         if self.slow_clients_bool==False:
             return slow_clients
         idx = [i for i in range(self.num_clients)]
@@ -125,9 +121,6 @@ class Server(object):
         return slow_clients
 
     def set_slow_clients(self):
-        # I never updated this but it is run in serverlocal for some reason idk
-        #print("set_slow_clients has been run")
-        #raise ValueError("set_slow_clients() has not been updated yet.")
         self.train_slow_clients = self.select_slow_clients(
             self.train_slow_rate)
         self.send_slow_clients = self.select_slow_clients(
@@ -218,9 +211,9 @@ class Server(object):
         # convert datetime obj to string
         str_current_datetime = str(current_datetime)
 
-        trial_result_path = self.result_path + str_current_datetime
-        if not os.path.exists(trial_result_path):
-            os.makedirs(trial_result_path)
+        self.trial_result_path = self.result_path + str_current_datetime
+        if not os.path.exists(self.trial_result_path):
+            os.makedirs(self.trial_result_path)
 
         param_log_str = (
             "BASE\n"
@@ -249,13 +242,16 @@ class Server(object):
             f"test_split_each_update = {self.test_split_each_update}\n"
             f"test_split_users = {self.test_split_users}\n"
             f"run_train_metrics = {self.run_train_metrics}")
-        with open(trial_result_path+r'\param_log.txt', 'w') as file:
+        with open(self.trial_result_path+r'\param_log.txt', 'w') as file:
             file.write(param_log_str)
 
         if (len(self.rs_train_loss))!=0 or self.use_train_metrics==False:  # Idk why this is condition...
             algo = algo + "_" + self.goal# + "_" + str(self.times)  # IDk what self.times represents...
-            file_path = trial_result_path + r"\{}.h5".format(algo)
+            file_path = self.trial_result_path + r"\{}.h5".format(algo)
             print("File path: " + file_path)
+            #for client in self.clients:
+            #    client.results_file_path = self.trial_result_path
+            #    client.h5_file_path = file_path
 
             with h5py.File(file_path, 'w') as hf:
                 hf.create_dataset('rs_test_loss', data=self.rs_test_loss)
