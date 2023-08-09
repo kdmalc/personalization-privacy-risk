@@ -34,9 +34,8 @@ class clientAVG(Client):
         for step in range(max_local_steps):  # I'm assuming this is gradient steps?... are local epochs the same as gd steps?
             for i, (x, y) in enumerate(trainloader):  # i currently have it set such that each tl only has 1 batch of 1200 (8/5/23)
                 print(f"Step {step}, batch {i}")
-                self.cphs_training_subroutine(x, y)
-                
-                '''
+                #self.cphs_training_subroutine(x, y)
+                #'''
                 # Assert that the dataloader data corresponds to the correct update data
                 # I think trainloader is fine so I can turn it off once tl has been verified
                 self.assert_tl_samples_match_npy(x, y)
@@ -101,7 +100,7 @@ class clientAVG(Client):
                 #print(f"Model ID / Object: {id(self.model)}; {self.model}") --> #They all appear to be different...
                 #self.running_epoch_loss.append(loss.item() * x.size(0))  # From: running_epoch_loss.append(loss.item() * images.size(0))
                 #running_num_samples += x.size(0)
-                '''
+                #'''
 
         #epoch_loss = self.running_epoch_loss / len(trainloader['train'])  # From: epoch_loss = running_epoch_loss / len(dataloaders['train'])
         #self.loss_log.append(epoch_loss)  
