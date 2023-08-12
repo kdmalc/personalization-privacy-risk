@@ -2,7 +2,7 @@ import torch
 import numpy as np
 import time
 import copy
-import torch.nn as nn
+#import torch.nn as nn
 from flcore.optimizers.fedoptimizer import PerturbedGradientDescent
 from flcore.clients.clientbase import Client
 import torch.nn.functional as F
@@ -11,8 +11,8 @@ from sklearn import metrics
 
 
 class clientDitto(Client):
-    def __init__(self, args, id, train_samples, test_samples, **kwargs):
-        super().__init__(args, id, train_samples, test_samples, **kwargs)
+    def __init__(self, args, ID, samples_path, labels_path, **kwargs):
+        super().__init__(args, ID, samples_path, labels_path, **kwargs)
 
         self.mu = args.mu
         self.plocal_steps = args.plocal_steps
@@ -46,6 +46,8 @@ class clientDitto(Client):
                 y = y.to(self.device)
                 if self.train_slow:
                     time.sleep(0.1 * np.abs(np.random.rand()))
+
+                
                 output = self.model(x)
                 loss = self.loss(output, y)
                 self.optimizer.zero_grad()
@@ -83,6 +85,7 @@ class clientDitto(Client):
                 y = y.to(self.device)
                 if self.train_slow:
                     time.sleep(0.1 * np.abs(np.random.rand()))
+
                 output = self.model_per(x)
                 loss = self.loss(output, y)
                 self.optimizer_per.zero_grad()
@@ -100,10 +103,7 @@ class clientDitto(Client):
         self.model_per.eval()
 
         test_acc = 0
-        test_num = 0
-        y_prob = []
-        y_true = []
-        
+        test_loss = 0
         with torch.no_grad():
             for x, y in testloaderfull:
                 if type(x) == type([]):
@@ -111,22 +111,26 @@ class clientDitto(Client):
                 else:
                     x = x.to(self.device)
                 y = y.to(self.device)
-                output = self.model_per(x)
 
-                test_acc += (torch.sum(torch.argmax(output, dim=1) == y)).item()
+                self.simulate_data_streaming_xy(x, y)
+                # D@s = predicted velocity
+                vel_pred = self.model_per(torch.transpose(self.F, 0, 1)) 
+                if vel_pred.shape[0]!=self.y_ref.shape[0]:
+                    tvel_pred = torch.transpose(vel_pred, 0, 1)
+                else:
+                    tvel_pred = vel_pred
+                t1 = self.loss_func(tvel_pred, self.y_ref)
+                t2 = self.lambdaD*(torch.linalg.matrix_norm((self.model_per.weight))**2)
+                t3 = self.lambdaF*(torch.linalg.matrix_norm((self.F))**2)
+                loss = t1 + t2 + t3
+
+                test_loss = loss.item()  # Just get the actual loss function term
+                running_test_loss += test_loss
+                #if self.verbose:
+                #    print(f"batch {i}, loss {test_loss:0,.5f}")
                 test_num += y.shape[0]
-
-                y_prob.append(F.softmax(output).detach().cpu().numpy())
-                y_true.append(label_binarize(y.detach().cpu().numpy(), classes=np.arange(self.num_classes)))
-
         # self.model.cpu()
-
-        y_prob = np.concatenate(y_prob, axis=0)
-        y_true = np.concatenate(y_true, axis=0)
-
-        auc = metrics.roc_auc_score(y_true, y_prob, average='micro')
-        
-        return test_acc, test_num, auc
+        return test_loss, test_num
 
     def train_metrics_personalized(self):
         trainloader = self.load_train_data()
@@ -141,14 +145,25 @@ class clientDitto(Client):
                 else:
                     x = x.to(self.device)
                 y = y.to(self.device)
-                output = self.model_per(x)
-                loss = self.loss(output, y)
 
+                self.simulate_data_streaming_xy(x, y)
+                # D@s = predicted velocity
+                vel_pred = self.model_per(torch.transpose(self.F, 0, 1)) 
+                if vel_pred.shape[0]!=self.y_ref.shape[0]:
+                    tvel_pred = torch.transpose(vel_pred, 0, 1)
+                else:
+                    tvel_pred = vel_pred
+                t1 = self.loss_func(tvel_pred, self.y_ref)
+                t2 = self.lambdaD*(torch.linalg.matrix_norm((self.model_per.weight))**2)
+                t3 = self.lambdaF*(torch.linalg.matrix_norm((self.F))**2)
+                loss = (t1 + t2 + t3).item() 
+
+                #output = self.model_per(x)
+                #loss = self.loss(output, y)
                 gm = torch.cat([p.data.view(-1) for p in self.model.parameters()], dim=0)
                 pm = torch.cat([p.data.view(-1) for p in self.model_per.parameters()], dim=0)
                 loss += 0.5 * self.mu * torch.norm(gm-pm, p=2)
                 
                 train_num += y.shape[0]
                 losses += loss.item() * y.shape[0]
-
         return losses, train_num

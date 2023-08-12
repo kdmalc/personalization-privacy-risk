@@ -66,12 +66,13 @@ class Ditto(Server):
         self.save_results()
         self.save_global_model()
 
-        if self.num_new_clients > 0:
-            self.eval_new_clients = True
-            self.set_new_clients(clientDitto)
-            print(f"\n-------------Fine tuning round-------------")
-            print("\nEvaluate new clients")
-            self.evaluate()
+        self.evaluate(train=False)
+        #if self.num_new_clients > 0:
+        #    self.eval_new_clients = True
+        #    self.set_new_clients(clientDitto)
+        #    print(f"\n-------------Fine tuning round-------------")
+        #    print("\nEvaluate new clients")
+        #    self.evaluate()
 
 
     def test_metrics_personalized(self):
@@ -80,17 +81,15 @@ class Ditto(Server):
             return self.test_metrics_new_clients()
         
         num_samples = []
-        tot_correct = []
-        tot_auc = []
+        losses = []
         for c in self.clients:
-            ct, ns, auc = c.test_metrics_personalized()
-            tot_correct.append(ct*1.0)
-            tot_auc.append(auc*ns)
+            ct, ns = c.test_metrics_personalized()
+            losses.append(ct*1.0)
             num_samples.append(ns)
 
-        ids = [c.id for c in self.clients]
+        IDs = [c.ID for c in self.clients]
 
-        return ids, num_samples, tot_correct, tot_auc
+        return IDs, num_samples, losses
 
     def train_metrics_personalized(self):
         if self.eval_new_clients and self.num_new_clients > 0:
@@ -103,9 +102,9 @@ class Ditto(Server):
             num_samples.append(ns)
             losses.append(cl*1.0)
 
-        ids = [c.id for c in self.clients]
+        IDs = [c.ID for c in self.clients]
 
-        return ids, num_samples, losses
+        return IDs, num_samples, losses
 
     # evaluate selected clients
     def evaluate_personalized(self, acc=None, loss=None):

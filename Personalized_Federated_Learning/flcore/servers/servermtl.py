@@ -2,7 +2,6 @@ import time
 import torch
 from flcore.clients.clientmtl import clientMTL
 from flcore.servers.serverbase import Server
-from threading import Thread
 
 
 class FedMTL(Server):
@@ -46,21 +45,15 @@ class FedMTL(Server):
 
                 client.train()
 
-            # threads = [Thread(target=client.train)
-            #            for client in self.selected_clients]
-            # [t.start() for t in threads]
-            # [t.join() for t in threads]
-
-            if self.auto_break and self.check_done(acc_lss=[self.rs_test_acc], top_cnt=self.top_cnt):
+            if self.auto_break and self.check_done(acc_lss=[self.rs_test_loss], top_cnt=self.top_cnt):
                 break
 
 
-        print("\nBest accuracy.")
-        # self.print_(max(self.rs_test_acc), max(
-        #     self.rs_train_acc), min(self.rs_train_loss))
-        print(max(self.rs_test_acc))
+        print("\nBest Loss.")
+        print(min(self.rs_test_loss))
 
         self.save_results()
+        self.evaluate(train=False)
 
 
     def flatten(self, model):

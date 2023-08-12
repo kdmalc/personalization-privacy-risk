@@ -58,8 +58,8 @@ class Server(object):
         self.train_slow_rate = args.train_slow_rate
         self.send_slow_rate = args.send_slow_rate
 
-        #self.dlg_eval = args.dlg_eval
-        #self.dlg_gap = args.dlg_gap
+        self.dlg_eval = args.dlg_eval
+        self.dlg_gap = args.dlg_gap
         self.batch_num_per_client = args.batch_num_per_client
 
         self.num_new_clients = args.num_new_clients
@@ -101,8 +101,8 @@ class Server(object):
             base_data_path = 'C:\\Users\\kdmen\\Desktop\\Research\\personalization-privacy-risk\\Data\\Client_Specific_Files\\'
             client = clientObj(self.args, 
                                 ID=i, 
-                                train_samples = base_data_path + "UserID" + str(i) + "_TrainData_8by20770by64.npy", 
-                                test_samples = base_data_path + "UserID" + str(i) + "_Labels_8by20770by2.npy", 
+                                samples_path = base_data_path + "UserID" + str(i) + "_TrainData_8by20770by64.npy", 
+                                labels_path = base_data_path + "UserID" + str(i) + "_Labels_8by20770by2.npy", 
                                 train_slow=train_slow, 
                                 send_slow=send_slow)
             
@@ -203,7 +203,7 @@ class Server(object):
         model_path = os.path.join(model_path, self.algorithm + "_server" + ".pt")
         return os.path.exists(model_path)
         
-    def save_results(self, save_cost_func_comps=False, save_gradient=False):
+    def save_results(self, personalized=False, save_cost_func_comps=False, save_gradient=False):
         algo = self.dataset + "_" + self.algorithm
 
         # get current date and time
@@ -245,7 +245,12 @@ class Server(object):
         with open(self.trial_result_path+r'\param_log.txt', 'w') as file:
             file.write(param_log_str)
 
-        if (len(self.rs_train_loss))!=0 or self.use_train_metrics==False:  # Idk why this is condition...
+        #if (len(self.rs_train_loss))!=0: #or self.run_train_metrics==False:  # Idk why this is condition...
+        # Bad testing logic...
+        #try:
+        #except AttributeError:
+        if (personalized==True and ((len(self.rs_test_loss_per))!=0)) or (personalized==False and ((len(self.rs_test_loss))!=0)):
+            # Why would this run if run_train_metrics is False...
             algo = algo + "_" + self.goal# + "_" + str(self.times)  # IDk what self.times represents...
             file_path = self.trial_result_path + r"\{}.h5".format(algo)
             print("File path: " + file_path)
@@ -254,21 +259,25 @@ class Server(object):
             #    client.h5_file_path = file_path
 
             with h5py.File(file_path, 'w') as hf:
-                hf.create_dataset('rs_test_loss', data=self.rs_test_loss)
-                hf.create_dataset('rs_train_loss', data=self.rs_train_loss)
+                if personalized:
+                    hf.create_dataset('rs_test_loss_per', data=self.rs_test_loss_per)
+                    hf.create_dataset('rs_train_loss_per', data=self.rs_train_loss_per)
+                else:
+                    hf.create_dataset('rs_test_loss', data=self.rs_test_loss)
+                    hf.create_dataset('rs_train_loss', data=self.rs_train_loss)
                 if save_cost_func_comps:
                     #print(f'cost_func_comps_log: \n {self.cost_func_comps_log}\n')                   
                     G1 = hf.create_group('cost_func_tuples_by_client')
                     for idx, cost_func_comps in enumerate(self.cost_func_comps_log):
                         name_str = 'ClientID' + str(idx)
                         G1.create_dataset(name_str, data=cost_func_comps)
-                
                 if save_gradient:
                     #print(f'gradient_norm_log: \n {self.gradient_norm_log}\n')
                     G2 = hf.create_group('gradient_norm_lists_by_client')
                     for idx, grad_norm_list in enumerate(self.gradient_norm_log):
                         name_str = 'ClientID' + str(idx)
                         G2.create_dataset(name_str, data=grad_norm_list)
+
 
     def save_item(self, item, item_name):
         if not os.path.exists(self.save_folder_name):

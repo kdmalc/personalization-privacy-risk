@@ -53,12 +53,13 @@ class PerAvg(Server):
 
         self.save_results()
 
-        if self.num_new_clients > 0:
-            self.eval_new_clients = True
-            self.set_new_clients(clientPerAvg)
-            print(f"\n-------------Fine tuning round-------------")
-            print("\nEvaluate new clients")
-            self.evaluate()
+        self.evaluate(train=False)
+        #if self.num_new_clients > 0:
+        #    self.eval_new_clients = True
+        #    self.set_new_clients(clientPerAvg)
+        #    print(f"\n-------------Fine tuning round-------------")
+        #    print("\nEvaluate new clients")
+        #    self.evaluate()
 
 
     def evaluate_one_step(self, acc=None, loss=None):
@@ -76,22 +77,22 @@ class PerAvg(Server):
         for i, c in enumerate(self.clients):
             c.clone_model(models_temp[i], c.model)
 
-        accs = [a / n for a, n in zip(stats[2], stats[1])]
+        #accs = [a / n for a, n in zip(stats[2], stats[1])]
 
-        test_acc = sum(stats[2])*1.0 / sum(stats[1])
+        test_loss = sum(stats[2])*1.0 / sum(stats[1])
         train_loss = sum(stats_train[2])*1.0 / sum(stats_train[1])
         
         if acc == None:
-            self.rs_test_acc.append(test_acc)
+            self.rs_test_loss.append(test_loss)
         else:
-            acc.append(test_acc)
+            acc.append(test_loss)
         
         if loss == None:
             self.rs_train_loss.append(train_loss)
         else:
             loss.append(train_loss)
 
-        print("Averaged Train Loss: {:.4f}".format(train_loss))
-        print("Averaged Test Accurancy: {:.4f}".format(test_acc))
         # self.print_(test_acc, train_acc, train_loss)
-        print("Std Test Accurancy: {:.4f}".format(np.std(accs)))
+        print("Averaged Train Loss: {:.4f}".format(train_loss))
+        print("Averaged Test Loss: {:.4f}".format(test_loss))
+        #print("Std Test Accurancy: {:.4f}".format(np.std(accs)))

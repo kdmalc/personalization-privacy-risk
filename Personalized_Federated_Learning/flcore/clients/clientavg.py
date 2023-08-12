@@ -9,8 +9,8 @@ from flcore.pflniid_utils.privacy import *
 
 
 class clientAVG(Client):
-    def __init__(self, args, ID, train_samples, test_samples, **kwargs):
-        super().__init__(args, ID, train_samples, test_samples, **kwargs)
+    def __init__(self, args, ID, samples_path, labels_path, **kwargs):
+        super().__init__(args, ID, samples_path, labels_path, **kwargs)
 
     def train(self):
         trainloader = self.load_train_data()

@@ -5,13 +5,13 @@ import copy
 import torch.nn as nn
 from flcore.optimizers.fedoptimizer import PerAvgOptimizer
 from flcore.clients.clientbase import Client
-from utils.data_utils import read_client_data
-from torch.utils.data import DataLoader
+#from utils.data_utils import read_client_data
+#from torch.utils.data import DataLoader
 
 
 class clientPerAvg(Client):
-    def __init__(self, args, id, train_samples, test_samples, **kwargs):
-        super().__init__(args, id, train_samples, test_samples, **kwargs)
+    def __init__(self, args, ID, samples_path, labels_path, **kwargs):
+        super().__init__(args, ID, samples_path, labels_path, **kwargs)
 
         # self.beta = args.beta
         self.beta = self.learning_rate
@@ -37,6 +37,7 @@ class clientPerAvg(Client):
             for X, Y in trainloader:
                 temp_model = copy.deepcopy(list(self.model.parameters()))
 
+                # How to integrate X,Y, x,y, and self.F?
                 # step 1
                 if type(X) == type([]):
                     x = [None, None]

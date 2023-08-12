@@ -347,7 +347,7 @@ class Client(object):
                 vel_pred = self.model(torch.transpose(self.F, 0, 1)) 
                 
                 if vel_pred.shape[0]!=self.y_ref.shape[0]:
-                    print("TRANSPOSING")
+                    #print("TRANSPOSING")
                     tvel_pred = torch.transpose(vel_pred, 0, 1)
                 else:
                     tvel_pred = vel_pred
@@ -356,7 +356,6 @@ class Client(object):
                 t3 = self.lambdaF*(torch.linalg.matrix_norm((self.F))**2)
                 loss = t1 + t2 + t3
 
-                ####################################
                 test_loss = loss.item()  # Just get the actual loss function term
                 running_test_loss += test_loss
                 if self.verbose:
@@ -402,7 +401,7 @@ class Client(object):
                 t3 = self.lambdaF*(torch.linalg.matrix_norm((self.F))**2)
                 loss = t1 + t2 + t3
                 if self.verbose:
-                    print(f"batch {i}, loss {loss:0,.2f}")
+                    print(f"batch {i}, loss {loss:0,.5f}")
                 train_num += self.y_ref.shape[0]  # Why is this y.shape and not x.shape?... I guess they are the same row dims?
                 # Why are they multiplying by y.shape[0] here...
                 losses += loss.item() #* y.shape[0]

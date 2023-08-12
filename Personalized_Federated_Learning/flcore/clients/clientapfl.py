@@ -10,8 +10,8 @@ from flcore.clients.clientbase import Client
 from sklearn import metrics
 
 class clientAPFL(Client):
-    def __init__(self, args, ID, train_samples, test_samples, **kwargs):
-        super().__init__(args, id, train_samples, test_samples, **kwargs)
+    def __init__(self, args, ID, samples_path, labels_path, **kwargs):
+        super().__init__(args, id, samples_path, labels_path, **kwargs)
 
         self.alpha = args.alpha
         self.model_per = copy.deepcopy(self.model)

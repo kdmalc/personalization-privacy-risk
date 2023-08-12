@@ -2,14 +2,14 @@ import numpy as np
 import time
 import copy
 import torch
-import torch.nn as nn
+#import torch.nn as nn
 from flcore.optimizers.fedoptimizer import pFedMeOptimizer
 from flcore.clients.clientbase import Client
 
 
 class clientpFedMe(Client):
-    def __init__(self, args, id, train_samples, test_samples, **kwargs):
-        super().__init__(args, id, train_samples, test_samples, **kwargs)
+    def __init__(self, args, ID, samples_path, labels_path, **kwargs):
+        super().__init__(args, ID, samples_path, labels_path, **kwargs)
 
         self.lamda = args.lamda
         self.K = args.K
@@ -38,21 +38,38 @@ class clientpFedMe(Client):
             max_local_epochs = np.random.randint(1, max_local_epochs // 2)
 
         for step in range(max_local_epochs):  # local update
-            for x, y in trainloader:
-                if type(x) == type([]):
-                    x[0] = x[0].to(self.device)
-                else:
-                    x = x.to(self.device)
-                y = y.to(self.device)
+            for i, (x, y) in enumerate(trainloader):
+                print(f"Step {step}, batch {i}")
                 if self.train_slow:
                     time.sleep(0.1 * np.abs(np.random.rand()))
 
+                self.assert_tl_samples_match_npy(x, y)
+                # Simulate datastreaming, eg set s, F and V
+                self.simulate_data_streaming_xy(x, y)
+                
                 # K is number of personalized steps
                 for i in range(self.K):
-                    output = self.model(x)
-                    loss = self.loss(output, y)
+                    # forward pass and loss
+                    vel_pred = self.model(torch.transpose(self.F, 0, 1)) 
+                    if vel_pred.shape[0]!=self.y_ref.shape[0]:
+                        tvel_pred = torch.transpose(vel_pred, 0, 1)
+                    else:
+                        tvel_pred = vel_pred
+                    t1 = self.loss_func(tvel_pred, self.y_ref)
+                    t2 = self.lambdaD*(torch.linalg.matrix_norm((self.model.weight))**2)
+                    t3 = self.lambdaF*(torch.linalg.matrix_norm((self.F))**2)
+                    loss = t1 + t2 + t3
+                    self.cost_func_comps_log = [(t1.item(), t2.item(), t3.item())]
                     self.optimizer.zero_grad()
+                    # backward pass
                     loss.backward()
+                    self.loss_log.append(loss.item())
+                    weight_grad = self.model.weight.grad
+                    if weight_grad == None:
+                        self.gradient_norm_log.append(-1)
+                    else:
+                        grad_norm = np.linalg.norm(self.model.weight.grad.detach().numpy())
+                        self.gradient_norm_log.append(grad_norm)
                     # finding aproximate theta
                     self.personalized_params = self.optimizer.step(self.local_params, self.device)
 
@@ -83,52 +100,76 @@ class clientpFedMe(Client):
         # self.model.to(self.device)
         self.model.eval()
 
-        test_acc = 0
+        running_test_loss = 0
         test_num = 0
         
         with torch.no_grad():
-            for x, y in testloaderfull:
+            for i, (x, y) in enumerate(testloaderfull):
                 if type(x) == type([]):
                     x[0] = x[0].to(self.device)
                 else:
                     x = x.to(self.device)
                 y = y.to(self.device)
-                output = self.model(x)
-                test_acc += (torch.sum(torch.argmax(output, dim=1) == y)).item()
+                
+                self.simulate_data_streaming_xy(x, y)
+                # D@s = predicted velocity
+                vel_pred = self.model(torch.transpose(self.F, 0, 1)) 
+                
+                if vel_pred.shape[0]!=self.y_ref.shape[0]:
+                    #print("TRANSPOSING")
+                    tvel_pred = torch.transpose(vel_pred, 0, 1)
+                else:
+                    tvel_pred = vel_pred
+                t1 = self.loss_func(tvel_pred, self.y_ref)
+                t2 = self.lambdaD*(torch.linalg.matrix_norm((self.model.weight))**2)
+                t3 = self.lambdaF*(torch.linalg.matrix_norm((self.F))**2)
+                loss = t1 + t2 + t3
+
+                #test_acc += (torch.sum(torch.argmax(output, dim=1) == y)).item()
+                test_loss = loss.item()  # Just get the actual loss function term
+                running_test_loss += test_loss
                 test_num += y.shape[0]
 
+                if self.verbose:
+                    print(f"batch {i}, loss {test_loss:0,.5f}")
         # self.model.cpu()
-        
-        return test_acc, test_num
+        return running_test_loss, test_num
 
     def train_metrics_personalized(self):
-        trainloader = self.load_train_data()
+        trainloader = self.load_train_data(eval=True)
         self.update_parameters(self.model, self.personalized_params)
         # self.model.to(self.device)
         self.model.eval()
 
-        train_acc = 0
         train_num = 0
         losses = 0
         with torch.no_grad():
-            for x, y in trainloader:
+            for i, (x, y) in enumerate(trainloader):
                 if type(x) == type([]):
                     x[0] = x[0].to(self.device)
                 else:
                     x = x.to(self.device)
                 y = y.to(self.device)
-                output = self.model(x)
-                loss = self.loss(output, y).item()
+
+                self.simulate_data_streaming_xy(x, y)
+                vel_pred = self.model(torch.transpose(self.F, 0, 1)) 
+                if vel_pred.shape[0]!=self.y_ref.shape[0]:
+                    tvel_pred = torch.transpose(vel_pred, 0, 1)
+                else:
+                    tvel_pred = vel_pred
+                t1 = self.loss_func(tvel_pred, self.y_ref)
+                t2 = self.lambdaD*(torch.linalg.matrix_norm((self.model.weight))**2)
+                t3 = self.lambdaF*(torch.linalg.matrix_norm((self.F))**2)
+                loss = (t1 + t2 + t3).item()
+                if self.verbose:
+                    print(f"batch {i}, loss {loss:0,.5f}")
 
                 lm = torch.cat([p.data.view(-1) for p in self.local_params], dim=0)
                 pm = torch.cat([p.data.view(-1) for p in self.personalized_params], dim=0)
                 loss += 0.5 * self.lamda * torch.norm(lm-pm, p=2)
 
-                train_acc += (torch.sum(torch.argmax(output, dim=1) == y)).item()
-                
+                #train_acc += (torch.sum(torch.argmax(output, dim=1) == y)).item()
                 train_num += y.shape[0]
                 losses += loss.item() * y.shape[0]
-
         # self.model.cpu()
-        
-        return train_acc, losses, train_num
+        return losses, train_num

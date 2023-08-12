@@ -35,10 +35,17 @@ def read_data_then_delete(file_name, delete=False):
     file_path = file_name + ".h5"
 
     with h5py.File(file_path, 'r') as hf:
-        rs_test_loss = np.array(hf.get('rs_test_loss'))
-
-    if delete:
-        os.remove(file_path)
-    print("Length: ", len(rs_test_loss))
+        # There must be a better way of doing this...
+        # Maybe could move these 3 funcs into the serverbase object? So it could access the algo or the personalized flag?
+        try: 
+            rs_test_loss = np.array(hf.get('rs_test_loss'))
+            if delete:
+                os.remove(file_path)
+            print("Length: ", len(rs_test_loss))
+        except TypeError:
+            rs_test_loss = np.array(hf.get('rs_test_loss_per'))
+            if delete:
+                os.remove(file_path)
+            print("Length: ", len(rs_test_loss))
 
     return rs_test_loss
