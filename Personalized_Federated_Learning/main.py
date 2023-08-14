@@ -246,8 +246,10 @@ if __name__ == "__main__":
     parser.add_argument('-gr', "--global_rounds", type=int, default=100)  # KAI: Originally was 2000
     parser.add_argument('-ls', "--local_epochs", type=int, default=1, 
                         help="Multiple update steps in one local epoch.")  # KAI: I think it was 1 originally.  I'm gonna keep it there.  Does this mean I can set batchsize to 1300 and cook? Is my setup capable or running multiple epochs? Implicitly I was doing 1 epoch before, using the full update data I believe...
-    parser.add_argument('-algo', "--algorithm", type=str, default="FedMTL") #Local #FedAvg #APFL #FedMTL #pFedMe ## #Ditto #PerAvg
-    parser.add_argument('-jr', "--join_ratio", type=float, default=0.2,
+    #Local #FedAvg #APFL #FedMTL #pFedMe ## #Ditto #PerAvg
+    # pFedMe not working
+    parser.add_argument('-algo', "--algorithm", type=str, default="APFL")
+    parser.add_argument('-jr', "--join_ratio", type=float, default=0.3,
                         help="Ratio of clients per round")
     parser.add_argument('-rjr', "--random_join_ratio", type=bool, default=False,
                         help="Random ratio of clients per round")
@@ -304,7 +306,6 @@ if __name__ == "__main__":
     parser.add_argument('-itk', "--itk", type=int, default=4000,
                         help="The iterations for solving quadratic subproblems")
     
-
     '''
     # SCAFFOLD
     parser.add_argument('-slr', "--server_learning_rate", type=float, default=1.0)
@@ -344,13 +345,13 @@ if __name__ == "__main__":
     
     # SECTION: Kai's additional args
     # PCA should probably be broken into 2 since 64 channels is device specific
-    parser.add_argument('-pca_ch', "--pca_channels", type=int, default=64, #64
+    parser.add_argument('-pca_ch', "--pca_channels", type=int, default=10, #64, 10
                         help="Number of principal components. 64 means do not use any PCA")
     parser.add_argument('-lF', "--lambdaF", type=float, default=0.0,
                         help="Penalty term for user EMG input (user effort)")
-    parser.add_argument('-lD', "--lambdaD", type=float, default=1e-3,
+    parser.add_argument('-lD', "--lambdaD", type=float, default=1e-3, #1e-3
                         help="Penalty term for the decoder norm (interface effort)")
-    parser.add_argument('-lE', "--lambdaE", type=float, default=1e-4,
+    parser.add_argument('-lE', "--lambdaE", type=float, default=1e-4, #1e-4
                         help="Penalty term on performance error norm")
     parser.add_argument('-stup', "--starting_update", type=int, default=10,
                         help="Which update to start on (for CPHS Simulation). Use 0 or 10.")
@@ -366,7 +367,7 @@ if __name__ == "__main__":
                         help="Number of recording channels with the used EMG device")
     parser.add_argument('-dt', "--dt", type=float, default=1/60,
                         help="Delta time, amount of time (sec?) between measurements")
-    parser.add_argument('-normalize_data', "--normalize_data", type=bool, default=True,
+    parser.add_argument('-normalize_data', "--normalize_data", type=bool, default=True, # Only works when True!
                         help="Normalize the input EMG signals and its labels. This is good practice.")
     parser.add_argument('-lrt', "--local_round_threshold", type=int, default=50,
                         help="Number of communication rounds per client until a client will advance to the next batch of streamed data")
@@ -379,9 +380,9 @@ if __name__ == "__main__":
                         help="Print out a bunch of extra stuff")
     parser.add_argument('-slow_clients_bool', "--slow_clients_bool", type=bool, default=False,
                         help="Control whether or not to have ANY slow clients")
-    parser.add_argument('-return_cost_func_comps', "--return_cost_func_comps", type=bool, default=False,  # They're basically returned by default now
+    parser.add_argument('-return_cost_func_comps', "--return_cost_func_comps", type=bool, default=True,  # They're basically returned by default now
                         help="Return Loss, Error, DTerm, FTerm from loss class")
-    parser.add_argument('-lm_bias', "--linear_model_bias", type=bool, default=False,
+    parser.add_argument('-lm_bias', "--linear_model_bias", type=bool, default=True,
                         help="Boolean determining whether to use an additive bias. Note that previous 599 approach had no additive bias.")
     # Idk if this will work actually? :0.self.ndpf won't work, I don't think...
     parser.add_argument('-ndp', "--num_decimal_points", type=int, default=5,
