@@ -100,7 +100,7 @@ class Client(object):
     def cphs_training_subroutine(self, x, y):
         # Assert that the dataloader data corresponds to the correct update data
         # I think trainloader is fine so I can turn it off once tl has been verified
-        self.assert_tl_samples_match_npy(x, y)
+        #self.assert_tl_samples_match_npy(x, y)
         
         # Simulate datastreaming, eg set s, F and V
         self.simulate_data_streaming_xy(x, y)
@@ -412,12 +412,15 @@ class Client(object):
         return losses, train_num
 
     
-    def assert_tl_samples_match_npy(self, x, y):
+    def assert_tl_samples_match_npy(self, x, y, batch_num):  #=None):  # I think batch_num should always work? As long as the batch size works out...
         # Assert that the dataloader data corresponds to the correct update data from the npy file that is loaded in
         # Right now this doesn't check the labels y... does print them tho
 
         nondl_x = np.round(self.cond_samples_npy[self.update_lower_bound:self.update_upper_bound], 4)
         nondl_y = np.round(self.cond_labels_npy[self.update_lower_bound:self.update_upper_bound], 4)
+        #if batch_num!=None:
+        nondl_x = nondl_x[self.batch_size*batch_num:self.batch_size*batch_num+self.batch_size]
+        nondl_y = nondl_y[self.batch_size*batch_num:self.batch_size*batch_num+self.batch_size]
         if (sum(sum(x[:5]-nondl_x[:5]))>0.01):  # 0.01 randomly chosen arbitarily small threshold
             # ^Client11 fails when threshold is < 0.002, idk why there is any discrepancy
             # ^All numbers are positive so anything <1 is just rounding as far as I'm concerned

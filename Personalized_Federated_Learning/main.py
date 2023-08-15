@@ -247,7 +247,7 @@ if __name__ == "__main__":
     #parser.add_argument('-nb', "--num_classes", type=int, default=10)  # Not doing classification...
     parser.add_argument('-m', "--model", type=str, default="LinearRegression")  # KAI: Changed the default to Linear Regression
     # I have little confidence in this batch size being correct...
-    parser.add_argument('-lbs', "--batch_size", type=int, default=1202)  # Setting it to a full update would be 1300ish... how many batches does it run? In one epoch? Not even sure where that is set
+    parser.add_argument('-lbs', "--batch_size", type=int, default=1202)  # Setting it to a full update would be 1202... will this automatically run twice?
     # The 1300 and the batch size are 2 separate things...
     # I want to restrict the given dataset to just the 1300, but then iterate in batches... or do I since we don't have that much data and can probably just use all the data at once? Make batch size match the update size? ...
     parser.add_argument('-lr', "--local_learning_rate", type=float, default=1,  #0.005
@@ -259,7 +259,7 @@ if __name__ == "__main__":
                         help="Multiple update steps in one local epoch.")  # KAI: I think it was 1 originally.  I'm gonna keep it there.  Does this mean I can set batchsize to 1300 and cook? Is my setup capable or running multiple epochs? Implicitly I was doing 1 epoch before, using the full update data I believe...
     #Local #FedAvg #APFL #FedMTL #pFedMe ## #Ditto #PerAvg
     ## pFedMe not working
-    parser.add_argument('-algo', "--algorithm", type=str, default="Local")
+    parser.add_argument('-algo', "--algorithm", type=str, default="FedAvg")
     parser.add_argument('-jr', "--join_ratio", type=float, default=0.3,
                         help="Ratio of clients per round")
     parser.add_argument('-rjr', "--random_join_ratio", type=bool, default=False,

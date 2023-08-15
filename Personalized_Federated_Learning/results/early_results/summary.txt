@@ -1,0 +1,12 @@
+These results are all the initial working runs with some early hyperparam tuning (pre-seed)
+pFedMe broken (flat losses)
+APFL training loss really bad for some reason, not sure why
+Lambdas not parametrized well, high learning rate (1)
+Determined bias=True helps improve loss
+Local outperforms global...
+
+If norm=False --> blows up
+If norm=False but lambdas are set to 599 report and PCA is used, still blows up (but not as fast)
+Default but lambdas E=1e-2 and D=1e-3 still eventually blows up (trained clients(?) blow up huge... or otherwise just some of the clients blow up... not sure which)
+Default but lambdas E=1 and D=0.1 still blows up
+Default but join ratio = 0.5, with PCA=10
