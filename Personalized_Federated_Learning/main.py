@@ -1,11 +1,22 @@
 #!/usr/bin/env python
 #import copy
+
+# Set a seed for reproducibility!
 import torch
+torch.manual_seed(0)
+# ^seed the RNG for all devices (both CPU and CUDA)
+#torch.use_deterministic_algorithms(True)
+# ^https://pytorch.org/docs/stable/notes/randomness.html
+
+import numpy as np
+np.random.seed(0)
+import random
+random.seed(0)
+
 import argparse
 import os
 import time
 import warnings
-import numpy as np
 import logging
 
 
