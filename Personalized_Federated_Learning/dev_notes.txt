@@ -1,5 +1,15 @@
-Explore effect of changing JR
+CURRENT PRIORITIES
+1. Figure out scheme for asynch FL and how that can run with the existing code (or will I just need to write something in LabGraph from scratch) --> part of this is how lifelong learning will work...
+--> Does global init actually give good performance... better than nonfederated  init...?
+2. Update code so that it is compatible with different batch sizes...
+3. Somewhat less important than the above, outfit the code so that it can run with different numbers of local epochs. Maybe this already works, haven't tried it actually
 
+INFRASTRUCTURE UPGRADES
+1. Integrate with PyTorch
+2. Switch code from using index as Client ID to passing in list of client subject IDs to use
+3. Evaluate real-time ability of code... what are the practical considerations in terms of number of rounds we can run? Optimal number of rounds / length of stream batch? Optimal batch size?
+
+GOOD TO LOOK AT (HYPERPARAM TRAINING)
 Reparam lambdas?
 Reparam learning rate?
 Reparam batch size? --> 1202 is an awkward size... what to do about it? 
@@ -9,10 +19,15 @@ Explore why learning rate is so high... are model weights really high?
 Use lr decay?
 What does a high lr do to FL?
 
-
 JOIN RATIO SHOULD HAVE NO EFFECT FOR LOCAL ALGO!!! ALL CLIENTS RUN AT ONCE!!!
 
 Plot JR effects
 Look at model weights (are they huge? Justify high learning rate?)
 Vary learning rate
 Vary lambdas? Turn back on lambda abort... grid/random search?
+
+I should switch it so that each run's models are saved in the results folder, and the models folder is instead used for init models and ones that have been shown to perform well...
+
+Explore effect of changing JR
+- Validate that changing the JR actually does it in the code... plotting shows no effect of varying JR...
+

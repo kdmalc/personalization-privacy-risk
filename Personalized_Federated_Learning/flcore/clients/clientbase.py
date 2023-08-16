@@ -400,8 +400,8 @@ class Client(object):
                 t2 = self.lambdaD*(torch.linalg.matrix_norm((self.model.weight))**2)
                 t3 = self.lambdaF*(torch.linalg.matrix_norm((self.F))**2)
                 loss = t1 + t2 + t3
-                if self.verbose:
-                    print(f"batch {i}, loss {loss:0,.5f}")
+                #if self.verbose:
+                print(f"batch {i}, loss {loss:0,.5f}")
                 train_num += self.y_ref.shape[0]  # Why is this y.shape and not x.shape?... I guess they are the same row dims?
                 # Why are they multiplying by y.shape[0] here...
                 losses += loss.item() #* y.shape[0]
@@ -412,15 +412,15 @@ class Client(object):
         return losses, train_num
 
     
-    def assert_tl_samples_match_npy(self, x, y, batch_num):  #=None):  # I think batch_num should always work? As long as the batch size works out...
+    def assert_tl_samples_match_npy(self, x, y, batch_num=None):  # I think batch_num should always work? As long as the batch size works out...
         # Assert that the dataloader data corresponds to the correct update data from the npy file that is loaded in
         # Right now this doesn't check the labels y... does print them tho
 
         nondl_x = np.round(self.cond_samples_npy[self.update_lower_bound:self.update_upper_bound], 4)
         nondl_y = np.round(self.cond_labels_npy[self.update_lower_bound:self.update_upper_bound], 4)
-        #if batch_num!=None:
-        nondl_x = nondl_x[self.batch_size*batch_num:self.batch_size*batch_num+self.batch_size]
-        nondl_y = nondl_y[self.batch_size*batch_num:self.batch_size*batch_num+self.batch_size]
+        if batch_num!=None:
+            nondl_x = nondl_x[self.batch_size*batch_num:self.batch_size*batch_num+self.batch_size]
+            nondl_y = nondl_y[self.batch_size*batch_num:self.batch_size*batch_num+self.batch_size]
         if (sum(sum(x[:5]-nondl_x[:5]))>0.01):  # 0.01 randomly chosen arbitarily small threshold
             # ^Client11 fails when threshold is < 0.002, idk why there is any discrepancy
             # ^All numbers are positive so anything <1 is just rounding as far as I'm concerned

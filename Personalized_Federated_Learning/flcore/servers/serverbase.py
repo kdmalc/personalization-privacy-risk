@@ -98,7 +98,8 @@ class Server(object):
             print(f"SBSC: iter {i}")
             # Should I switch i to be the subject ID? Not specifically required to run, for now at least
             # ID = i probably isn't the best solution... assumes things are in order...... no? Not a good solution regardless
-            base_data_path = 'C:\\Users\\kdmen\\Desktop\\Research\\personalization-privacy-risk\\Data\\Client_Specific_Files\\'
+            #base_data_path = 'C:\\Users\\kdmen\\Desktop\\Research\\personalization-privacy-risk\\Data\\Client_Specific_Files\\'
+            base_data_path = 'C:\\Users\\kdmen\\Desktop\\Research\\Data\\Client_Specific_Files\\'
             client = clientObj(self.args, 
                                 ID=i, 
                                 samples_path = base_data_path + "UserID" + str(i) + "_TrainData_8by20770by64.npy", 
@@ -450,7 +451,8 @@ class Server(object):
                 print(f"SBSNC: iter {i}")
                 # Should I switch i to be the subject ID? Not specifically required to run, for now at least
                 # ID = i probably isn't the best solution... assumes things are in order...... no? Not a good solution regardless
-                base_data_path = 'C:\\Users\\kdmen\\Desktop\\Research\\personalization-privacy-risk\\Data\\Client_Specific_Files\\'
+                #base_data_path = 'C:\\Users\\kdmen\\Desktop\\Research\\personalization-privacy-risk\\Data\\Client_Specific_Files\\'
+                base_data_path = 'C:\\Users\\kdmen\\Desktop\\Research\\Data\\Client_Specific_Files\\'
                 client = clientObj(self.args, 
                                     ID=i, 
                                     train_samples = base_data_path + "UserID" + str(i) + "_TrainData_8by20770by64.npy", 

@@ -2,12 +2,10 @@
 __pycache__
 Data
 UW_Code
-Random_Notes
 *.csv
 *.pkl
 *.pickle
 *.png
 *.jpg
-NMF.txt
 *.h5
 *.pt
