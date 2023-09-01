@@ -481,3 +481,4 @@ class Server(object):
         IDs = [c.ID for c in self.clients]
 
         return IDs, num_samples, tot_loss
+    

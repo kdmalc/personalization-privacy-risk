@@ -1,6 +1,44 @@
 # Run via: sh <file_name>.sh
 
-nohup python -u main.py -lr 1 -pca_ch 64 -algo FedAvg
+echo "lD=0.001, lE=0.0001"
+echo "Run 1:"
+nohup python -u main.py -gr 200 -lr 1 -lrt 25 -pca_ch 10 -lD 0.001 -lE 0.0001 -lm_bias True -algo FedAvg
+echo "Run 2:"
+nohup python -u main.py -gr 200 -lr 0.0001 -lrt 25 -pca_ch 10 -lm_bias True -algo FedAvg
+echo "Run 3:"
+nohup python -u main.py -gr 200 -lr 0.01 -lrt 25 -pca_ch 10 -lm_bias True -algo FedAvg
+
+echo "lD=0.001, lE=0.0001"
+echo "Run 1:"
+nohup python -u main.py -gr 200 -lr 1 -lrt 25 -pca_ch 10 -lD 0.001 -lE 0.0001 -lm_bias True -algo FedAvg
+echo "Run 2:"
+nohup python -u main.py -gr 200 -lr 0.0001 -lrt 25 -pca_ch 10 -lm_bias True -algo FedAvg
+echo "Run 3:"
+nohup python -u main.py -gr 200 -lr 0.01 -lrt 25 -pca_ch 10 -lm_bias True -algo FedAvg
+
+echo "lD=0.001, lE=0.0001"
+echo "Run 1:"
+nohup python -u main.py -gr 200 -lr 1 -lrt 25 -pca_ch 10 -lD 0.001 -lE 0.0001 -lm_bias True -algo FedAvg
+echo "Run 2:"
+nohup python -u main.py -gr 200 -lr 0.0001 -lrt 25 -pca_ch 10 -lm_bias True -algo FedAvg
+echo "Run 3:"
+nohup python -u main.py -gr 200 -lr 0.01 -lrt 25 -pca_ch 10 -lm_bias True -algo FedAvg
+
+echo "lD=0.001, lE=0.0001"
+echo "Run 1:"
+nohup python -u main.py -gr 200 -lr 1 -lrt 25 -pca_ch 10 -lD 0.001 -lE 0.0001 -lm_bias True -algo FedAvg
+echo "Run 2:"
+nohup python -u main.py -gr 200 -lr 0.0001 -lrt 25 -pca_ch 10 -lm_bias True -algo FedAvg
+echo "Run 3:"
+nohup python -u main.py -gr 200 -lr 0.01 -lrt 25 -pca_ch 10 -lm_bias True -algo FedAvg
+
+echo "lD=0.001, lE=0.0001"
+echo "Run 1:"
+nohup python -u main.py -gr 200 -lr 1 -lrt 25 -pca_ch 10 -lD 0.001 -lE 0.0001 -lm_bias True -algo FedAvg
+echo "Run 2:"
+nohup python -u main.py -gr 200 -lr 0.0001 -lrt 25 -pca_ch 10 -lm_bias True -algo FedAvg
+echo "Run 3:"
+nohup python -u main.py -gr 200 -lr 0.01 -lrt 25 -pca_ch 10 -lm_bias True -algo FedAvg
 
 #-lrt = 50
 #-lF=0.0, lD=0.001, lE=0.0001
@@ -14,7 +52,6 @@ nohup python -u main.py -lr 1 -pca_ch 64 -algo FedAvg
 ############################################################
 
 #nohup python -u main.py -lbs 16 -nc 20 -jr 1 -nb 10 -data mnist -m dnn -algo FedAvg -gr 2000 -did 0 -go dnn > mnist_fedavg.out 2>&1 &
-
 # nohup: This command is used to run a command in the background, and it ensures that the command continues to run even if the terminal session is closed.
 #-u: This argument tells Python to run the script in unbuffered mode. It ensures that the output is immediately flushed and displayed, which is useful when redirecting output to files.
 #-lbs = batch_size (default: 1202)

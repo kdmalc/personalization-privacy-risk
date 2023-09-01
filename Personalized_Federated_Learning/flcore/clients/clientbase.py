@@ -435,6 +435,23 @@ class Client(object):
         #assert(sum(sum(x[:5]-self.cond_labels_npy[self.update_ix[self.current_update]:self.update_ix[self.current_update+1]][:5]))==0) 
 
 
+    def pred_vel_and_gen_loss(self, log_cost_func_comps=True):
+        '''This function is the forward pass and loss, computing our custom loss function and returning the loss object'''
+        # D@s = predicted velocity
+        vel_pred = self.model(torch.transpose(self.F, 0, 1)) 
+        if vel_pred.shape[0]!=self.y_ref.shape[0]:
+            tvel_pred = torch.transpose(vel_pred, 0, 1)
+        else:
+            tvel_pred = vel_pred
+        t1 = self.loss_func(tvel_pred, self.y_ref)
+        t2 = self.lambdaD*(torch.linalg.matrix_norm((self.model.weight))**2)
+        t3 = self.lambdaF*(torch.linalg.matrix_norm((self.F))**2)
+        loss = t1 + t2 + t3
+        if log_cost_func_comps:
+            self.cost_func_comps_log = [(t1.item(), t2.item(), t3.item())]
+        return loss
+
+
     # def get_next_train_batch(self):
     #     try:
     #         # Samples a new batch for persionalizing

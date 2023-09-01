@@ -1,9 +1,9 @@
 import copy
-import torch
-import numpy as np
+#import torch
+#import numpy as np
 from flcore.clients.clientperavg import clientPerAvg
 from flcore.servers.serverbase import Server
-from threading import Thread
+#from threading import Thread
 
 
 class PerAvg(Server):
@@ -31,25 +31,19 @@ class PerAvg(Server):
             # choose several clients to send back upated model to server
             for client in self.selected_clients:
                 client.train()
+                # Why is this here twice...
                 client.train()
-
-            # threads = [Thread(target=client.train)
-            #            for client in self.selected_clients]
-            # [t.start() for t in threads]
-            # [t.join() for t in threads]
 
             self.receive_models()
             if self.dlg_eval and i%self.dlg_gap == 0:
                 self.call_dlg(i)
             self.aggregate_parameters()
 
-            if self.auto_break and self.check_done(acc_lss=[self.rs_test_acc], top_cnt=self.top_cnt):
+            if self.auto_break and self.check_done(acc_lss=[self.rs_test_loss], top_cnt=self.top_cnt):
                 break
 
-        print("\nBest accuracy.")
-        # self.print_(max(self.rs_test_acc), max(
-        #     self.rs_train_acc), min(self.rs_train_loss))
-        print(max(self.rs_test_acc))
+        print("\nBest loss.")
+        print(min(self.rs_test_loss))
 
         self.save_results()
 

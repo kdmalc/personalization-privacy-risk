@@ -2,7 +2,7 @@ import numpy as np
 import torch
 import time
 import copy
-import torch.nn as nn
+#import torch.nn as nn
 from flcore.optimizers.fedoptimizer import PerAvgOptimizer
 from flcore.clients.clientbase import Client
 #from utils.data_utils import read_client_data
@@ -46,15 +46,20 @@ class clientPerAvg(Client):
                 else:
                     x = X[:self.batch_size].to(self.device)
                 y = Y[:self.batch_size].to(self.device)
-                if self.train_slow:
-                    time.sleep(0.1 * np.abs(np.random.rand()))
-                output = self.model(x)
-                loss = self.loss(output, y)
+                self.simulate_data_streaming_xy(x, y)
+                #if self.train_slow:
+                #    time.sleep(0.1 * np.abs(np.random.rand()))
+
+                # forward pass and loss
+                loss = self.pred_vel_and_gen_loss()
+                #output = self.model(x)
+                #loss = self.loss(output, y)
                 self.optimizer.zero_grad()
                 loss.backward()
                 self.optimizer.step()
 
                 # step 2
+                # How is this any different from step 1?
                 if type(X) == type([]):
                     x = [None, None]
                     x[0] = X[0][self.batch_size:].to(self.device)
@@ -62,11 +67,14 @@ class clientPerAvg(Client):
                 else:
                     x = X[self.batch_size:].to(self.device)
                 y = Y[self.batch_size:].to(self.device)
-                if self.train_slow:
-                    time.sleep(0.1 * np.abs(np.random.rand()))
+                self.simulate_data_streaming_xy(x, y)
+                #if self.train_slow:
+                #    time.sleep(0.1 * np.abs(np.random.rand()))
                 self.optimizer.zero_grad()
-                output = self.model(x)
-                loss = self.loss(output, y)
+                # forward pass and loss
+                loss = self.pred_vel_and_gen_loss()
+                #output = self.model(x)
+                #loss = self.loss(output, y)
                 loss.backward()
 
                 # restore the model parameters to the one before first update
@@ -96,8 +104,11 @@ class clientPerAvg(Client):
         else:
             x = x.to(self.device)
         y = y.to(self.device)
-        output = self.model(x)
-        loss = self.loss(output, y)
+        self.simulate_data_streaming_xy(x, y)
+        # forward pass and loss
+        loss = self.pred_vel_and_gen_loss()
+        #output = self.model(x)
+        #loss = self.loss(output, y)
         self.optimizer.zero_grad()
         loss.backward()
         self.optimizer.step()
@@ -122,11 +133,12 @@ class clientPerAvg(Client):
             else:
                 x = X[:self.batch_size].to(self.device)
             y = Y[:self.batch_size].to(self.device)
-            if self.train_slow:
-                time.sleep(0.1 * np.abs(np.random.rand()))
+            self.simulate_data_streaming_xy(x, y)
             self.optimizer.zero_grad()
-            output = self.model(x)
-            loss = self.loss(output, y)
+            # forward pass and loss
+            loss = self.pred_vel_and_gen_loss()
+            #output = self.model(x)
+            #loss = self.loss(output, y)
             loss.backward()
             self.optimizer.step()
 
@@ -138,11 +150,10 @@ class clientPerAvg(Client):
             else:
                 x = X[self.batch_size:].to(self.device)
             y = Y[self.batch_size:].to(self.device)
-            if self.train_slow:
-                time.sleep(0.1 * np.abs(np.random.rand()))
+            self.simulate_data_streaming_xy(x, y)
             self.optimizer.zero_grad()
-            output = self.model(x)
-            loss1 = self.loss(output, y)
+            # forward pass and loss
+            loss1 = self.pred_vel_and_gen_loss()
 
             train_num += y.shape[0]
             losses += loss1.item() * y.shape[0]
@@ -157,10 +168,13 @@ class clientPerAvg(Client):
             else:
                 x = x.to(self.device)
             y = y.to(self.device)
-            if self.train_slow:
-                time.sleep(0.1 * np.abs(np.random.rand()))
-            output = self.model(x)
-            loss = self.loss(output, y)
+            self.simulate_data_streaming_xy(x, y)
+            # forward pass and loss
+            loss = self.pred_vel_and_gen_loss()
+            #output = self.model(x)
+            #loss = self.loss(output, y)
             self.optimizer.zero_grad()
             loss.backward()
             self.optimizer.step()
+
+            # self.model.cpu()
