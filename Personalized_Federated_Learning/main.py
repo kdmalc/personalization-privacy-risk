@@ -247,7 +247,7 @@ if __name__ == "__main__":
     #parser.add_argument('-nb', "--num_classes", type=int, default=10)  # Not doing classification...
     parser.add_argument('-m', "--model", type=str, default="LinearRegression")  # KAI: Changed the default to Linear Regression
     # I have little confidence in this batch size being correct...
-    parser.add_argument('-lbs', "--batch_size", type=int, default=100)  # Setting it to a full update would be 1202... will this automatically run twice?
+    parser.add_argument('-lbs', "--batch_size", type=int, default=1202)  # Setting it to a full update would be 1202... will this automatically run twice?
     # The 1300 and the batch size are 2 separate things...
     # I want to restrict the given dataset to just the 1300, but then iterate in batches... or do I since we don't have that much data and can probably just use all the data at once? Make batch size match the update size? ...
     parser.add_argument('-lr', "--local_learning_rate", type=float, default=1,  #0.005
@@ -255,7 +255,7 @@ if __name__ == "__main__":
     parser.add_argument('-ld', "--learning_rate_decay", type=bool, default=False)
     parser.add_argument('-ldg', "--learning_rate_decay_gamma", type=float, default=0.99)
     parser.add_argument('-gr', "--global_rounds", type=int, default=100)  # KAI: Originally was 2000
-    parser.add_argument('-ls', "--local_epochs", type=int, default=1, 
+    parser.add_argument('-ls', "--local_epochs", type=int, default=3, 
                         help="Multiple update steps in one local epoch.")  # KAI: I think it was 1 originally.  I'm gonna keep it there.  Does this mean I can set batchsize to 1300 and cook? Is my setup capable or running multiple epochs? Implicitly I was doing 1 epoch before, using the full update data I believe...
     #Local #FedAvg #APFL #FedMTL #pFedMe ## #Ditto #PerAvg
     ## pFedMe not working
@@ -356,7 +356,7 @@ if __name__ == "__main__":
     
     # SECTION: Kai's additional args
     # PCA should probably be broken into 2 since 64 channels is device specific
-    parser.add_argument('-pca_ch', "--pca_channels", type=int, default=10, #64, 10
+    parser.add_argument('-pca_ch', "--pca_channels", type=int, default=10,
                         help="Number of principal components. 64 means do not use any PCA")
     parser.add_argument('-lF', "--lambdaF", type=float, default=0.0,
                         help="Penalty term for user EMG input (user effort)")
@@ -384,7 +384,7 @@ if __name__ == "__main__":
                         help="Number of communication rounds per client until a client will advance to the next batch of streamed data")
     # I think I depreciated debug_mode, double check it's removed
     parser.add_argument('-debug_mode', "--debug_mode", type=bool, default=False,
-                        help="In debug mode, the code is run to minimize overhead time in order to debug as fast as possible.  Namely, the data is held at the server to decrease init time, and communication delays are ignored.")
+                        help="I THINK I KILLED THIS MODE: In debug mode, the code is run to minimize overhead time in order to debug as fast as possible.  Namely, the data is held at the server to decrease init time, and communication delays are ignored.")
     parser.add_argument('-con_num', "--condition_number", type=int, default=1,
                         help="Which condition number (trial) to train on")
     parser.add_argument('-v', "--verbose", type=bool, default=False,

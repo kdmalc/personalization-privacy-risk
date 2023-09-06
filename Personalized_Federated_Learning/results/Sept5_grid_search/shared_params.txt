@@ -1,0 +1,10 @@
+-gr 200
+-lm_bias True
+-lrt = 25
+-stup = 10
+-normalize_data = True
+-test_split_fraction = 0.2
+-test_split_each_update = False
+-test_split_users = False
+-bs = 1202 (AKA full update)
+-localepochs = 3

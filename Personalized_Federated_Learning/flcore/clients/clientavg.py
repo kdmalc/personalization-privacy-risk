@@ -31,10 +31,14 @@ class clientAVG(Client):
         # WHICH OF THESE LOOPS IS EQUIVALENT TO MY EPOCHS...
         print(f'Client{self.ID} Training')
         #running_num_samples = 0
-        for step in range(max_local_steps):  # I'm assuming this is gradient steps?... are local epochs the same as gd steps?
+        for step in range(max_local_steps):  # Local epochs the same as num GD steps, number of passes through the full training set (present update data)
             for i, (x, y) in enumerate(trainloader):  # i currently have it set such that each tl only has 1 batch of 1200 (8/5/23)
                 print(f"Step {step}, batch {i}")
-                self.cphs_training_subroutine(x, y)
+                #if step==0:
+                #    fresh_epoch = True
+                #else:
+                #    fresh_epoch = False
+                self.cphs_training_subroutine(x, y) #fresh_epoch
                 
         #epoch_loss = self.running_epoch_loss / len(trainloader['train'])  # From: epoch_loss = running_epoch_loss / len(dataloaders['train'])
         #self.loss_log.append(epoch_loss)  

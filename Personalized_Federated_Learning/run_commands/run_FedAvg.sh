@@ -1,44 +1,6 @@
 # Run via: sh <file_name>.sh
 
-echo "lD=0.001, lE=0.0001"
-echo "Run 1:"
-nohup python -u main.py -gr 200 -lr 1 -lrt 25 -pca_ch 10 -lD 0.001 -lE 0.0001 -lm_bias True -algo FedAvg
-echo "Run 2:"
-nohup python -u main.py -gr 200 -lr 0.0001 -lrt 25 -pca_ch 10 -lm_bias True -algo FedAvg
-echo "Run 3:"
-nohup python -u main.py -gr 200 -lr 0.01 -lrt 25 -pca_ch 10 -lm_bias True -algo FedAvg
-
-echo "lD=0.001, lE=0.0001"
-echo "Run 1:"
-nohup python -u main.py -gr 200 -lr 1 -lrt 25 -pca_ch 10 -lD 0.001 -lE 0.0001 -lm_bias True -algo FedAvg
-echo "Run 2:"
-nohup python -u main.py -gr 200 -lr 0.0001 -lrt 25 -pca_ch 10 -lm_bias True -algo FedAvg
-echo "Run 3:"
-nohup python -u main.py -gr 200 -lr 0.01 -lrt 25 -pca_ch 10 -lm_bias True -algo FedAvg
-
-echo "lD=0.001, lE=0.0001"
-echo "Run 1:"
-nohup python -u main.py -gr 200 -lr 1 -lrt 25 -pca_ch 10 -lD 0.001 -lE 0.0001 -lm_bias True -algo FedAvg
-echo "Run 2:"
-nohup python -u main.py -gr 200 -lr 0.0001 -lrt 25 -pca_ch 10 -lm_bias True -algo FedAvg
-echo "Run 3:"
-nohup python -u main.py -gr 200 -lr 0.01 -lrt 25 -pca_ch 10 -lm_bias True -algo FedAvg
-
-echo "lD=0.001, lE=0.0001"
-echo "Run 1:"
-nohup python -u main.py -gr 200 -lr 1 -lrt 25 -pca_ch 10 -lD 0.001 -lE 0.0001 -lm_bias True -algo FedAvg
-echo "Run 2:"
-nohup python -u main.py -gr 200 -lr 0.0001 -lrt 25 -pca_ch 10 -lm_bias True -algo FedAvg
-echo "Run 3:"
-nohup python -u main.py -gr 200 -lr 0.01 -lrt 25 -pca_ch 10 -lm_bias True -algo FedAvg
-
-echo "lD=0.001, lE=0.0001"
-echo "Run 1:"
-nohup python -u main.py -gr 200 -lr 1 -lrt 25 -pca_ch 10 -lD 0.001 -lE 0.0001 -lm_bias True -algo FedAvg
-echo "Run 2:"
-nohup python -u main.py -gr 200 -lr 0.0001 -lrt 25 -pca_ch 10 -lm_bias True -algo FedAvg
-echo "Run 3:"
-nohup python -u main.py -gr 200 -lr 0.01 -lrt 25 -pca_ch 10 -lm_bias True -algo FedAvg
+nohup python -u main.py -lr 1 -pca_ch 64 -algo FedAvg
 
 #-lrt = 50
 #-lF=0.0, lD=0.001, lE=0.0001
