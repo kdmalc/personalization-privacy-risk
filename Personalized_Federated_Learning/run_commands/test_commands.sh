@@ -3,6 +3,16 @@
 python -u main.py -tr_ids ['METACPHS_S106'] -con_num [1,2,3,4,5,6,7,8] -gr 100 -lr 1 -lrt 25 -lD 0.00001 -lE 0.000001 -algo FedAvg
 python -u main.py -tr_ids ['METACPHS_S106'] -con_num [1,2,3,4,5,6,7,8] -gr 100 -lr 1 -lrt 25 -lD 0.00001 -lE 0.000001 -algo Local
 
+# From my stat hetero assignment earlier, Clients 2,4,9,10,12 were the closest group --> Results in 40 clients LOL
+python -u main.py -tr_ids "['METACPHS_S108', 'METACPHS_S110', 'METACPHS_S115', 'METACPHS_S116', 'METACPHS_S118']" -con_num [1,2,3,4,5,6,7,8] -gr 100 -lr 1 -lrt 25 -lD 0.00001 -lE 0.000001 -algo FedAvg
+python -u main.py -tr_ids "['METACPHS_S108', 'METACPHS_S110', 'METACPHS_S115', 'METACPHS_S116', 'METACPHS_S118']" -con_num [1,2,3,4,5,6,7,8] -gr 100 -lr 1 -lrt 25 -lD 0.00001 -lE 0.000001 -algo Local
+
+# Now run FedAvg but with different numbers of clients to see if the resulting global model is better with more clients (and if the stat hetero I saw is fake news or not)
+
+# ALL CLIENTS RUN!!!
+python -u main.py -con_num [1,2,3,4,5,6,7,8] -gr 100 -lr 1 -lrt 25 -lD 0.00001 -lE 0.000001 -algo FedAvg
+
+
 # -tr_ids = ['METACPHS_S106', 'METACPHS_S107', 'METACPHS_S108', 
 #    'METACPHS_S109', 'METACPHS_S110', 'METACPHS_S111', 'METACPHS_S112', 
 #    'METACPHS_S113', 'METACPHS_S114', 'METACPHS_S115', 'METACPHS_S116', 

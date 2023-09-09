@@ -1,0 +1,29 @@
+BASE
+algorithm = Local
+model = Linear(in_features=10, out_features=2, bias=True)
+condition_number_lst = [1, 2, 3, 4, 5, 6, 7, 8]
+device_channels = 64
+
+MODEL HYPERPARAMETERS
+lambdaF = 0.0
+lambdaD = 1e-05
+lambdaE = 1e-06
+global_rounds = 100
+local_epochs = 3
+batch_size = 1202
+batch_num_per_client = None
+local_learning_rate = 1.0
+learning_rate_decay = False
+learning_rate_decay_gamma = 0.99
+pca_channels = 10
+normalize_data = True
+
+FEDERATED LEARNING PARAMS
+starting_update = 10
+local_round_threshold = 25
+
+TESTING
+test_split_fraction = 0.2
+test_split_each_update = False
+test_split_users = False
+run_train_metrics = True
