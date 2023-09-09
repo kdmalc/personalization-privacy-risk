@@ -281,7 +281,7 @@ if __name__ == "__main__":
     parser.add_argument('-ab', "--auto_break", type=bool, default=False)
     parser.add_argument('-dlg', "--dlg_eval", type=bool, default=False)  # DLG = Deep Leakage from Gradients
     parser.add_argument('-dlgg', "--dlg_gap", type=int, default=100)
-    parser.add_argument('-bnpc', "--batch_num_per_client", type=int, default=2)  # Only used with DLG
+    parser.add_argument('-bnpc', "--batch_num_per_client", type=int, default=None)  # Only used with DLG
     parser.add_argument('-nnc', "--num_new_clients", type=int, default=0)
     parser.add_argument('-fte', "--fine_tuning_epoch", type=int, default=0)
     
@@ -294,8 +294,10 @@ if __name__ == "__main__":
                         help="The rate for slow clients when sending global model")
     parser.add_argument('-ts', "--time_select", type=bool, default=False,
                         help="Whether to group and select clients at each round according to time cost")
-    parser.add_argument('-tth', "--time_threthold", type=float, default=10000,
-                        help="The threthold for droping slow clients")
+    parser.add_argument('-tth', "--time_threshold", type=float, default=10000,
+                        help="The threshold for droping slow clients")
+    parser.add_argument('-lth', "--loss_threshold", type=float, default=10000,
+                        help="The max loss threshold for aborting a training run")
     
     # SECTION: pFedMe / PerAvg / FedProx / FedAMP / FedPHP
     parser.add_argument('-bt', "--beta", type=float, default=0.0,
@@ -373,6 +375,8 @@ if __name__ == "__main__":
                         help="Implement train/test split within each update or on the entire dataset")
     parser.add_argument('-test_split_users', "--test_split_users", type=bool, default=False,
                         help="Split testing data by holding out some users (fraction held out determined by test_split_fraction)")
+    parser.add_argument('-ts_ids', "--test_subj_IDs", type=bool, default=[],
+                        help="")
     ##
     parser.add_argument('-device_ch', "--device_channels", type=int, default=64,
                         help="Number of recording channels with the used EMG device")
@@ -385,8 +389,10 @@ if __name__ == "__main__":
     # I think I depreciated debug_mode, double check it's removed
     parser.add_argument('-debug_mode', "--debug_mode", type=bool, default=False,
                         help="I THINK I KILLED THIS MODE: In debug mode, the code is run to minimize overhead time in order to debug as fast as possible.  Namely, the data is held at the server to decrease init time, and communication delays are ignored.")
-    parser.add_argument('-con_num', "--condition_number", type=int, default=1,
-                        help="Which condition number (trial) to train on")
+    parser.add_argument('-con_num', "--condition_number_lst", type=int, default=[1],
+                        help="Which condition number (trial) to train on. Must be a list. By default, will iterate through all train_subjs for each cond (eg each cond_num gets its own client even for the same subject)")
+    parser.add_argument('-tr_ids', "--train_subj_IDs", type=bool, default=['METACPHS_S106', 'METACPHS_S107', 'METACPHS_S108', 'METACPHS_S109', 'METACPHS_S110', 'METACPHS_S111', 'METACPHS_S112', 'METACPHS_S113', 'METACPHS_S114', 'METACPHS_S115', 'METACPHS_S116', 'METACPHS_S117', 'METACPHS_S118', 'METACPHS_S119'],
+                        help="Subject ID Codes for users to be trained")
     parser.add_argument('-v', "--verbose", type=bool, default=False,
                         help="Print out a bunch of extra stuff")
     parser.add_argument('-slow_clients_bool', "--slow_clients_bool", type=bool, default=False,
@@ -425,7 +431,7 @@ if __name__ == "__main__":
     #print("Client drop rate: {}".format(args.client_drop_rate))
     #print("Client select regarding time: {}".format(args.time_select))
     #if args.time_select:
-    #    print("Time threthold: {}".format(args.time_threthold))
+    #    print("Time threshold: {}".format(args.time_threshold))
     #print("Running times: {}".format(args.times))
     print("Dataset: {}".format(args.dataset))
     #print("Number of classes: {}".format(args.num_classes))

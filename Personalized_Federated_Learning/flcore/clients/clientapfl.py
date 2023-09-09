@@ -2,7 +2,7 @@
 
 import copy
 import torch
-import torch.nn as nn
+#import torch.nn as nn
 import numpy as np
 import time
 from flcore.clients.clientbase import Client
@@ -10,8 +10,8 @@ from flcore.clients.clientbase import Client
 from sklearn import metrics
 
 class clientAPFL(Client):
-    def __init__(self, args, ID, samples_path, labels_path, **kwargs):
-        super().__init__(args, id, samples_path, labels_path, **kwargs)
+    def __init__(self, args, ID, samples_path, labels_path, condition_number, **kwargs):
+        super().__init__(args, ID, samples_path, labels_path, condition_number, **kwargs)
 
         self.alpha = args.alpha
         self.model_per = copy.deepcopy(self.model)

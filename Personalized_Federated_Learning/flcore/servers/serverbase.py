@@ -32,7 +32,7 @@ class Server(object):
         self.algorithm = args.algorithm
         self.time_select = args.time_select
         self.goal = args.goal
-        self.time_threthold = args.time_threthold  # Spelled wrong lol
+        self.time_threshold = args.time_threshold
         self.save_folder_name = args.save_folder_name
         self.top_cnt = 20
         self.auto_break = args.auto_break
@@ -71,10 +71,8 @@ class Server(object):
         self.ndp = args.num_decimal_points
         self.global_round = 0
         self.test_split_fraction = args.test_split_fraction
-        self.condition_number = args.condition_number
         self.debug_mode = args.debug_mode
         self.global_update = args.starting_update
-        self.test_split_each_update = args.test_split_each_update
         self.verbose = args.verbose
         self.slow_clients_bool = args.slow_clients_bool
         self.run_train_metrics = args.run_train_metrics
@@ -87,25 +85,34 @@ class Server(object):
         self.lambdaE = args.lambdaE
         self.normalize_data = args.normalize_data
         self.local_round_threshold = args.local_round_threshold
-        self.test_split_users = args.test_split_users
         self.learning_rate_decay = args.learning_rate_decay
         self.learning_rate_decay_gamma = args.learning_rate_decay_gamma
+        # Testing
+        self.test_split_users = args.test_split_users
+        self.test_split_each_update = args.test_split_each_update
+        self.test_subj_IDs = args.test_subj_IDs
+        # Trial set up
+        self.condition_number_lst = args.condition_number_lst
+        self.train_subj_IDs = args.train_subj_IDs
+        # This might need to get changed, but works as long as last 3 chars are the numerical subject ID (eg we drop the header and 'S')
+        self.train_numerical_subj_IDs = [id_str[-3:] for id_str in self.train_subj_IDs]
 
     def set_clients(self, clientObj):  
         if self.verbose:
             print("ServerBase Set_Clients (SBSC) -- probably called in init() of server children classes")
+        
+        base_data_path = 'C:\\Users\\kdmen\\Desktop\\Research\\Data\\Subject_Specific_Files\\'
         for i, train_slow, send_slow in zip(range(self.num_clients), self.train_slow_clients, self.send_slow_clients):
             print(f"SBSC: iter {i}")
-            # Should I switch i to be the subject ID? Not specifically required to run, for now at least
-            # ID = i probably isn't the best solution... assumes things are in order...... no? Not a good solution regardless
-            #base_data_path = 'C:\\Users\\kdmen\\Desktop\\Research\\personalization-privacy-risk\\Data\\Client_Specific_Files\\'
-            base_data_path = 'C:\\Users\\kdmen\\Desktop\\Research\\Data\\Client_Specific_Files\\'
-            client = clientObj(self.args, 
-                                ID=i, 
-                                samples_path = base_data_path + "UserID" + str(i) + "_TrainData_8by20770by64.npy", 
-                                labels_path = base_data_path + "UserID" + str(i) + "_Labels_8by20770by2.npy", 
-                                train_slow=train_slow, 
-                                send_slow=send_slow)
+            for j in self.condition_number_lst:
+                print(f"SBSC: cond iter, cond number: {j}")
+                client = clientObj(self.args, 
+                                    ID=self.train_subj_IDs[i], 
+                                    samples_path = base_data_path + 'S' + str(self.train_numerical_subj_IDs[i]) + "_TrainData_8by20770by64.npy", 
+                                    labels_path = base_data_path + 'S' + str(self.train_numerical_subj_IDs[i]) + "_Labels_8by20770by2.npy", 
+                                    condition_number = j, 
+                                    train_slow=train_slow, 
+                                    send_slow=send_slow)
             
             self.clients.append(client)
             client.load_train_data(client_init=True)
@@ -164,7 +171,7 @@ class Server(object):
                         client.send_time_cost['total_cost'] / client.send_time_cost['num_rounds']
             except ZeroDivisionError:
                 client_time_cost = 0
-            if client_time_cost <= self.time_threthold:
+            if client_time_cost <= self.time_threshold:
                 tot_samples += client.train_samples  # tot_samples += client.num_train_samples
                 self.uploaded_IDs.append(client.ID)
                 self.uploaded_weights.append(client.train_samples)  # What is going on here
@@ -220,7 +227,7 @@ class Server(object):
             "BASE\n"
             f"algorithm = {self.algorithm}\n"
             f"model = {self.global_model}\n"
-            f"condition_number = {self.condition_number}\n"
+            f"condition_number_lst = {self.condition_number_lst}\n"
             f"device_channels = {self.device_channels}\n"
             "\nMODEL HYPERPARAMETERS\n"
             f"lambdaF = {self.lambdaF}\n"
@@ -352,7 +359,7 @@ class Server(object):
                 acc.append(test_loss)
 
             #assert(test_loss<1e5)
-            print("Averaged Test Loss: {:.4f}".format(avg_test_loss))
+            print("Averaged Test Loss: {:.5f}".format(avg_test_loss))
 
         if train:
             stats_train = self.train_metrics()
@@ -370,7 +377,7 @@ class Server(object):
                 loss.append(train_loss)
 
             #assert(train_loss<1e5)
-            print("Averaged Train Loss: {:.4f}".format(avg_train_loss))
+            print("Averaged Train Loss: {:.5f}".format(avg_train_loss))
 
 
     def check_done(self, acc_lss, top_cnt=None, div_value=None):

@@ -37,10 +37,12 @@ class FedAvg(Server):
                 print("\nEvaluate global model")
                 self.evaluate()
 
-            print("CLIENT TRAINING")
+            if self.verbose:
+                print("CLIENT TRAINING")
             for client in self.selected_clients:
                 client.train()
-                print(f"Client{client.ID} loss: {client.loss_log[-1]:0,.3f}")
+                if self.verbose:
+                    print(f"Client {client.ID} loss: {client.loss_log[-1]:0,.3f}")
 
             self.receive_models()
             # I'm not using dlg

@@ -1,16 +1,16 @@
 # PFLNIID
 
-import torch
-import torch.nn as nn
-import numpy as np
+#import torch
+#import torch.nn as nn
+#import numpy as np
 import time
 from flcore.clients.clientbase import Client
 from flcore.pflniid_utils.privacy import *
 
 
 class clientAVG(Client):
-    def __init__(self, args, ID, samples_path, labels_path, **kwargs):
-        super().__init__(args, ID, samples_path, labels_path, **kwargs)
+    def __init__(self, args, ID, samples_path, labels_path, condition_number, **kwargs):
+        super().__init__(args, ID, samples_path, labels_path, condition_number, **kwargs)
 
     def train(self):
         trainloader = self.load_train_data()
@@ -28,17 +28,14 @@ class clientAVG(Client):
         #if self.train_slow:
         #    max_local_steps = np.random.randint(1, max_local_steps // 2)
 
-        # WHICH OF THESE LOOPS IS EQUIVALENT TO MY EPOCHS...
-        print(f'Client{self.ID} Training')
+        if self.verbose:
+            print(f'Client {self.ID} Training')
         #running_num_samples = 0
         for step in range(max_local_steps):  # Local epochs the same as num GD steps, number of passes through the full training set (present update data)
             for i, (x, y) in enumerate(trainloader):  # i currently have it set such that each tl only has 1 batch of 1200 (8/5/23)
-                print(f"Step {step}, batch {i}")
-                #if step==0:
-                #    fresh_epoch = True
-                #else:
-                #    fresh_epoch = False
-                self.cphs_training_subroutine(x, y) #fresh_epoch
+                if self.verbose:
+                    print(f"Step {step}, batch {i}")
+                self.cphs_training_subroutine(x, y)
                 
         #epoch_loss = self.running_epoch_loss / len(trainloader['train'])  # From: epoch_loss = running_epoch_loss / len(dataloaders['train'])
         #self.loss_log.append(epoch_loss)  

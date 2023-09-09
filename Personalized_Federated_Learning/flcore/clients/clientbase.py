@@ -24,7 +24,9 @@ class Client(object):
     Base class for clients in federated learning.
     """
 
-    def __init__(self, args, ID, samples_path, labels_path, **kwargs):
+    def __init__(self, args, ID, samples_path, labels_path, condition_number, **kwargs):
+        # Why do I even have this take any arguments instead of just using args...
+
         self.model = copy.deepcopy(args.model)
         self.algorithm = args.algorithm
         self.dataset = args.dataset
@@ -76,7 +78,7 @@ class Client(object):
         self.last_global_round = 0
         self.update_ix=[0,  1200,  2402,  3604,  4806,  6008,  7210,  8412,  9614, 10816, 12018, 13220, 14422, 15624, 16826, 18028, 19230, 20432, 20769]
         assert (not (self.test_split_users and self.test_split_each_update)), "test_split_users and test_split_each_update cannot both be true (contradictory test conditions)"
-        self.condition_number = args.condition_number
+        self.condition_number = condition_number #args.condition_number
         self.verbose = args.verbose
         self.return_cost_func_comps = args.return_cost_func_comps
         self.run_train_metrics = args.run_train_metrics
@@ -164,7 +166,8 @@ class Client(object):
         # update weights
         self.optimizer.step()
 
-        print(f"Client{self.ID}; update {self.current_update}; x.size(): {x.size()}; loss: {loss.item():0.5f}")
+        if self.verbose:
+            print(f"Client {self.ID}; update {self.current_update}; x.size(): {x.size()}; loss: {loss.item():0.5f}")
         #print(f"Model ID / Object: {id(self.model)}; {self.model}") --> #They all appear to be different...
         #self.running_epoch_loss.append(loss.item() * x.size(0))  # From: running_epoch_loss.append(loss.item() * images.size(0))
         #running_num_samples += x.size(0)
@@ -212,7 +215,7 @@ class Client(object):
         '''
 
         if self.verbose:
-            print(f"Client{self.ID} loading data file in [SHOULD ONLY RUN ONCE PER CLIENT]")
+            print(f"Client {self.ID} loading data file in [SHOULD ONLY RUN ONCE PER CLIENT]")
         # Load in client's data
         with open(self.samples_path, 'rb') as handle:
             samples_npy = np.load(handle)
@@ -254,7 +257,7 @@ class Client(object):
             # ---> THIS IMPLIES THAT I AM CREATING A NEW TRAINING LOADER FOR EACH UPDATE... this is what I want actually I think
             if (self.local_round%self.local_round_threshold==0) and (self.local_round>1) and (self.current_update < self.max_training_update_upbound):
                 self.current_update += 1
-                print(f"Client{self.ID} advances to update {self.current_update} on local round {self.local_round}")
+                print(f"Client {self.ID} advances to update {self.current_update} on local round {self.local_round}")
             # Slice the full client dataset based on the current update number
             if self.current_update < self.max_training_update_upbound:
                 self.update_lower_bound = self.update_ix[self.current_update]
@@ -271,7 +274,7 @@ class Client(object):
         training_data_for_dataloader = [(x, y) for x, y in zip(X_data, y_data)]
         
         if self.verbose:
-            print(f"cb load_train_data(): Client{self.ID}: Setting Training DataLoader")
+            print(f"cb load_train_data(): Client {self.ID}: Setting Training DataLoader")
         # Set dataloader
         if batch_size == None:
             batch_size = self.batch_size
@@ -285,7 +288,7 @@ class Client(object):
     def load_test_data(self, batch_size=None): 
         # Make sure this runs AFTER load_train_data so the data is already loaded in
         if self.verbose:
-            print(f"Client{self.ID}: Setting Test DataLoader")
+            print(f"Client {self.ID}: Setting Test DataLoader")
         if batch_size == None:
             batch_size = self.batch_size
 
@@ -333,7 +336,7 @@ class Client(object):
         running_test_loss = 0
         num_samples = 0
         if self.verbose:
-            print(f'cb Client{self.ID} test_metrics()')
+            print(f'cb Client {self.ID} test_metrics()')
         with torch.no_grad():
             for i, (x, y) in enumerate(testloaderfull):
                 if type(x) == type([]):
@@ -381,7 +384,7 @@ class Client(object):
         train_num = 0
         losses = 0
         if self.verbose:
-            print(f'cb Client{self.ID} train_metrics()')
+            print(f'cb Client {self.ID} train_metrics()')
         with torch.no_grad():
             for i, (x, y) in enumerate(trainloader):
                 if type(x) == type([]):
@@ -400,8 +403,8 @@ class Client(object):
                 t2 = self.lambdaD*(torch.linalg.matrix_norm((self.model.weight))**2)
                 t3 = self.lambdaF*(torch.linalg.matrix_norm((self.F))**2)
                 loss = t1 + t2 + t3
-                #if self.verbose:
-                print(f"batch {i}, loss {loss:0,.5f}")
+                if self.verbose:
+                    print(f"batch {i}, loss {loss:0,.5f}")
                 train_num += self.y_ref.shape[0]  # Why is this y.shape and not x.shape?... I guess they are the same row dims?
                 # Why are they multiplying by y.shape[0] here...
                 losses += loss.item() #* y.shape[0]
@@ -422,6 +425,8 @@ class Client(object):
             nondl_x = nondl_x[self.batch_size*batch_num:self.batch_size*batch_num+self.batch_size]
             nondl_y = nondl_y[self.batch_size*batch_num:self.batch_size*batch_num+self.batch_size]
         if (sum(sum(x[:5]-nondl_x[:5]))>0.01):  # 0.01 randomly chosen arbitarily small threshold
+            # I think this bug is fixed now
+
             # ^Client11 fails when threshold is < 0.002, idk why there is any discrepancy
             # ^All numbers are positive so anything <1 is just rounding as far as I'm concerned
             print(f"clientavg: TRAINLOADER DOESN'T MATCH EXPECTED!! (@ update {self.current_update}, with x.size={x.size()})")
@@ -474,11 +479,12 @@ class Client(object):
             item_path = self.save_folder_name
         if not os.path.exists(item_path):
             os.makedirs(item_path)
-        torch.save(item, os.path.join(item_path, "client_" + str(self.ID) + "_" + item_name + ".pt"))
+        #torch.save(item, os.path.join(item_path, self.ID + "_" + item_name + ".pt"))
 
         
     def load_item(self, item_name, item_path=None):
         if item_path == None:
             item_path = self.save_folder_name
-        return torch.load(os.path.join(item_path, "client_" + str(self.ID) + "_" + item_name + ".pt"))
+        #return torch.load(os.path.join(item_path, "client_" + str(self.ID) + "_" + item_name + ".pt"))
+        return torch.load(os.path.join(item_path, self.ID + "_" + item_name + ".pt"))
     
