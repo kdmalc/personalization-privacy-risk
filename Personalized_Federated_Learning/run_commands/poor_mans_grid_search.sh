@@ -69,6 +69,6 @@ nohup python -u main.py -gr 200 -lr 0.01 -lrt 25 -pca_ch 10 -lD 0.00001 -lE 0.00
 #-test_split_fraction = 0.2
 #-test_split_each_update = False
 #-test_split_users = False
-#-lm_bias = False --> Probably could change this to true?
+#-lm_bias = True
 #-bs = 1202 (AKA full update)
 #-localepochs = 3

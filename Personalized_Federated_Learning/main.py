@@ -18,6 +18,7 @@ import os
 import time
 import warnings
 import logging
+import ast
 
 
 from flcore.servers.serveravg import FedAvg
@@ -373,8 +374,11 @@ if __name__ == "__main__":
                         help="Implement train/test split within each update or on the entire dataset")
     parser.add_argument('-test_split_users', "--test_split_users", type=bool, default=False,
                         help="Split testing data by holding out some users (fraction held out determined by test_split_fraction)")
-    parser.add_argument('-ts_ids', "--test_subj_IDs", type=bool, default=[],
-                        help="")
+    ##################################################################################################################################
+    ##################################################################################################################################
+    ##################################################################################################################################
+    parser.add_argument('-ts_ids', "--test_subj_IDs", type=str, default='[]',
+                        help="List of subject ID strings of all subjects to be set to test only")
     ##
     parser.add_argument('-device_ch', "--device_channels", type=int, default=64,
                         help="Number of recording channels with the used EMG device")
@@ -387,9 +391,12 @@ if __name__ == "__main__":
     # I think I depreciated debug_mode, double check it's removed
     parser.add_argument('-debug_mode', "--debug_mode", type=bool, default=False,
                         help="I THINK I KILLED THIS MODE: In debug mode, the code is run to minimize overhead time in order to debug as fast as possible.  Namely, the data is held at the server to decrease init time, and communication delays are ignored.")
-    parser.add_argument('-con_num', "--condition_number_lst", type=int, default=[1],
+    ##################################################################################################################################
+    ##################################################################################################################################
+    ##################################################################################################################################
+    parser.add_argument('-con_num', "--condition_number_lst", type=str, default='[1]',
                         help="Which condition number (trial) to train on. Must be a list. By default, will iterate through all train_subjs for each cond (eg each cond_num gets its own client even for the same subject)")
-    parser.add_argument('-tr_ids', "--train_subj_IDs", type=bool, default=['METACPHS_S106', 'METACPHS_S107', 'METACPHS_S108', 'METACPHS_S109', 'METACPHS_S110', 'METACPHS_S111', 'METACPHS_S112', 'METACPHS_S113', 'METACPHS_S114', 'METACPHS_S115', 'METACPHS_S116', 'METACPHS_S117', 'METACPHS_S118', 'METACPHS_S119'],
+    parser.add_argument('-tr_ids', "--train_subj_IDs", type=str, default=str(['METACPHS_S106', 'METACPHS_S107', 'METACPHS_S108', 'METACPHS_S109', 'METACPHS_S110', 'METACPHS_S111', 'METACPHS_S112', 'METACPHS_S113', 'METACPHS_S114', 'METACPHS_S115', 'METACPHS_S116', 'METACPHS_S117', 'METACPHS_S118', 'METACPHS_S119']),
                         help="Subject ID Codes for users to be trained")
     parser.add_argument('-v', "--verbose", type=bool, default=False,
                         help="Print out a bunch of extra stuff")
@@ -406,7 +413,71 @@ if __name__ == "__main__":
     parser.add_argument('-rtm', "--run_train_metrics", type=bool, default=True,
                         help="Evaluate every client on the training data")  # I don't think this matters for local, since every client is being run anyways?
 
+    #############################################################################################################################################
+
     args = parser.parse_args()
+
+    ############################################################################################
+    ############################################################################################
+    ############################################################################################
+    def convert_cmd_line_str_lst_to_type_lst(list_as_string, datatype, verbose=False):
+        '''
+        Safely convert the command line entered list (which Python uses a string representation of) to a list of the correct datatype
+        Inputs:
+            datatype: int or str, depending on what you're doing
+        '''
+        #try:
+        # Using ast.literal_eval to safely evaluate the string
+        if type(list_as_string)!=str:
+            print("CONVERTING TO STRING")
+            list_as_string = str(list_as_string)
+        print(f"list_as_string")
+        print(list_as_string)
+        temp_lst = ast.literal_eval(list_as_string)
+        if datatype==int:
+            if not isinstance(temp_lst, list) or not all(isinstance(item, datatype) for item in temp_lst):
+                raise ValueError(f"Invalid input. Must be a list of {datatype}.")
+        elif datatype==str:
+            # Initialize an empty list to store the string elements
+            string_list = []
+
+            # Iterate through the characters and add them to the result list as strings
+            current_string = ""
+            for char in temp_lst:
+                print(f"char: {char}")
+                print(f"current_string: {current_string}")
+                print(f"string_list: {string_list}")
+                print()
+                
+                if char=='[' or char==']' or char==',' or char==' ':
+                    print("MATCH")
+                    pass
+                elif char == "'":
+                    print("QUOTATION")
+                    # When encountering a single quote, it indicates the start or end of a string
+                    if current_string:
+                        string_list.append(current_string)
+                        current_string = ""
+                else:
+                    print("ELSE")
+                    current_string += char
+        else:
+            raise ValueError(f"{datatype} is not a supported datatype, please enter <str> or <int> (note: no quotation marks)")
+        #except (ValueError, SyntaxError):
+        #    print(f"Invalid input. Please provide a valid list of {datatype}.")
+        if verbose:
+            print(list_as_string)
+            print(temp_lst)
+        return temp_lst
+
+    args.condition_number_lst = convert_cmd_line_str_lst_to_type_lst(args.condition_number_lst, int, True)
+    args.train_subj_IDs = convert_cmd_line_str_lst_to_type_lst(args.train_subj_IDs, str, True)
+    if args.test_subj_IDs!=[]:
+        args.test_subj_IDs = convert_cmd_line_str_lst_to_type_lst(args.test_subj_IDs, str, True)
+    
+    ############################################################################################
+    ############################################################################################
+    ############################################################################################
 
     # I always need to run on CPU only since I don't have Nvidia GPU available
     #os.environ["CUDA_VISIBLE_DEVICES"] = args.device_id
@@ -420,10 +491,12 @@ if __name__ == "__main__":
     print("Local batch size: {}".format(args.batch_size))
     print("Local steps: {}".format(args.local_epochs))
     print("Local learing rate: {}".format(args.local_learning_rate))
+    print("Subjects in training data: {}".format(args.train_subj_IDs))
+    print("List of all condition numbers to train over: {}".format(args.condition_number_lst))
     #print("Local learing rate decay: {}".format(args.learning_rate_decay))
     #if args.learning_rate_decay:
     #    print("Local learing rate decay gamma: {}".format(args.learning_rate_decay_gamma))
-    print("Total number of clients: {}".format(len(args.train_subject_IDs)))
+    print("Total number of clients: {}".format(len(args.train_subj_IDs)))
     print("Clients join in each round: {}".format(args.join_ratio))
     #print("Clients randomly join: {}".format(args.random_join_ratio))
     #print("Client drop rate: {}".format(args.client_drop_rate))
@@ -432,7 +505,6 @@ if __name__ == "__main__":
     #    print("Time threshold: {}".format(args.time_threshold))
     #print("Running times: {}".format(args.times))
     print("Dataset: {}".format(args.dataset))
-    #print("Number of classes: {}".format(args.num_classes))
     print("Backbone (model): {}".format(args.model))
     #print("Using device: {}".format(args.device))
     #print("Using DP: {}".format(args.privacy))
@@ -467,10 +539,8 @@ if __name__ == "__main__":
 
     print()
     print(f"YOU ARE RUNNING -{args.algorithm}- ALGORITHM")
-    #print()
 
     server_obj = run(args)
-    # Does it save the model somewhere?
 
     
     # print(prof.key_averages().table(sort_by="cpu_time_total", row_limit=20))

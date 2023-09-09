@@ -26,6 +26,8 @@ class Server(object):
         self.local_learning_rate = args.local_learning_rate
         self.global_model = copy.deepcopy(args.model)
         self.algorithm = args.algorithm
+        self.personalized_algorithms = ["APFL", "FedMTL", "PerAvg", "pFedMe", "FedPer", "Ditto"]
+        self.personalized_algo_bool = True if self.algorithm.upper() in [algo.upper() for algo in self.personalized_algorithms] else False
         self.time_select = args.time_select
         self.goal = args.goal
         self.time_threshold = args.time_threshold
@@ -91,7 +93,7 @@ class Server(object):
         # Trial set up
         self.condition_number_lst = args.condition_number_lst
         self.train_subj_IDs = args.train_subj_IDs
-        self.num_clients = len(self.train_subj_IDs)
+        self.num_clients = len(self.train_subj_IDs) * len(self.condition_number_lst)
         self.join_ratio = args.join_ratio
         self.random_join_ratio = args.random_join_ratio
         self.num_join_clients = int(self.num_clients * self.join_ratio)
@@ -104,20 +106,21 @@ class Server(object):
             print("ServerBase Set_Clients (SBSC) -- probably called in init() of server children classes")
         
         base_data_path = 'C:\\Users\\kdmen\\Desktop\\Research\\Data\\Subject_Specific_Files\\'
-        for i, train_slow, send_slow in zip(range(self.num_clients), self.train_slow_clients, self.send_slow_clients):
+        for i, train_slow, send_slow in zip(range(len(self.train_subj_IDs)), self.train_slow_clients, self.send_slow_clients):
             print(f"SBSC: iter {i}")
             for j in self.condition_number_lst:
-                print(f"SBSC: cond iter, cond number: {j}")
+                print("CONDITION NUMBER LIST:")
+                print(self.condition_number_lst)
+                print(f"SBSC: cond iter, cond number: {str(j)}")
                 client = clientObj(self.args, 
                                     ID=self.train_subj_IDs[i], 
                                     samples_path = base_data_path + 'S' + str(self.train_numerical_subj_IDs[i]) + "_TrainData_8by20770by64.npy", 
                                     labels_path = base_data_path + 'S' + str(self.train_numerical_subj_IDs[i]) + "_Labels_8by20770by2.npy", 
-                                    condition_number = j, 
+                                    condition_number = j-1, 
                                     train_slow=train_slow, 
                                     send_slow=send_slow)
-            
-            self.clients.append(client)
-            client.load_train_data(client_init=True)
+                self.clients.append(client)
+                client.load_train_data(client_init=True)
 
     # random select slow clients
     def select_slow_clients(self, slow_rate):
@@ -212,6 +215,7 @@ class Server(object):
         model_path = os.path.join("models", self.dataset)
         model_path = os.path.join(model_path, self.algorithm + "_server" + ".pt")
         return os.path.exists(model_path)
+    
         
     def save_results(self, personalized=False, save_cost_func_comps=False, save_gradient=False):
         algo = self.dataset + "_" + self.algorithm
@@ -279,13 +283,19 @@ class Server(object):
                     #print(f'cost_func_comps_log: \n {self.cost_func_comps_log}\n')                   
                     G1 = hf.create_group('cost_func_tuples_by_client')
                     for idx, cost_func_comps in enumerate(self.cost_func_comps_log):
-                        name_str = 'ClientID' + str(idx)
+                        name_index = idx // len(self.condition_number_lst)
+                        if name_index >= len(self.train_subj_IDs):
+                            name_index = len(self.train_subj_IDs) - 1  # Ensure it doesn't exceed the last index
+                        name_str = self.train_subj_IDs[name_index] + "_C" + str(self.condition_number_lst[idx%len(self.condition_number_lst)])
                         G1.create_dataset(name_str, data=cost_func_comps)
                 if save_gradient:
                     #print(f'gradient_norm_log: \n {self.gradient_norm_log}\n')
                     G2 = hf.create_group('gradient_norm_lists_by_client')
                     for idx, grad_norm_list in enumerate(self.gradient_norm_log):
-                        name_str = 'ClientID' + str(idx)
+                        name_index = idx // len(self.condition_number_lst)
+                        if name_index >= len(self.train_subj_IDs):
+                            name_index = len(self.train_subj_IDs) - 1  # Ensure it doesn't exceed the last index
+                        name_str = self.train_subj_IDs[name_index] + "_C" + str(self.condition_number_lst[idx%len(self.condition_number_lst)])
                         G2.create_dataset(name_str, data=grad_norm_list)
 
 
@@ -379,7 +389,10 @@ class Server(object):
                 loss.append(train_loss)
 
             print("Averaged Train Loss: {:.5f}".format(avg_train_loss))
-            assert avg_train_loss<self.loss_threshold, 'Averaged training loss exceeded the maximum loss threshold, aborting training.'
+            if avg_train_loss>self.loss_threshold:
+                # Log training loss up to this point...
+                self.save_results(personalized=self.personalized_algo_bool, save_cost_func_comps=True, save_gradient=True)
+                raise ValueError('Averaged training loss exceeded the maximum loss threshold, aborting training.')
 
 
     def check_done(self, acc_lss, top_cnt=None, div_value=None):
