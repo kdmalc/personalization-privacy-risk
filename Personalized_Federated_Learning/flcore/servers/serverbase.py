@@ -25,10 +25,6 @@ class Server(object):
         self.batch_size = args.batch_size
         self.local_learning_rate = args.local_learning_rate
         self.global_model = copy.deepcopy(args.model)
-        self.num_clients = args.num_clients
-        self.join_ratio = args.join_ratio
-        self.random_join_ratio = args.random_join_ratio
-        self.num_join_clients = int(self.num_clients * self.join_ratio)
         self.algorithm = args.algorithm
         self.time_select = args.time_select
         self.goal = args.goal
@@ -62,8 +58,9 @@ class Server(object):
         self.dlg_gap = args.dlg_gap
         self.batch_num_per_client = args.batch_num_per_client
 
-        self.num_new_clients = args.num_new_clients
-        self.new_clients = []
+        self.new_clients_ID_lst = args.new_clients_ID_lst
+        self.num_new_clients = len(self.new_clients_ID_lst)
+        self.new_clients_obj_lst = []
         self.eval_new_clients = False
         self.fine_tuning_epoch = args.fine_tuning_epoch
         
@@ -94,8 +91,13 @@ class Server(object):
         # Trial set up
         self.condition_number_lst = args.condition_number_lst
         self.train_subj_IDs = args.train_subj_IDs
+        self.num_clients = len(self.train_subj_IDs)
+        self.join_ratio = args.join_ratio
+        self.random_join_ratio = args.random_join_ratio
+        self.num_join_clients = int(self.num_clients * self.join_ratio)
         # This might need to get changed, but works as long as last 3 chars are the numerical subject ID (eg we drop the header and 'S')
         self.train_numerical_subj_IDs = [id_str[-3:] for id_str in self.train_subj_IDs]
+        self.loss_threshold = args.loss_threshold
 
     def set_clients(self, clientObj):  
         if self.verbose:
@@ -376,8 +378,8 @@ class Server(object):
                 print("Server evaluate loss!=None!")
                 loss.append(train_loss)
 
-            #assert(train_loss<1e5)
             print("Averaged Train Loss: {:.5f}".format(avg_train_loss))
+            assert avg_train_loss<self.loss_threshold, 'Averaged training loss exceeded the maximum loss threshold, aborting training.'
 
 
     def check_done(self, acc_lss, top_cnt=None, div_value=None):
@@ -471,9 +473,9 @@ class Server(object):
     # fine-tuning on new clients
     def fine_tuning_new_clients(self):
         print("fine_tuning_new_clients USES GLOBAL MODEL!!!")
-        for client in self.new_clients:
+        for client in self.new_clients_obj_lst:
             client.set_parameters(self.global_model)
-            for e in range(self.fine_tuning_epoch):
+            for _ in range(self.fine_tuning_epoch):
                 client.train()
 
     # evaluating on new clients

@@ -264,8 +264,6 @@ if __name__ == "__main__":
                         help="Ratio of clients per round")
     parser.add_argument('-rjr', "--random_join_ratio", type=bool, default=False,
                         help="Random ratio of clients per round")
-    parser.add_argument('-nc', "--num_clients", type=int, default=14,
-                        help="Total number of clients")
     parser.add_argument('-dp', "--privacy", type=bool, default=False,
                         help="differential privacy")
     parser.add_argument('-dps', "--dp_sigma", type=float, default=0.0)
@@ -282,7 +280,7 @@ if __name__ == "__main__":
     parser.add_argument('-dlg', "--dlg_eval", type=bool, default=False)  # DLG = Deep Leakage from Gradients
     parser.add_argument('-dlgg', "--dlg_gap", type=int, default=100)
     parser.add_argument('-bnpc', "--batch_num_per_client", type=int, default=None)  # Only used with DLG
-    parser.add_argument('-nnc', "--num_new_clients", type=int, default=0)
+    parser.add_argument('-nnc', "--new_clients_ID_lst", type=int, default=[])
     parser.add_argument('-fte', "--fine_tuning_epoch", type=int, default=0)
     
     # SECTION: practical
@@ -425,7 +423,7 @@ if __name__ == "__main__":
     #print("Local learing rate decay: {}".format(args.learning_rate_decay))
     #if args.learning_rate_decay:
     #    print("Local learing rate decay gamma: {}".format(args.learning_rate_decay_gamma))
-    print("Total number of clients: {}".format(args.num_clients))
+    print("Total number of clients: {}".format(len(args.train_subject_IDs)))
     print("Clients join in each round: {}".format(args.join_ratio))
     #print("Clients randomly join: {}".format(args.random_join_ratio))
     #print("Client drop rate: {}".format(args.client_drop_rate))
@@ -448,7 +446,8 @@ if __name__ == "__main__":
     #print("DLG attack: {}".format(args.dlg_eval))
     if args.dlg_eval:
         print("DLG attack round gap: {}".format(args.dlg_gap))
-    print("Total number of new clients: {}".format(args.num_new_clients))
+    ############################################################################################################################################
+    print("Total number of new clients: {}".format(len(args.new_clients_ID_lst)))
     print("Fine tuning epoches on new clients: {}".format(args.fine_tuning_epoch))
     
     print()
