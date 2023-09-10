@@ -18,10 +18,7 @@ import os
 import time
 import warnings
 import logging
-#import ast
-
 from utils.helper_funcs import convert_cmd_line_str_lst_to_type_lst
-
 
 from flcore.servers.serveravg import FedAvg
 from flcore.servers.serverpFedMe import pFedMe

@@ -2,7 +2,7 @@
 
 from flcore.clients.clientapfl import clientAPFL
 from flcore.servers.serverbase import Server
-from threading import Thread
+#from threading import Thread
 
 
 class APFL(Server):
@@ -31,7 +31,8 @@ class APFL(Server):
 
             for client in self.selected_clients:
                 client.train()
-                print(f"SL: Client{client.ID} round {i} loss: {client.loss_log[-1]:0,.5f}")
+                if self.verbose:
+                    print(f"SL: {client.ID} round {i} loss: {client.loss_log[-1]:0,.5f}")
 
             self.receive_models()
             # I'm not using dlg

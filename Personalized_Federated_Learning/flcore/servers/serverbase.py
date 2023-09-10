@@ -7,9 +7,7 @@ import h5py
 import copy
 import time
 import random
-#import pickle
 from datetime import datetime
-
 #from flcore.pflniid_utils.dlg import DLG
 #from utils import node_creator
 
@@ -107,11 +105,8 @@ class Server(object):
         
         base_data_path = 'C:\\Users\\kdmen\\Desktop\\Research\\Data\\Subject_Specific_Files\\'
         for i, train_slow, send_slow in zip(range(len(self.train_subj_IDs)), self.train_slow_clients, self.send_slow_clients):
-            print(f"SBSC: iter {i}")
             for j in self.condition_number_lst:
-                print("CONDITION NUMBER LIST:")
-                print(self.condition_number_lst)
-                print(f"SBSC: cond iter, cond number: {str(j)}")
+                print(f"SB Set Client: iter {i}, cond number: {str(j)}")
                 client = clientObj(self.args, 
                                     ID=self.train_subj_IDs[i], 
                                     samples_path = base_data_path + 'S' + str(self.train_numerical_subj_IDs[i]) + "_TrainData_8by20770by64.npy", 
@@ -198,22 +193,32 @@ class Server(object):
         for server_param, client_param in zip(self.global_model.parameters(), client_model.parameters()):
             server_param.data += client_param.data.clone() * w
 
+    '''
     def save_global_model(self):
         model_path = os.path.join("models", self.dataset)
         if not os.path.exists(model_path):
             os.makedirs(model_path)
         model_path = os.path.join(model_path, self.algorithm + "_server" + ".pt")
         torch.save(self.global_model, model_path)
+    '''
 
-    def load_model(self):
-        model_path = os.path.join("models", self.dataset)
-        model_path = os.path.join(model_path, self.algorithm + "_server" + ".pt")
+    def load_model(self, directory_name, type):
+        '''
+            Loads the specified model to become the current global model!
+
+            str directory_name: name of when the model was saved, likely in the form of %m-%d_%H-%M unless it was renamed (this is the model's directory)
+            str type: Should be one of 'global', 'pers', or 'local'
+        '''
+        model_path = os.path.join("models", self.dataset, directory_name, self.algorithm + "_server_" + type + ".pt")
         assert (os.path.exists(model_path))
         self.global_model = torch.load(model_path)
 
-    def model_exists(self):
-        model_path = os.path.join("models", self.dataset)
-        model_path = os.path.join(model_path, self.algorithm + "_server" + ".pt")
+    def model_exists(self, directory_name, type):
+        '''
+            str directory_name: name of when the model was saved, likely in the form of %m-%d_%H-%M unless it was renamed (this is the model's directory)
+            str type: Should be one of 'global', 'pers', or 'local'
+        '''
+        model_path = os.path.join("models", self.dataset, directory_name, self.algorithm + "_server_" + type + ".pt")
         return os.path.exists(model_path)
     
         
@@ -228,6 +233,18 @@ class Server(object):
         self.trial_result_path = self.result_path + str_current_datetime
         if not os.path.exists(self.trial_result_path):
             os.makedirs(self.trial_result_path)
+        model_path = os.path.join("models", self.dataset, str_current_datetime)
+        if not os.path.exists(model_path):
+            os.makedirs(model_path)
+        model_path = os.path.join(model_path, self.algorithm + "_server_global.pt")
+        torch.save(self.global_model, model_path)
+        if personalized==True:
+            pers_model_path = os.path.join(model_path, self.algorithm + "_client_pers_model")
+            for c in self.clients:
+                if not os.path.exists(pers_model_path):
+                    print(f"SB pers model save made directory! {pers_model_path}")
+                    os.makedirs(pers_model_path)
+                torch.save(c.model, os.path.join(model_path, self.algorithm + "_client_pers_model", c.ID + "_pers_model.pt"))
 
         param_log_str = (
             "BASE\n"
@@ -244,7 +261,6 @@ class Server(object):
             f"global_rounds = {self.global_rounds}\n"
             f"local_epochs = {self.local_epochs}\n"
             f"batch_size = {self.batch_size}\n"
-            #f"batch_num_per_client = {self.batch_num_per_client}\n"
             f"local_learning_rate = {self.local_learning_rate}\n"
             f"learning_rate_decay = {self.learning_rate_decay}\n"
             f"learning_rate_decay_gamma = {self.learning_rate_decay_gamma}\n"
@@ -261,10 +277,6 @@ class Server(object):
         with open(self.trial_result_path+r'\param_log.txt', 'w') as file:
             file.write(param_log_str)
 
-        #if (len(self.rs_train_loss))!=0: #or self.run_train_metrics==False:  # Idk why this is condition...
-        # Bad testing logic...
-        #try:
-        #except AttributeError:
         if (personalized==True and ((len(self.rs_test_loss_per))!=0)) or (personalized==False and ((len(self.rs_test_loss))!=0)):
             # Why would this run if run_train_metrics is False...
             algo = algo + "_" + self.goal# + "_" + str(self.times)  # IDk what self.times represents...
@@ -330,6 +342,8 @@ class Server(object):
         self.global_round += 1
         
         if self.eval_new_clients and self.num_new_clients > 0:
+            # if eval new client AND we actually have new clients, then return this
+            # maps to depreceated values I think...
             print("KAI: Returned early for some reason, idk what this code is doing")
             return [0], [1], [0]
         
@@ -338,7 +352,7 @@ class Server(object):
         print(f"Serverbase train_metrics(): GLOBAL ROUND: {self.global_round}")
         for c in self.clients:
             if self.verbose:
-                print(f"Serverbase train_metrics(): Client{c.ID}")
+                print(f"Serverbase train_metrics(): {c.ID}")
             c.last_global_round = self.global_round
             cl, ns = c.train_metrics()
             num_samples.append(ns)
@@ -469,21 +483,20 @@ class Server(object):
         if self.num_new_clients==0:
             pass
         else:
-            assert("set_new_clients must be refactored, IDs by index will not work here")
-            #for i, train_slow, send_slow in zip(range(self.num_clients), self.train_slow_clients, self.send_slow_clients):
+            base_data_path = 'C:\\Users\\kdmen\\Desktop\\Research\\Data\\Subject_Specific_Files\\'
             for i in range(self.num_clients, self.num_clients + self.num_new_clients):
-                print(f"SBSNC: iter {i}")
-                # Should I switch i to be the subject ID? Not specifically required to run, for now at least
-                # ID = i probably isn't the best solution... assumes things are in order...... no? Not a good solution regardless
-                #base_data_path = 'C:\\Users\\kdmen\\Desktop\\Research\\personalization-privacy-risk\\Data\\Client_Specific_Files\\'
-                base_data_path = 'C:\\Users\\kdmen\\Desktop\\Research\\Data\\Client_Specific_Files\\'
-                client = clientObj(self.args, 
-                                    ID=i, 
-                                    train_samples = base_data_path + "UserID" + str(i) + "_TrainData_8by20770by64.npy", 
-                                    test_samples = base_data_path + "UserID" + str(i) + "_Labels_8by20770by2.npy", 
-                                    train_slow=False, 
-                                    send_slow=False)
-                self.clients.append(client)
+                # Idk I guess I can keep the condition iter? Idk why I would want to turn it off other than not expecting it
+                for j in self.condition_number_lst:
+                    print(f"SB Set New Client: iter iter {i}, cond number: {str(j)}")
+                    client = clientObj(self.args, 
+                                        ID=self.train_subj_IDs[i], 
+                                        samples_path = base_data_path + 'S' + str(self.train_numerical_subj_IDs[i]) + "_TrainData_8by20770by64.npy", 
+                                        labels_path = base_data_path + 'S' + str(self.train_numerical_subj_IDs[i]) + "_Labels_8by20770by2.npy", 
+                                        condition_number = j-1, 
+                                        train_slow=False, 
+                                        send_slow=False)
+                    self.clients.append(client)
+                    #client.load_test_data(client_init=True)
 
     # fine-tuning on new clients
     def fine_tuning_new_clients(self):

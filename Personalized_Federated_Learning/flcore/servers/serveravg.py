@@ -65,7 +65,6 @@ class FedAvg(Server):
         print("\nAverage time cost per round.")
         print(sum(self.Budget[1:])/len(self.Budget[1:]))
 
-        # Kai's added code for logging
         for idx, client in enumerate(self.clients):
             self.cost_func_comps_log.append(client.cost_func_comps_log)
             self.gradient_norm_log.append(client.gradient_norm_log)
@@ -81,13 +80,8 @@ class FedAvg(Server):
             os.makedirs(trial_result_path)
         #
         for client in self.clients:
+            # Is this just a bunch of copies of the global model...
             client.save_item(client.model, 'local_client_model', item_path=model_path)
-        # No idea where this global model is coming from? Why did they save it...
-        self.save_global_model()
-
-        ## The original code
-        #self.save_results()
-        #self.save_global_model()
 
         ####################################################
         # Uhhhh I don't think my dataset can do this...

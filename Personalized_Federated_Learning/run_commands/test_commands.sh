@@ -1,3 +1,9 @@
+# SHORT VALIDATION RUNS
+python -u main.py -gr 10 -lr 1 -lD 0.00001 -lE 0.000001 -algo FedAvg
+python -u main.py -gr 10 -lr 1 -lD 0.00001 -lE 0.000001 -algo Local
+
+
+######################################################################################
 # This is to test my theory about local vs FedAvg, training over all the data for just 1 client. 
 # Let's see the differences between Local and FedAvg, this may tell us functional info about the stat hetero
 #python -u main.py -tr_ids ['METACPHS_S106'] -con_num [1,2,3,4,5,6,7,8] -gr 100 -lr 1 -lrt 25 -lD 0.00001 -lE 0.000001 -algo FedAvg

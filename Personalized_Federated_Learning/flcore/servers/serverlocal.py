@@ -40,9 +40,10 @@ class Local(Server):
             #print("CLIENT TRAINING")
             for client in self.selected_clients:
                 client.train()
-                print(f"SL: Client{client.ID} round {i} loss: {client.loss_log[-1]:0,.5f}")
+                if self.verbose:
+                    print(f"SL: {client.ID} round {i} loss: {client.loss_log[-1]:0,.5f}")
 
-            print()
+            #print()
 
             if self.auto_break and self.check_done(acc_lss=[self.rs_test_acc], top_cnt=self.top_cnt):
                 print("Breaking")
@@ -69,5 +70,3 @@ class Local(Server):
 
         for client in self.clients:
             client.save_item(client.model, 'local_client_model', item_path=model_path)
-        # No idea where this global model is coming from? Why did they save it...
-        self.save_global_model()

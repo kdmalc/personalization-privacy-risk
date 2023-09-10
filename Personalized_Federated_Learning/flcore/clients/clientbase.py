@@ -479,7 +479,8 @@ class Client(object):
             item_path = self.save_folder_name
         if not os.path.exists(item_path):
             os.makedirs(item_path)
-        #torch.save(item, os.path.join(item_path, self.ID + "_" + item_name + ".pt"))
+        # This just saves the model right...
+        torch.save(item, os.path.join(item_path, self.ID + "_" + item_name + ".pt"))
 
         
     def load_item(self, item_name, item_path=None):
