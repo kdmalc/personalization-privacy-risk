@@ -98,6 +98,13 @@ class Server(object):
         # This might need to get changed, but works as long as last 3 chars are the numerical subject ID (eg we drop the header and 'S')
         self.train_numerical_subj_IDs = [id_str[-3:] for id_str in self.train_subj_IDs]
         self.loss_threshold = args.loss_threshold
+        ## SEQUENTIAL TRAINING PARAMS
+        self.sequential = args.sequential
+        self.live_clients = args.live_clients
+        self.static_clients = args.static_clients
+        self.static_vs_live_weighting = args.static_vs_live_weighting
+        self.prev_model_directory = args.prev_model_directory
+
 
     def set_clients(self, clientObj):  
         if self.verbose:
@@ -115,7 +122,14 @@ class Server(object):
                                     train_slow=train_slow, 
                                     send_slow=send_slow)
                 self.clients.append(client)
-                client.load_train_data(client_init=True)
+                if self.sequential:
+                    # NOT FINISHED YET 
+                    
+                    # Load the client model
+                    full_path_to_item = self.prev_model_directory + self.ID
+                    client.load_item(None, full_path_to_item)
+                else:
+                    client.load_train_data(client_init=True)
 
     # random select slow clients
     def select_slow_clients(self, slow_rate):

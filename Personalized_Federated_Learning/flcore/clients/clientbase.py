@@ -483,8 +483,11 @@ class Client(object):
         torch.save(item, os.path.join(item_path, self.ID + "_" + item_name + ".pt"))
 
         
-    def load_item(self, item_name, item_path=None):
-        if item_path == None:
+    def load_item(self, item_name, item_path=None, full_path_to_item=None):
+        if item_path != None:
+            # Uses torch.load so it assumes it is a model...
+            return torch.load(full_path_to_item)
+        elif item_path == None:
             item_path = self.save_folder_name
         #return torch.load(os.path.join(item_path, "client_" + str(self.ID) + "_" + item_name + ".pt"))
         return torch.load(os.path.join(item_path, self.ID + "_" + item_name + ".pt"))

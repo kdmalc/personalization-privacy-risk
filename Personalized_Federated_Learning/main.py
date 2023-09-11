@@ -373,9 +373,6 @@ if __name__ == "__main__":
                         help="Implement train/test split within each update or on the entire dataset")
     parser.add_argument('-test_split_users', "--test_split_users", type=bool, default=False,
                         help="Split testing data by holding out some users (fraction held out determined by test_split_fraction)")
-    ##################################################################################################################################
-    ##################################################################################################################################
-    ##################################################################################################################################
     parser.add_argument('-ts_ids', "--test_subj_IDs", type=str, default='[]',
                         help="List of subject ID strings of all subjects to be set to test only")
     ##
@@ -390,9 +387,6 @@ if __name__ == "__main__":
     # I think I depreciated debug_mode, double check it's removed
     parser.add_argument('-debug_mode', "--debug_mode", type=bool, default=False,
                         help="I THINK I KILLED THIS MODE: In debug mode, the code is run to minimize overhead time in order to debug as fast as possible.  Namely, the data is held at the server to decrease init time, and communication delays are ignored.")
-    ##################################################################################################################################
-    ##################################################################################################################################
-    ##################################################################################################################################
     parser.add_argument('-con_num', "--condition_number_lst", type=str, default='[1]',
                         help="Which condition number (trial) to train on. Must be a list. By default, will iterate through all train_subjs for each cond (eg each cond_num gets its own client even for the same subject)")
     parser.add_argument('-tr_ids', "--train_subj_IDs", type=str, default=str(['METACPHS_S106', 'METACPHS_S107', 'METACPHS_S108', 'METACPHS_S109', 'METACPHS_S110', 'METACPHS_S111', 'METACPHS_S112', 'METACPHS_S113', 'METACPHS_S114', 'METACPHS_S115', 'METACPHS_S116', 'METACPHS_S117', 'METACPHS_S118', 'METACPHS_S119']),
@@ -411,6 +405,17 @@ if __name__ == "__main__":
     # This one is not integrated yet
     parser.add_argument('-rtm', "--run_train_metrics", type=bool, default=True,
                         help="Evaluate every client on the training data")  # I don't think this matters for local, since every client is being run anyways?
+    ## SEQUENTIAL TRAINING PARAMS
+    parser.add_argument('-seq', "--sequential", type=bool, default=False,
+                        help="Boolean toggle for whether sequential mode is on (for now, mixing current client with previously trained models)")
+    parser.add_argument('-live_clients', "--live_clients", type=str, default='[]',
+                        help="List of current subject ID strings (blank model will be trained and saved)")
+    parser.add_argument('-static_clients', "--static_clients", type=str, default='[]',
+                        help="List of previously trained subject ID strings (models will be uploaded and not trained)")
+    parser.add_argument('-svlweight', "--static_vs_live_weighting", type=float, default=0.75,
+                        help="Ratio between number of static clients and live clients present in each training round")
+    parser.add_argument('-pmd', "--prev_model_directory", type=str, default="",
+                        help="Directory name containing all the prev clients models") # Should this be switched to just path.....
 
     #############################################################################################################################################
 
