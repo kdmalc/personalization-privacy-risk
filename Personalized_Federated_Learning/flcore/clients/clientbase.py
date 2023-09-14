@@ -9,7 +9,7 @@ import os
 from torch.utils.data import DataLoader
 
 from sklearn.decomposition import PCA
-from  utils.processing_funcs import normalize_2D_tensor
+from utils.processing_funcs import normalize_2D_tensor
 from utils.custom_loss_class2 import CPHSLoss2
 from utils.emg_dataset_class import *
 
@@ -191,8 +191,6 @@ class Client(object):
         else:
             s_normed = s_temp
         # Apply PCA if applicable
-        ## Should I also normalize the output of PCA? I want the inputs and labels to be on the same scale/range... 
-        ### Does that need to be true after every transformation? Probably not...
         if self.pca_channels!=self.device_channels:
             pca = PCA(n_components=self.pca_channels)
             s = torch.transpose(torch.tensor(pca.fit_transform(s_normed), dtype=torch.float32), 0, 1)

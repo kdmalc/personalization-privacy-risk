@@ -1,3 +1,26 @@
+import numpy as np
+
+def normalize_2D_array(array):
+    min_val = np.min(array)
+    max_val = np.max(array)
+    
+    if max_val == min_val:
+        return np.zeros_like(array)
+    
+    normalized_array = (array - min_val) / (max_val - min_val)
+    return normalized_array
+
+'''
+# Example usage:
+input_array = np.array([[1, 2, 3],
+                        [4, 5, 6],
+                        [7, 8, 9]], dtype=np.float32)
+
+normalized_array = normalize_2D_array(input_array)
+print(normalized_array)
+'''
+
+
 # Add this as a static method?
 def condensed_external_plotting(input_data, version, exclusion_ID_lst=[], dim_reduc_factor=10, plot_gradient=False, global_error=True, local_error=True, pers_error=False, different_local_round_thresh_per_client=False, legend_on=False, plot_performance=False, plot_Dnorm=False, plot_Fnorm=False, num_participants=14, show_update_change=False, custom_title="", ylim=-1):
     id2color = {0:'lightcoral', 1:'maroon', 2:'chocolate', 3:'darkorange', 4:'gold', 5:'olive', 6:'olivedrab', 

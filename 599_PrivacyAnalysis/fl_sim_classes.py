@@ -282,7 +282,10 @@ class Server(ModelBase):
             summed_num_datapoints += my_client.learning_batch
         # Aggregate local model weights, weighted by normalized local learning rate
         aggr_w = np.zeros((2, self.PCA_comps))
+        ###########################################################################################################################
         for my_client in self.chosen_clients_lst:
+            # Hmmm should I actually be normalizing (or rather, scaling) the models before aggregation?
+            # ^Breaks the cost func locally but globally I don't thikn it should matter?
             # Normalize models between clients...
             if self.normalize_dec:
                 normalization_term = np.amax(my_client.w)
@@ -292,6 +295,7 @@ class Server(ModelBase):
         # Normalize the resulting global model
         if self.normalize_dec:
             aggr_w /= np.amax(aggr_w)
+        ###########################################################################################################################
         
         # This would be the place to do smoothbatch if we wanted to do it on a global level
         # Right now the global decoders are essentially independent
@@ -321,7 +325,7 @@ class Server(ModelBase):
                                                                
 
 class Client(ModelBase, TrainingMethods):
-    def __init__(self, ID, w, method, local_data, data_stream, smoothbatch=1, current_round=0, PCA_comps=7, availability=1, global_method='FedAvg', normalize_dec=False, normalize_EMG=True, track_cost_components=True, track_lr_comps=True, use_real_hess=True, gradient_clipping=False, log_decs=True, clipping_threshold=100, tol=1e-10, adaptive=True, eta=1, track_gradient=True, wprev_global=False, num_steps=1, use_zvel=False, APFL_input_eta=False, safe_lr_factor=False, mix_in_each_steps=False, mix_mixed_SB=False, delay_scaling=5, random_delays=False, download_delay=1, upload_delay=1, copy_type='deep', validate_memory_IDs=True, local_round_threshold=25, condition_number=1, verbose=False):
+    def __init__(self, ID, w, method, local_data, data_stream, smoothbatch=1, current_round=0, PCA_comps=7, availability=1, global_method='FedAvg', normalize_dec=False, normalize_EMG=True, track_cost_components=True, track_lr_comps=True, use_real_hess=True, gradient_clipping=False, log_decs=True, clipping_threshold=100, tol=1e-10, adaptive=True, eta=1, track_gradient=True, wprev_global=False, num_steps=1, use_zvel=False, APFL_input_eta=False, safe_lr_factor=False, set_alphaF_zero=False, mix_in_each_steps=False, mix_mixed_SB=False, delay_scaling=5, random_delays=False, download_delay=1, upload_delay=1, copy_type='deep', validate_memory_IDs=True, local_round_threshold=25, condition_number=1, verbose=False):
         super().__init__(ID, w, method, smoothbatch=smoothbatch, current_round=current_round, PCA_comps=PCA_comps, verbose=verbose, num_participants=14, log_init=0)
         '''
         Note self.smoothbatch gets overwritten according to the condition number!  
@@ -398,7 +402,10 @@ class Client(ModelBase, TrainingMethods):
             self.smoothbatch=smoothbatch
             print()
         self.alphaE = 1e-6
-        self.alphaF = 1e-7
+        if set_alphaF_zero:
+            self.alphaF = 0
+        else:
+            self.alphaF = 1e-7
         #
         self.gradient_clipping = gradient_clipping
         self.clipping_threshold = clipping_threshold
@@ -545,11 +552,13 @@ class Client(ModelBase, TrainingMethods):
             
         if need_to_advance:
             s_temp = self.training_data[lower_bound:upper_bound,:]
+            ###########################################################################################################################
             # First, normalize the entire s matrix
             if self.normalize_EMG:
                 s_normed = s_temp/np.amax(s_temp)
             else:
                 s_normed = s_temp
+            ###########################################################################################################################
             # Now do PCA unless it is set to 64 (AKA the default num channels i.e. no reduction)
             # Also probably ought to find a global transform if possible so I don't recompute it every time...
             if self.PCA_comps!=self.pca_channel_default:  
@@ -921,12 +930,16 @@ class Client(ModelBase, TrainingMethods):
                 raise ValueError(f"Unexpected size of test_current_dec: {np.prod(test_dec.shape)} vs {self.PCA_comps*2} expected")
         
         # This sets FVD using the full client dataset
+        # ^... testing on the full dataset (especially all at once) seems stupid...
         # Since we aren't doing any optimization then it shouldn't matter if we use updates or not...
         simulate_data_stream(streaming_method='full_data')
+        #simulate_data_stream(streaming_method='full_data')
+        
         # Evaluate cost
         temp = cost_l2(self.F, test_dec, self.H, self.V, self.learning_batch, self.alphaF, self.alphaD, Ne=self.PCA_comps)
-        dec_cost = round(temp, 3)
-        # Also want to see actual output 
+        dec_cost = round(temp, 7)
+        
+        # Also want to see actual output AKA predicted output (I forget if this is position or velocity)
         # This might be the cost and not the actual position...
         D_reshaped = np.reshape(test_dec,(2,self.PCA_comps))
         dec_pos = D_reshaped@self.F + self.H@self.V[:,:-1] - self.V[:,1:]
