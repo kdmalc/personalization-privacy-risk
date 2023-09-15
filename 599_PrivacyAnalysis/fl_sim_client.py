@@ -15,7 +15,7 @@ from fl_sim_base import *
 
 
 class Client(ModelBase, TrainingMethods):
-    def __init__(self, ID, w, method, local_data, data_stream, smoothbatch=1, current_round=0, PCA_comps=7, availability=1, global_method='FedAvg', normalize_dec=False, normalize_EMG=True, starting_update=0, track_cost_components=True, track_lr_comps=True, use_real_hess=True, gradient_clipping=False, log_decs=True, clipping_threshold=100, tol=1e-10, adaptive=True, eta=1, track_gradient=True, wprev_global=False, num_steps=1, use_zvel=False, APFL_input_eta=False, safe_lr_factor=False, set_alphaF_zero=False, mix_in_each_steps=False, mix_mixed_SB=False, delay_scaling=5, random_delays=False, download_delay=1, upload_delay=1, copy_type='deep', validate_memory_IDs=True, local_round_threshold=25, condition_number=1, verbose=False):
+    def __init__(self, ID, w, method, local_data, data_stream, smoothbatch=1, current_round=0, PCA_comps=7, availability=1, global_method='FedAvg', normalize_dec=False, normalize_EMG=True, starting_update=0, track_cost_components=True, track_lr_comps=True, use_real_hess=True, gradient_clipping=False, log_decs=True, clipping_threshold=100, tol=1e-10, adaptive=True, eta=1, track_gradient=True, wprev_global=False, num_steps=1, use_zvel=False, APFL_input_eta=False, safe_lr_factor=False, set_alphaF_zero=False, mix_in_each_steps=False, mix_mixed_SB=False, delay_scaling=5, random_delays=False, download_delay=1, upload_delay=1, copy_type='deep', validate_memory_IDs=True, local_round_threshold=25, condition_number=1, verbose=False, test_split_type='end', test_split_frac=0.3, use_up16_for_test=True):
         super().__init__(ID, w, method, smoothbatch=smoothbatch, current_round=current_round, PCA_comps=PCA_comps, verbose=verbose, num_participants=14, log_init=0)
         '''
         Note self.smoothbatch gets overwritten according to the condition number!  
@@ -37,13 +37,16 @@ class Client(ModelBase, TrainingMethods):
         self.dt = 1.0/60.0
         self.eta = eta  # Learning rate
         # TRAIN TEST DATA SPLIT
+        self.test_split_type = test_split_type
+        self.test_split_frac = test_split_frac
+        self.use_up16_for_test = use_up16_for_test
         test_split_product_index = local_data['training'].shape[0]*test_split_frac
         # Convert this value to the cloest update_ix value
-        train_test_update_number_split = min(self.update_ix, key=lambda x:abs(x-test_split_product_index))
-        self.test_split_idx = update_ix[train_test_update_number_split]
+        train_test_update_number_split = min(ModelBase.update_ix, key=lambda x:abs(x-test_split_product_index))
         print(f"use_up16_for_test: {self.use_up16_for_test}")
         print(f"test_split_product_index = local_data['training'].shape[0]*test_split_frac = {test_split_product_index}")
         print(f"train_test_update_number_split (closest update): {train_test_update_number_split}")
+        self.test_split_idx = ModelBase.update_ix[train_test_update_number_split]
         print(f"test_split_product_index (actual data index): {self.test_split_idx}")
         self.training_data = local_data['training']#[:self.test_split_idx, :]
         self.labels = local_data['labels']#[:self.test_split_idx, :]
@@ -159,8 +162,8 @@ class Client(ModelBase, TrainingMethods):
         
         # SET TESTING DATA AND METRICS
         if self.use_up16_for_test==True:
-            lower_bound = (update_ix[15])//2  #Use only the second half of each update
-            upper_bound = update_ix[16]
+            lower_bound = (ModelBase.update_ix[15])//2  #Use only the second half of each update
+            upper_bound = ModelBase.update_ix[16]
         else:
             raise ValueError("use_up16_for_test must be True, it is the only testing supported currently")
         self.test_learning_batch = upper_bound - lower_bound
@@ -236,12 +239,12 @@ class Client(ModelBase, TrainingMethods):
             #print("Maxxed out your update (you are on update 18), continuing training on last update only")
             # Probably ought to track that we maxed out --> LOG SYSTEM
             # We are stopping an update early, so use -3/-2 and not -2/-1 (the last update)
-            lower_bound = (update_ix[-3] + update_ix[-2])//2  #Use only the second half of each update
-            upper_bound = update_ix[-2]
+            lower_bound = (ModelBase.update_ix[-3] + ModelBase.update_ix[-2])//2  #Use only the second half of each update
+            upper_bound = ModelBase.update_ix[-2]
             self.learning_batch = upper_bound - lower_bound
         elif streaming_method=='full_data':
-            lower_bound = update_ix[0]  # Starts at 0 and not update 10, for now
-            upper_bound = update_ix[-1]
+            lower_bound = ModelBase.update_ix[0]  # Starts at 0 and not update 10, for now
+            upper_bound = ModelBase.update_ix[-1]
             self.learning_batch = upper_bound - lower_bound
         elif streaming_method=='streaming':
             # If we pass threshold, move on to the next update
@@ -254,8 +257,8 @@ class Client(ModelBase, TrainingMethods):
                     print()
                     
                 # Using only the second half of each update for co-adaptivity reasons
-                lower_bound = (update_ix[self.current_update] + update_ix[self.current_update+1])//2  
-                upper_bound = update_ix[self.current_update+1]
+                lower_bound = (ModelBase.update_ix[self.current_update] + ModelBase.update_ix[self.current_update+1])//2  
+                upper_bound = ModelBase.update_ix[self.current_update+1]
                 self.learning_batch = upper_bound - lower_bound
             elif self.current_round>2:
                 # This is the base case
@@ -264,12 +267,12 @@ class Client(ModelBase, TrainingMethods):
             else:
                 # This is for the init case (current round is 0 or 1)
                 # need_to_advance is true, so we overwrite s and such... this is fine 
-                lower_bound = (update_ix[self.current_update] + update_ix[self.current_update+1])//2  
-                upper_bound = update_ix[self.current_update+1]
+                lower_bound = (ModelBase.update_ix[self.current_update] + ModelBase.update_ix[self.current_update+1])//2  
+                upper_bound = ModelBase.update_ix[self.current_update+1]
                 self.learning_batch = upper_bound - lower_bound
         elif streaming_method=='advance_each_iter':
-            lower_bound = (update_ix[self.current_update] + update_ix[self.current_update+1])//2  
-            upper_bound = update_ix[self.current_update+1]
+            lower_bound = (ModelBase.update_ix[self.current_update] + ModelBase.update_ix[self.current_update+1])//2  
+            upper_bound = ModelBase.update_ix[self.current_update+1]
             self.learning_batch = upper_bound - lower_bound
             
             self.current_update += 1
@@ -657,8 +660,8 @@ class Client(ModelBase, TrainingMethods):
             raise ValueError('test_metrics which does not exist. Must be local, global, or pers')
             
         if self.use_up16_for_test==True and final_eval==True:
-            lower_bound = (update_ix[16])//2  #Use only the second half of each update
-            upper_bound = update_ix[17]
+            lower_bound = (ModelBase.update_ix[16])//2  #Use only the second half of each update
+            upper_bound = ModelBase.update_ix[17]
             
             self.test_learning_batch = upper_bound - lower_bound
             # THIS NEEDS TO BE FIXED...

@@ -20,6 +20,7 @@ class ModelBase:
     update_ix = [0,  1200,  2402,  3604,  4806,  6008,  7210,  8412,  9614, 10816, 12018, 13220, 14422, 15624, 16826, 18028, 19230, 20432, 20769]
     id2color = {0:'lightcoral', 1:'maroon', 2:'chocolate', 3:'darkorange', 4:'gold', 5:'olive', 6:'olivedrab', 
             7:'lawngreen', 8:'aquamarine', 9:'deepskyblue', 10:'steelblue', 11:'violet', 12:'darkorchid', 13:'deeppink'}
+    pers_methods = ['FedAvgSB', 'APFL', 'Per-FedAvg FO', 'Per-FedAvg HF']
     
     def __init__(self, ID, w, method, smoothbatch=1, verbose=False, PCA_comps=7, current_round=0, num_participants=14, log_init=0):
         self.type = 'BaseClass'
@@ -43,7 +44,6 @@ class ModelBase:
         self.current_round = current_round
         self.verbose = verbose
         self.smoothbatch = smoothbatch
-        self.pers_methods = ['FedAvgSB', 'APFL', 'Per-FedAvg FO', 'Per-FedAvg HF']
 
         
     def __repr__(self): 
