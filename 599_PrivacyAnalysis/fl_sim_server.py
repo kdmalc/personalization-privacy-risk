@@ -104,8 +104,10 @@ class Server(ModelBase):
                         raise ValueError("copy_type must be set to either deep, shallow, or none")
         else:
             raise('Method not currently supported, please reset method to FedAvg')
+        
         # Save the new decoder to the log
         self.dec_log.append(copy.deepcopy(self.w))
+        # Run test_metrics to generate performance on testing data
         for my_client in self.all_clients:
             # Reset all clients so no one is chosen for the next round
             if type(my_client)==int:
