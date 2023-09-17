@@ -37,17 +37,15 @@ class Client(ModelBase, TrainingMethods):
         self.dt = 1.0/60.0
         self.eta = eta  # Learning rate
         # TRAIN TEST DATA SPLIT
+        self.use_up16_for_test = use_up16_for_test
+        #if use_up16_for_test:
+        #print("USE UPDATE 16 FOR TEST")
         self.test_split_type = test_split_type
         self.test_split_frac = test_split_frac
-        self.use_up16_for_test = use_up16_for_test
         test_split_product_index = local_data['training'].shape[0]*test_split_frac
         # Convert this value to the cloest update_ix value
         train_test_update_number_split = min(ModelBase.update_ix, key=lambda x:abs(x-test_split_product_index))
-        print(f"use_up16_for_test: {self.use_up16_for_test}")
-        print(f"test_split_product_index = local_data['training'].shape[0]*test_split_frac = {test_split_product_index}")
-        print(f"train_test_update_number_split (closest update): {train_test_update_number_split}")
-        self.test_split_idx = ModelBase.update_ix[train_test_update_number_split]
-        print(f"test_split_product_index (actual data index): {self.test_split_idx}")
+        self.test_split_idx = ModelBase.update_ix.index(train_test_update_number_split)
         self.training_data = local_data['training']#[:self.test_split_idx, :]
         self.labels = local_data['labels']#[:self.test_split_idx, :]
         #self.testing_data = local_data['training'][self.test_split_idx:, :]
@@ -176,12 +174,10 @@ class Client(ModelBase, TrainingMethods):
         if self.PCA_comps!=self.pca_channel_default:  
             pca = PCA(n_components=self.PCA_comps)
             s_normed = pca.fit_transform(s_normed)
-        s = np.transpose(s_normed)
-        self.F_test = s[:,:-1] # note: truncate F for estimate_decoder
-        v_actual = model@s
-        p_actual = np.cumsum(v_actual, axis=1)*self.dt  # Numerical integration of v_actual to get p_actual
-        p_reference = np.transpose(self.labels[lower_bound:upper_bound,:])
-        self.V_test = (p_reference - p_actual)*self.dt
+        self.s_test = np.transpose(s_normed)
+        self.F_test = self.s_test[:,:-1] # note: truncate F for estimate_decoder
+        self.p_test_reference = np.transpose(self.labels[lower_bound:upper_bound,:])
+
             
             
     # 0: Main Loop
@@ -673,20 +669,21 @@ class Client(ModelBase, TrainingMethods):
             if self.PCA_comps!=self.pca_channel_default:  
                 pca = PCA(n_components=self.PCA_comps)
                 s_normed = pca.fit_transform(s_normed)
-            s = np.transpose(s_normed)
-            self.F_test = s[:,:-1] # note: truncate F for estimate_decoder
-            v_actual = model@s
-            p_actual = np.cumsum(v_actual, axis=1)*self.dt  # Numerical integration of v_actual to get p_actual
-            p_reference = np.transpose(self.labels[lower_bound:upper_bound,:])
-            self.V_test = (p_reference - p_actual)*self.dt
+            self.s_test = np.transpose(s_normed)
+            self.F_test = self.s_test[:,:-1] # note: truncate F for estimate_decoder
+            self.p_test_reference = np.transpose(self.labels[lower_bound:upper_bound,:])
         elif self.use_up16_for_test==True and final_eval==False:
             # Can reuse the test values already set earlier in the init func
             pass
         else:
             raise ValueError("use_up16_for_test must be True, it is the only testing supported currently")
+            
+        v_actual = model@self.s_test
+        p_actual = np.cumsum(v_actual, axis=1)*self.dt  # Numerical integration of v_actual to get p_actual
+        self.V_test = (self.p_test_reference - p_actual)*self.dt
         
         test_loss = cost_l2(self.F_test, model, self.H, self.V_test, self.test_learning_batch, self.alphaF, self.alphaD, Ne=self.PCA_comps)
-        self.test_log.append(test_loss)
+        test_log.append(test_loss)
         
         # OLD VERSION THAT WAS NEVER USED
         '''
@@ -712,4 +709,4 @@ class Client(ModelBase, TrainingMethods):
         D_reshaped = np.reshape(test_dec,(2,self.PCA_comps))
         dec_pos = D_reshaped@self.F + self.H@self.V[:,:-1] - self.V[:,1:]
         '''
-        return dec_cost, dec_pos
+        return test_loss, self.V_test
