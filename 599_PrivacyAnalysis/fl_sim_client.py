@@ -112,14 +112,17 @@ class Client(ModelBase, TrainingMethods):
         self.pers_dec_log = [np.zeros((2,self.PCA_comps))]
         self.global_dec_log = [np.zeros((2,self.PCA_comps))]
         # Overwrite the logs since global and local track in slightly different ways
+        
+        ## DEFINED IN THE MODEL BASE CLASS!
         # TRAINING LOSS
-        self.local_error_log = []
-        self.global_error_log = []
-        self.pers_error_log = []
+        #self.local_error_log = []
+        #self.global_error_log = []
+        #self.pers_error_log = []
         # TESTING LOSS
-        self.local_test_error_log = []
-        self.global_test_error_log = []
-        self.pers_test_error_log = []
+        #self.local_test_error_log = []
+        #self.global_test_error_log = []
+        #self.pers_test_error_log = []
+        
         #
         self.track_cost_components = track_cost_components
         self.performance_log = []

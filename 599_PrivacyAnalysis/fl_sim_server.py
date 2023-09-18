@@ -108,16 +108,24 @@ class Server(ModelBase):
         # Save the new decoder to the log
         self.dec_log.append(copy.deepcopy(self.w))
         # Run test_metrics to generate performance on testing data
-        for my_client in self.all_clients:
+        for client_idx, my_client in enumerate(self.all_clients):
             # Reset all clients so no one is chosen for the next round
             if type(my_client)==int:
                 raise TypeError("All my clients are all integers...")
             my_client.chosen_status = 0
             # test_metrics for all clients
             if self.method=='FedAvg':
-                my_client.test_metrics(self.w, 'global')
+                test_loss, test_pred = my_client.test_metrics(self.w, 'global')
             elif self.method=='NoFL':
-                my_client.test_metrics(my_client.w, 'local')   
+                test_loss, test_pred = my_client.test_metrics(my_client.w, 'local') 
+            if client_idx!=0:
+                running_test_loss += np.array(test_loss)
+            else:
+                running_test_loss =np.array( test_loss)
+        if self.method=='FedAvg':
+            self.global_test_error_log = running_test_loss / len(self.all_clients)
+        elif self.method=='NoFL':
+            self.local_test_error_log = running_test_loss / len(self.all_clients)
             
         
     # 1.1
@@ -159,7 +167,7 @@ class Server(ModelBase):
             
             # This isn't great code because it checks the init every single time it runs
             #  Maybe move this to be before this loop?
-            if self.local_error_log[-1]==self.log_init:
+            if len(self.local_error_log)==0:  #self.local_error_log[-1]==self.log_init:
                 local_init_carry_val = 0
                 global_init_carry_val = 0
                 pers_init_carry_val = 0

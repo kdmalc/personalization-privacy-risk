@@ -37,9 +37,12 @@ class ModelBase:
         self.w_prev = copy.deepcopy(self.w)
         self.num_participants = num_participants
         self.log_init = log_init
-        self.local_error_log = [log_init]*num_participants
-        self.global_error_log = [log_init]*num_participants
-        self.pers_error_log = [log_init]*num_participants
+        self.local_error_log = [] #[log_init]*num_participants
+        self.global_error_log = [] #[log_init]*num_participants
+        self.pers_error_log = [] #[log_init]*num_participants
+        self.local_test_error_log = [] #[log_init]*num_participants
+        self.global_test_error_log = [] #[log_init]*num_participants
+        self.pers_test_error_log = [] #[log_init]*num_participants
         self.method = method
         self.current_round = current_round
         self.verbose = verbose
