@@ -15,7 +15,7 @@ from fl_sim_base import *
         
         
 class Server(ModelBase):
-    def __init__(self, ID, D0, method, all_clients, smoothbatch=1, C=0.1, normalize_dec=True, test_split_type='end', use_up16_for_test=True, test_split_frac=0.3, current_round=0, PCA_comps=7, verbose=False, APFL_Tau=10, copy_type='deep', validate_memory_IDs=True):
+    def __init__(self, ID, D0, method, all_clients, smoothbatch=1, C=0.35, normalize_dec=True, test_split_type='end', use_up16_for_test=True, test_split_frac=0.3, current_round=0, PCA_comps=10, verbose=False, APFL_Tau=10, copy_type='deep', validate_memory_IDs=True):
         super().__init__(ID, D0, method, smoothbatch=smoothbatch, current_round=current_round, PCA_comps=PCA_comps, verbose=verbose, num_participants=14, log_init=0)
         self.type = 'Server'
         self.num_avail_clients = 0
@@ -115,17 +115,23 @@ class Server(ModelBase):
             my_client.chosen_status = 0
             # test_metrics for all clients
             if self.method=='FedAvg':
-                test_loss, test_pred = my_client.test_metrics(self.w, 'global')
+                global_test_loss, global_test_pred = my_client.test_metrics(self.w, 'global')
+                local_test_loss, local_test_pred = my_client.test_metrics(my_client.w, 'local')
             elif self.method=='NoFL':
-                test_loss, test_pred = my_client.test_metrics(my_client.w, 'local') 
+                global_test_loss = 0
+                local_test_loss, local_test_pred = my_client.test_metrics(my_client.w, 'local') 
+            #
             if client_idx!=0:
-                running_test_loss += np.array(test_loss)
+                running_global_test_loss += np.array(global_test_loss)
+                running_local_test_loss += np.array(local_test_loss)
             else:
-                running_test_loss =np.array( test_loss)
+                running_global_test_loss = np.array(global_test_loss)
+                running_local_test_loss = np.array(local_test_loss)
         if self.method=='FedAvg':
-            self.global_test_error_log = running_test_loss / len(self.all_clients)
+            self.global_test_error_log = running_global_test_loss / len(self.all_clients)
+            self.local_test_error_log = running_local_test_loss / len(self.all_clients)
         elif self.method=='NoFL':
-            self.local_test_error_log = running_test_loss / len(self.all_clients)
+            self.local_test_error_log = running_local_test_loss / len(self.all_clients)
             
         
     # 1.1
