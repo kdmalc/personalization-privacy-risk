@@ -98,7 +98,7 @@ class Client(ModelBase, TrainingMethods):
         else:
             # Set smoothbatch to whatever you manually entered
             self.smoothbatch=smoothbatch
-            print()
+            #print()
         self.alphaE = 1e-6
         if set_alphaF_zero:
             self.alphaF = 0

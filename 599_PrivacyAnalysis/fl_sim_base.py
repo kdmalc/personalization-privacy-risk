@@ -28,7 +28,7 @@ class ModelBase:
         self.PCA_comps = PCA_comps
         self.pca_channel_default = 64  # When PCA_comps equals this, DONT DO PCA
         if w.shape!=(2, self.PCA_comps):
-            print(f"Class BaseModel: Overwrote the provided init decoder: {w.shape} --> {(2, self.PCA_comps)}")
+            #print(f"Class BaseModel: Overwrote the provided init decoder: {w.shape} --> {(2, self.PCA_comps)}")
             self.w = np.random.rand(2, self.PCA_comps)
         else:
             self.w = w
