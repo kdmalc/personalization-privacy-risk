@@ -38,6 +38,8 @@ class Server(object):
         self.train_slow_clients = []
         self.send_slow_clients = []
 
+        # ... I have no idea what this is supposed to be fore anymore... IS IT FOR SEQ??
+        ## Apparently is used in recieve_models() ... okay
         self.uploaded_weights = []
         self.uploaded_IDs = []
         self.uploaded_models = []
@@ -124,10 +126,19 @@ class Server(object):
                 self.clients.append(client)
                 if self.sequential:
                     # NOT FINISHED YET 
-                    
-                    # Load the client model
-                    full_path_to_item = self.prev_model_directory + self.ID
-                    client.load_item(None, full_path_to_item)
+                    if client.ID in self.live_clients:
+                        # Do I need to do anything? I don't think so...
+                        pass
+                    elif client.ID in self.static_clients:
+                        # Load the client model
+                        ## This is not super robust. Assume the full path is the provided path and the file name is just the ID...
+                        ### Does this need to be updated to include the file extension? Probably... .pt?
+                        #path_to_trained_client_model = self.prev_model_directory + self.ID
+                        # HARD CODE: since all clients should be working off the same global model... 
+                        ## self.prev_model_directory is hardcoded file path w/ file for now...
+                        path_to_trained_client_model = self.prev_model_directory
+                        # It requires item_name, but I don't use it as of now, so just set it to None
+                        client.load_item(None, full_path_to_item=path_to_trained_client_model)
                 else:
                     client.load_train_data(client_init=True)
 
@@ -161,6 +172,9 @@ class Server(object):
         print("SENDING GLOBAL MODEL TO CLIENTS")
         assert (len(self.clients) > 0)
 
+        # The way they have it implies that EVERY CLIENT SETS TO THE GLOBAL MODEL EVERY ROUND...
+        ## Go back and change this after the rest just to make sure it doesn't break the rest of the code
+        #for client in self.selected_clients:
         for client in self.clients:
             start_time = time.time()
             
@@ -188,6 +202,9 @@ class Server(object):
             if client_time_cost <= self.time_threshold:
                 tot_samples += client.train_samples  # tot_samples += client.num_train_samples
                 self.uploaded_IDs.append(client.ID)
+                # HAHA I think this comment is from them not me LOL
+                ## But what is going on here. Ask CGPT ig, idk if I need to change anything.
+                ### Seems like active clients are just the selected ones?
                 self.uploaded_weights.append(client.train_samples)  # What is going on here
                 self.uploaded_models.append(client.model)
         for i, w in enumerate(self.uploaded_weights):
@@ -237,21 +254,25 @@ class Server(object):
     
         
     def save_results(self, personalized=False, save_cost_func_comps=False, save_gradient=False):
-        algo = self.dataset + "_" + self.algorithm
+        # Dataset should be the directory name right...?
+        #algo = self.dataset + "_" + self.algorithm
+        algo = self.algorithm
 
         # get current date and time
         current_datetime = datetime.now().strftime("%m-%d_%H-%M")
         # convert datetime obj to string
         str_current_datetime = str(current_datetime)
 
-        self.trial_result_path = self.result_path + str_current_datetime
+        self.trial_result_path = self.result_path + str_current_datetime + "_" + algo
         if not os.path.exists(self.trial_result_path):
             os.makedirs(self.trial_result_path)
+        
         model_path = os.path.join("models", self.dataset, str_current_datetime)
         if not os.path.exists(model_path):
             os.makedirs(model_path)
         model_path = os.path.join(model_path, self.algorithm + "_server_global.pt")
         torch.save(self.global_model, model_path)
+
         if personalized==True:
             pers_model_path = os.path.join(model_path, self.algorithm + "_client_pers_model")
             for c in self.clients:
@@ -367,7 +388,8 @@ class Server(object):
         for c in self.clients:
             if self.verbose:
                 print(f"Serverbase train_metrics(): {c.ID}")
-            c.last_global_round = self.global_round
+            # Why is it setting it to this if this is in train_metrics not training... it wasn't updated.......
+            #c.last_global_round = self.global_round
             cl, ns = c.train_metrics()
             num_samples.append(ns)
             losses.append(cl*1.0)
@@ -380,7 +402,7 @@ class Server(object):
     def evaluate(self, train=True, test=True, acc=None, loss=None):
         '''
         KAI Docstring
-        This func runs test_metrics and train_metrics, and then sums all of
+        This func runs test_metrics and train_metrics, and then sums all of ...
         Previously, test_metrics and train_metrics were collecting the losses on ALL clients (even the untrained ones...)
         I switched that (5/31 12:06pm) to be just the selected clients, the idea being that ALL clients explode the loss func
         '''
@@ -419,6 +441,7 @@ class Server(object):
                 loss.append(train_loss)
 
             print("Averaged Train Loss: {:.5f}".format(avg_train_loss))
+            # If the average loss is unreasonably high just abort the run
             if avg_train_loss>self.loss_threshold:
                 # Log training loss up to this point...
                 self.save_results(personalized=self.personalized_algo_bool, save_cost_func_comps=True, save_gradient=True)

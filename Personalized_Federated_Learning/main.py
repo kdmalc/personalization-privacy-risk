@@ -409,13 +409,17 @@ if __name__ == "__main__":
     parser.add_argument('-seq', "--sequential", type=bool, default=False,
                         help="Boolean toggle for whether sequential mode is on (for now, mixing current client with previously trained models)")
     parser.add_argument('-live_clients', "--live_clients", type=str, default='[]',
-                        help="List of current subject ID strings (blank model will be trained and saved)")
+                        help="List of current subject ID strings (models will be trained and saved)")
     parser.add_argument('-static_clients', "--static_clients", type=str, default='[]',
-                        help="List of previously trained subject ID strings (models will be uploaded and not trained)")
+                        help="List of previously trained subject ID strings (models will be uploaded, used in training, but never updated)")
     parser.add_argument('-svlweight', "--static_vs_live_weighting", type=float, default=0.75,
-                        help="Ratio between number of static clients and live clients present in each training round")
-    parser.add_argument('-pmd', "--prev_model_directory", type=str, default="",
-                        help="Directory name containing all the prev clients models") # Should this be switched to just path.....
+                        help="Ratio between number of static clients and live clients present in each training round. Set completely arbitrarily for now.")
+    # ...
+    ## For FedAvg all clients have the same model so code has to change to reflect this
+    ### Current saving regime is broken and saves Local correctly I believe but not FedAvg (no FedAvg directory even...)
+    #### My default entry is the path with Latest FedAvg filename, despite what the help description says...
+    parser.add_argument('-pmd', "--prev_model_directory", type=str, default=r"C:\Users\kdmen\Desktop\Research\personalization-privacy-risk\Personalized_Federated_Learning\models\cphs\FedAvg_server.pt",
+                        help="Directory name containing all the prev clients models") 
 
     #############################################################################################################################################
 
