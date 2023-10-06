@@ -164,8 +164,19 @@ class Server(object):
             num_join_clients = np.random.choice(range(self.num_join_clients, self.num_clients+1), 1, replace=False)[0]
         else:
             num_join_clients = self.num_join_clients
-        selected_clients = list(np.random.choice(self.clients, num_join_clients, replace=False))
-
+        
+        #selected_clients = list(np.random.choice(self.clients, num_join_clients, replace=False))
+        # Randomly select the remaining clients from the available list
+        if self.sequential:
+            if num_join_clients > len(self.live_clients):
+                #remaining_client_ids = [client.ID for client in self.clients if client.ID not in self.live_clients]
+                # ^I already have this actually, it's just self.static_clients
+                random.shuffle(self.static_clients)
+                #remaining_clients = [available_clients_dict[client_id] for client_id in remaining_client_ids[:num_to_sample - len(urgent_client_ids)]]
+                #sampled_clients.extend(remaining_clients)
+                selected_clients = [self.clients[client_id] for client_id in self.static_clients[:num_join_clients - len(self.live_clients)]]
+        else:
+            selected_clients = list(np.random.choice(self.clients, num_join_clients, replace=False))
         return selected_clients
 
     def send_models(self):

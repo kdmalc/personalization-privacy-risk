@@ -30,9 +30,12 @@ class APFL(Server):
                 self.evaluate()
 
             for client in self.selected_clients:
-                client.train()
-                if self.verbose:
-                    print(f"SL: {client.ID} round {i} loss: {client.loss_log[-1]:0,.5f}")
+                # If seq is off then train as normal
+                ## If seq is on then only train if client is a live client
+                if (self.sequential==False) or ((self.sequential==True) and (client in self.live_clients)):
+                    client.train()
+                    if self.verbose:
+                        print(f"Client {client.ID} loss: {client.loss_log[-1]:0,.3f}")
 
             self.receive_models()
             # I'm not using dlg

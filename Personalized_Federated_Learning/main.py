@@ -63,6 +63,7 @@ logger.setLevel(logging.ERROR)
 warnings.simplefilter("ignore")
 torch.manual_seed(0)
 
+
 def run(args):
     time_list = []
     reporter = MemReporter()
@@ -224,18 +225,12 @@ def run(args):
         for i in range(len(server.rs_test_loss)):
             print(f"Round {i}, Test Loss: {server.rs_test_loss[i]:0.5f}")
 
-
     print("All done!")
-
     reporter.report()
-
-    # How do I get the clients to return them?... self.clients AKA server.clients should work
     return server
 
 
-if __name__ == "__main__":
-    total_start = time.time()
-
+def parse_args():
     parser = argparse.ArgumentParser()
     # general
     parser.add_argument('-go', "--goal", type=str, default="test", 
@@ -254,7 +249,7 @@ if __name__ == "__main__":
                         help="Local learning rate")
     parser.add_argument('-ld', "--learning_rate_decay", type=bool, default=False)
     parser.add_argument('-ldg', "--learning_rate_decay_gamma", type=float, default=0.99)
-    parser.add_argument('-gr', "--global_rounds", type=int, default=100)  # KAI: Originally was 2000
+    parser.add_argument('-gr', "--global_rounds", type=int, default=500)  # KAI: Originally was 2000
     parser.add_argument('-ls', "--local_epochs", type=int, default=3, 
                         help="Multiple update steps in one local epoch.")  # KAI: I think it was 1 originally.  I'm gonna keep it there.  Does this mean I can set batchsize to 1300 and cook? Is my setup capable or running multiple epochs? Implicitly I was doing 1 epoch before, using the full update data I believe...
     #Local #FedAvg #APFL #FedMTL #pFedMe ## #Ditto #PerAvg
@@ -280,7 +275,9 @@ if __name__ == "__main__":
     parser.add_argument('-dlg', "--dlg_eval", type=bool, default=False)  # DLG = Deep Leakage from Gradients
     parser.add_argument('-dlgg', "--dlg_gap", type=int, default=100)
     parser.add_argument('-bnpc', "--batch_num_per_client", type=int, default=None)  # Only used with DLG
-    parser.add_argument('-nnc', "--new_clients_ID_lst", type=int, default=[])
+    #############################################################################################################
+    parser.add_argument('-nnc', "--new_clients_ID_lst", type=str, default='[]')
+    #############################################################################################################
     parser.add_argument('-fte', "--fine_tuning_epoch", type=int, default=0)
     
     # SECTION: practical
@@ -294,7 +291,7 @@ if __name__ == "__main__":
                         help="Whether to group and select clients at each round according to time cost")
     parser.add_argument('-tth', "--time_threshold", type=float, default=10000,
                         help="The threshold for droping slow clients")
-    parser.add_argument('-lth', "--loss_threshold", type=float, default=10000,
+    parser.add_argument('-lth', "--loss_threshold", type=int, default=10000,
                         help="The max loss threshold for aborting a training run")
     
     # SECTION: pFedMe / PerAvg / FedProx / FedAMP / FedPHP
@@ -355,6 +352,8 @@ if __name__ == "__main__":
     '''
     
     # SECTION: Kai's additional args
+    parser.add_argument('-run', "--run", type=bool, default=True,
+                        help="If False, will set up the arg parser and args variable, but won't run")
     # PCA should probably be broken into 2 since 64 channels is device specific
     parser.add_argument('-pca_ch', "--pca_channels", type=int, default=10,
                         help="Number of principal components. 64 means do not use any PCA")
@@ -418,13 +417,13 @@ if __name__ == "__main__":
     ## For FedAvg all clients have the same model so code has to change to reflect this
     ### Current saving regime is broken and saves Local correctly I believe but not FedAvg (no FedAvg directory even...)
     #### My default entry is the path with Latest FedAvg filename, despite what the help description says...
-    parser.add_argument('-pmd', "--prev_model_directory", type=str, default=r"C:\Users\kdmen\Desktop\Research\personalization-privacy-risk\Personalized_Federated_Learning\models\cphs\FedAvg_server.pt",
+    parser.add_argument('-pmd', "--prev_model_directory", type=str, default="C:\\Users\\kdmen\\Desktop\\Research\\personalization-privacy-risk\\Personalized_Federated_Learning\\models\\cphs\\FedAvg_server.pt",
                         help="Directory name containing all the prev clients models") 
 
     #############################################################################################################################################
 
     args = parser.parse_args()
-    
+
     args.condition_number_lst = convert_cmd_line_str_lst_to_type_lst(args.condition_number_lst, int)
     args.train_subj_IDs = convert_cmd_line_str_lst_to_type_lst(args.train_subj_IDs, str)
     if args.test_subj_IDs!=[]:
@@ -436,8 +435,19 @@ if __name__ == "__main__":
         print("\ncuda is not avaiable.\n")
         args.device = "cpu"
 
+    return args
+
+
+if __name__ == "__main__":
+    total_start = time.time()
+
+    # Idk if this will work with command line now or not lol
+    args = parse_args()
+    
     print("=" * 50)
 
+    if args.run!=True:
+        print("YOU HAVE NOT TOGGLED ARGS.RUN TO BE TRUE AND THUS THIS WILL NOT RUN")
     print("Algorithm: {}".format(args.algorithm))
     print("Local batch size: {}".format(args.batch_size))
     print("Local steps: {}".format(args.local_epochs))
@@ -491,8 +501,8 @@ if __name__ == "__main__":
     print()
     print(f"YOU ARE RUNNING -{args.algorithm}- ALGORITHM")
 
-    server_obj = run(args)
-
+    if args.run:
+        server_obj = run(args)
     
     # print(prof.key_averages().table(sort_by="cpu_time_total", row_limit=20))
     # print(f"\nTotal time cost: {round(time.time()-total_start, 2)}s.")

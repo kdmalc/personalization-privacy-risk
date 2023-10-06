@@ -30,9 +30,14 @@ class PerAvg(Server):
 
             # choose several clients to send back upated model to server
             for client in self.selected_clients:
-                client.train()
-                # Why is this here twice...
-                client.train()
+                # If seq is off then train as normal
+                ## If seq is on then only train if client is a live client
+                if (self.sequential==False) or ((self.sequential==True) and (client in self.live_clients)):
+                    client.train()
+                    if self.verbose:
+                        print(f"Client {client.ID} loss: {client.loss_log[-1]:0,.3f}")
+                    # Why is this here twice... (it appeared twice in their codebase, idk)
+                    client.train()
 
             self.receive_models()
             if self.dlg_eval and i%self.dlg_gap == 0:
