@@ -1,0 +1,66 @@
+'''
+This implementation is based on the original Learn++ algorithm and can be used for regression tasks. The LearnPPRegressor class takes a base_estimator argument that should be an instance of a scikit-learn regressor. The n_estimators argument specifies the number of estimators to use in the ensemble. The beta argument controls the weighting of each estimator in the ensemble.
+
+To use this implementation, you can create an instance of LearnPPRegressor and call its fit method with your training data. You can then call its predict method to make predictions on new data.
+'''
+
+
+import numpy as np
+
+class LearnPPRegressor:
+    def __init__(self, base_estimator, n_estimators=10, beta=0.5):
+        self.base_estimator = base_estimator
+        self.n_estimators = n_estimators
+        self.beta = beta
+        self.estimators_ = []
+        self.weights_ = []
+        
+    def fit(self, X, y):
+        for i in range(self.n_estimators):
+            # Sample data according to the distribution
+            sample_weights = self._get_sample_weights(X, y)
+            sample_indices = np.random.choice(range(len(X)), size=len(X), replace=True, p=sample_weights)
+            X_sampled = X[sample_indices]
+            y_sampled = y[sample_indices]
+            
+            # Train the base estimator on the sampled data
+            estimator = self.base_estimator.fit(X_sampled, y_sampled)
+            
+            # Compute the weight of the estimator
+            y_pred = estimator.predict(X)
+            error = np.abs(y - y_pred)
+            weight = (1 - self.beta) ** error
+            weight /= np.sum(weight)
+            
+            # Save the estimator and its weight
+            self.estimators_.append(estimator)
+            self.weights_.append(weight)
+            
+    def predict(self, X):
+        predictions = np.zeros(len(X))
+        for i in range(len(self.estimators_)):
+            predictions += self.weights_[i] * self.estimators_[i].predict(X)
+        return predictions
+    
+    def _get_sample_weights(self, X, y):
+        if len(self.estimators_) == 0:
+            return np.ones(len(X)) / len(X)
+        
+        weights = np.zeros(len(X))
+        for i in range(len(X)):
+            x_i = X[i]
+            y_i = y[i]
+            
+            # Compute the error of each estimator on (x_i, y_i)
+            errors = np.abs(self.predict(np.array([x_i])) - y_i)
+            
+            # Compute the weight of each estimator based on its error
+            weights_i = (1 - self.beta) ** errors
+            
+            # Combine the weights of all estimators to get the final weight of (x_i, y_i)
+            weights[i] = np.prod(weights_i)
+        
+        # Normalize the weights so that they sum to 1
+        weights /= np.sum(weights)
+        
+        return weights
