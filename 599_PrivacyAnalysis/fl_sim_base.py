@@ -65,12 +65,17 @@ class TrainingMethods:
         w_new = w - eta*grad_cost
         return w_new
 
-    def train_eta_scipyminstep(self, w, eta, F, D, H, V, learning_batch, alphaF, alphaD, D0, display_info, PCA_comps, full=False):
-        # I turned off display_info because it's kind of annoying
+    def train_eta_scipyminstep(self, w, eta, F, D, H, V, learning_batch, 
+                               alphaF, alphaD, D0, display_info, PCA_comps, full=False):
         if full:
-            out = minimize(lambda D: cost_l2(F,D,H,V,learning_batch,alphaF,alphaD,Ne=PCA_comps), D0, method='BFGS', jac=lambda D: gradient_cost_l2(F,D,H,V,learning_batch,alphaF,alphaD,Ne=PCA_comps))#, options={'disp': display_info})
+            out = minimize(
+                lambda D: cost_l2(F,D,H,V,learning_batch, alphaF,alphaD,Ne=PCA_comps), D0, method='BFGS', 
+                jac=lambda D: gradient_cost_l2(F,D,H,V,learning_batch,alphaF,alphaD,Ne=PCA_comps))#, options={'disp': display_info})
         else:
-            out = minimize(lambda D: cost_l2(F,D,H,V,learning_batch,alphaF,alphaD,Ne=PCA_comps), D0, method='BFGS', jac=lambda D: gradient_cost_l2(F,D,H,V,learning_batch,alphaF,alphaD,Ne=PCA_comps), options={'maxiter':eta}) #'disp': display_info, 
+            out = minimize(
+                lambda D: cost_l2(F,D,H,V,learning_batch,alphaF,alphaD,Ne=PCA_comps), D0, method='BFGS', 
+                jac=lambda D: gradient_cost_l2(F,D,H,V,learning_batch,alphaF,alphaD,Ne=PCA_comps), 
+                options={'maxiter':eta}) #'disp': display_info, 
         w_new = np.reshape(out.x,(2, PCA_comps))
         return w_new
 

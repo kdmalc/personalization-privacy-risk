@@ -23,8 +23,10 @@ def get_all_results_for_one_algo(base_server_file_path, algorithm="", dataset=""
     test_acc = []
     algorithms_list = [algorithm] * times
     for i in range(times):
-        file_name = dataset + "_" + algorithms_list[i] + "_" + goal# + "_" + str(i)
+        #file_name = dataset + "_" + algorithms_list[i] + "_" + goal# + "_" + str(i)
+        file_name = algorithms_list[i] + "_" + goal# + "_" + str(i)
         full_file_name = os.path.join(base_server_file_path, file_name)
+        # ^^Do I need to make this directory?
         test_acc.append(np.array(read_data_then_delete(full_file_name, delete=False)))
 
     return test_acc

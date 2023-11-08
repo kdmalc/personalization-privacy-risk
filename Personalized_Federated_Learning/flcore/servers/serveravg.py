@@ -29,6 +29,8 @@ class FedAvg(Server):
             #print("Select clients")
             self.selected_clients = self.select_clients()
             #print(f"Selected client IDs: {[client.ID for client in self.selected_clients]}")
+
+            # This should only happen for the live clients...
             #print("Send models")
             self.send_models()
 
@@ -40,12 +42,12 @@ class FedAvg(Server):
             if self.verbose:
                 print("CLIENT TRAINING")
             for client in self.selected_clients:
-                # If seq is off then train as normal
-                ## If seq is on then only train if client is a live client
+                # If (seq is off) or (current client is the live seq client) then train as normal, else skip training (for dead clients)
                 if (self.sequential==False) or ((self.sequential==True) and (client in self.live_clients)):
                     client.train()
                     if self.verbose:
                         print(f"Client {client.ID} loss: {client.loss_log[-1]:0,.3f}")
+                # If seq is on but you are a static client, your model shouldn't update, thus no training
 
             self.receive_models()
             # I'm not using dlg
@@ -78,9 +80,10 @@ class FedAvg(Server):
         self.save_results(save_cost_func_comps=True, save_gradient=True)
         model_path = os.path.join("models", self.dataset, "Local", str(current_datetime))
         #
-        trial_result_path = self.result_path + str_current_datetime
-        if not os.path.exists(trial_result_path):
-            os.makedirs(trial_result_path)
+        # Idk what this is doing. This currently creates the empty dir I believe
+        #trial_result_path = self.result_path + str_current_datetime
+        #if not os.path.exists(trial_result_path):
+        #    os.makedirs(trial_result_path)
         #
         for client in self.clients:
             # Is this just a bunch of copies of the global model...

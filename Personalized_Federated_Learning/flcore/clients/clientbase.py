@@ -482,10 +482,14 @@ class Client(object):
 
         
     def load_item(self, item_name, item_path=None, full_path_to_item=None):
-        if item_path != None:
-            # Uses torch.load so it assumes it is a model...
+        if full_path_to_item!=None:
+            # Uses torch.load so it assumes it is a model
             return torch.load(full_path_to_item)
+        elif item_path != None:
+            # Uses torch.load so it assumes it is a model...
+            return torch.load(os.path.join(item_path, item_name))
+            # An earlier default: 
+            #return torch.load(os.path.join(item_path, self.ID + "_" + item_name + ".pt"))
         elif item_path == None:
-            item_path = self.save_folder_name
-        return torch.load(os.path.join(item_path, self.ID + "_" + item_name + ".pt"))
+            raise ValueError("No path (item_path or full_path_to_item) provided")
     

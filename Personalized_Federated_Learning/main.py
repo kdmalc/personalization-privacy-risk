@@ -201,29 +201,30 @@ def run(args):
         '''
 
         server.train()
-
         time_list.append(time.time()-start)
 
+    server.plot_results()
     print(f"\nAverage time cost: {round(np.average(time_list), 2)}s.")
       
     # Global average
     if args.algorithm != "Local":
         average_data(server.trial_result_path, dataset=args.dataset, algorithm=args.algorithm, goal=args.goal, times=args.times)
-        # Not super sure what it is averaging over (the last 10 rounds? Not sure...)
-        
-    print("Server's round, rs_train_loss, rs_test_loss (averaged over clients): ")
+        # Not super sure what "times" is, by default it is 1. Assuming it runs the process multiple times to average out the stochasticity?
+
+    # Idk why I was printing this...  
+    #print("Server's round, rs_train_loss, rs_test_loss (averaged over clients): ")
     #print(server.rs_train_loss)  # I think this is a list...
     #print("Server's rs_test_loss (averaged over clients): ")
     #print(server.rs_test_loss)
     #assert( len(server.rs_train_loss) == len(server.rs_test_loss))
-    if args.run_train_metrics:
-        for i in range(len(server.rs_train_loss)):
-            print(f"Round {i}, Train Loss: {server.rs_train_loss[i]:0.5f}, Test Loss: {server.rs_test_loss[i]:0.5f}")
-            if i==(len(server.rs_train_loss)-1):
-                print(f"Final eval ({i+1}), Test Loss: {server.rs_test_loss[i+1]:0.5f}")
-    else:
-        for i in range(len(server.rs_test_loss)):
-            print(f"Round {i}, Test Loss: {server.rs_test_loss[i]:0.5f}")
+    #if args.run_train_metrics:
+    #    for i in range(len(server.rs_train_loss)):
+    #        print(f"Round {i}, Train Loss: {server.rs_train_loss[i]:0.5f}, Test Loss: {server.rs_test_loss[i]:0.5f}")
+    #        if i==(len(server.rs_train_loss)-1):
+    #            print(f"Final eval ({i+1}), Test Loss: {server.rs_test_loss[i+1]:0.5f}")
+    #else:
+    #    for i in range(len(server.rs_test_loss)):
+    #        print(f"Round {i}, Test Loss: {server.rs_test_loss[i]:0.5f}")
 
     print("All done!")
     reporter.report()
@@ -249,14 +250,14 @@ def parse_args():
                         help="Local learning rate")
     parser.add_argument('-ld', "--learning_rate_decay", type=bool, default=False)
     parser.add_argument('-ldg', "--learning_rate_decay_gamma", type=float, default=0.99)
-    parser.add_argument('-gr', "--global_rounds", type=int, default=500)  # KAI: Originally was 2000
+    parser.add_argument('-gr', "--global_rounds", type=int, default=100)  # KAI: Originally was 2000
     parser.add_argument('-ls', "--local_epochs", type=int, default=3, 
                         help="Multiple update steps in one local epoch.")  # KAI: I think it was 1 originally.  I'm gonna keep it there.  Does this mean I can set batchsize to 1300 and cook? Is my setup capable or running multiple epochs? Implicitly I was doing 1 epoch before, using the full update data I believe...
     #Local #FedAvg #APFL #FedMTL #pFedMe ## #Ditto #PerAvg
     ## pFedMe not working
     parser.add_argument('-algo', "--algorithm", type=str, default="FedAvg")
     parser.add_argument('-jr', "--join_ratio", type=float, default=0.3,
-                        help="Ratio of clients per round")
+                        help="Fraction of clients to be active in training per round")
     parser.add_argument('-rjr', "--random_join_ratio", type=bool, default=False,
                         help="Random ratio of clients per round")
     parser.add_argument('-dp', "--privacy", type=bool, default=False,
@@ -388,8 +389,6 @@ def parse_args():
                         help="I THINK I KILLED THIS MODE: In debug mode, the code is run to minimize overhead time in order to debug as fast as possible.  Namely, the data is held at the server to decrease init time, and communication delays are ignored.")
     parser.add_argument('-con_num', "--condition_number_lst", type=str, default='[1]',
                         help="Which condition number (trial) to train on. Must be a list. By default, will iterate through all train_subjs for each cond (eg each cond_num gets its own client even for the same subject)")
-    parser.add_argument('-tr_ids', "--train_subj_IDs", type=str, default=str(['METACPHS_S106', 'METACPHS_S107', 'METACPHS_S108', 'METACPHS_S109', 'METACPHS_S110', 'METACPHS_S111', 'METACPHS_S112', 'METACPHS_S113', 'METACPHS_S114', 'METACPHS_S115', 'METACPHS_S116', 'METACPHS_S117', 'METACPHS_S118', 'METACPHS_S119']),
-                        help="Subject ID Codes for users to be trained")
     parser.add_argument('-v', "--verbose", type=bool, default=False,
                         help="Print out a bunch of extra stuff")
     parser.add_argument('-slow_clients_bool', "--slow_clients_bool", type=bool, default=False,
@@ -407,18 +406,29 @@ def parse_args():
     ## SEQUENTIAL TRAINING PARAMS
     parser.add_argument('-seq', "--sequential", type=bool, default=False,
                         help="Boolean toggle for whether sequential mode is on (for now, mixing current client with previously trained models)")
+    parser.add_argument('-uppm', "--use_prev_pers_model", type=bool, default=False,
+                        help="Boolean toggle for whether to use previously trained personalized models for the client inits")
+    # default=str(['METACPHS_S106', 'METACPHS_S107', 'METACPHS_S108', 'METACPHS_S109', 'METACPHS_S110', 'METACPHS_S111', 'METACPHS_S112', 'METACPHS_S113', 'METACPHS_S114', 'METACPHS_S115', 'METACPHS_S116', 'METACPHS_S117', 'METACPHS_S118', 'METACPHS_S119']),
     parser.add_argument('-live_clients', "--live_clients", type=str, default='[]',
                         help="List of current subject ID strings (models will be trained and saved)")
     parser.add_argument('-static_clients', "--static_clients", type=str, default='[]',
                         help="List of previously trained subject ID strings (models will be uploaded, used in training, but never updated)")
     parser.add_argument('-svlweight', "--static_vs_live_weighting", type=float, default=0.75,
                         help="Ratio between number of static clients and live clients present in each training round. Set completely arbitrarily for now.")
-    # ...
+    # This needs to be changed to a smaller set (that does not include the future live clients) when training a model for Sequential
+    ## Default (non-seq) --> Actually, I think this doesn't need to change. 
+    ### This is the list of all clients it will train, both live and static. If not present here they are not used in training at all
+    ### It just takes longer to load more data if you leave it as its default
+    parser.add_argument('-tr_ids', "--train_subj_IDs", type=str, default=str(['METACPHS_S106', 'METACPHS_S107', 'METACPHS_S108', 'METACPHS_S109', 'METACPHS_S110', 'METACPHS_S111', 'METACPHS_S112', 'METACPHS_S113', 'METACPHS_S114', 'METACPHS_S115', 'METACPHS_S116', 'METACPHS_S117', 'METACPHS_S118', 'METACPHS_S119']),
+                        help="Subject ID Codes for users to be trained")
     ## For FedAvg all clients have the same model so code has to change to reflect this
     ### Current saving regime is broken and saves Local correctly I believe but not FedAvg (no FedAvg directory even...)
     #### My default entry is the path with Latest FedAvg filename, despite what the help description says...
-    parser.add_argument('-pmd', "--prev_model_directory", type=str, default="C:\\Users\\kdmen\\Desktop\\Research\\personalization-privacy-risk\\Personalized_Federated_Learning\\models\\cphs\\FedAvg_server.pt",
+    parser.add_argument('-pmd', "--prev_model_directory", type=str, default="C:\\Users\\kdmen\\Desktop\\Research\\personalization-privacy-risk\\Personalized_Federated_Learning\\models\\cphs\\FedAvg\\11-07_11-31\FedAvg_server_global.pt",
                         help="Directory name containing all the prev clients models") 
+    # This needs to be updated...
+    #parser.add_argument('-ppmd', "--prev_pers_model_directory", type=str, default="C:\\Users\\kdmen\\Desktop\\Research\\personalization-privacy-risk\\Personalized_Federated_Learning\\models\\cphs\\FedAvg_server.pt",
+    #                    help="Directory name containing all the prev clients personalized models") 
 
     #############################################################################################################################################
 
@@ -428,6 +438,9 @@ def parse_args():
     args.train_subj_IDs = convert_cmd_line_str_lst_to_type_lst(args.train_subj_IDs, str)
     if args.test_subj_IDs!=[]:
         args.test_subj_IDs = convert_cmd_line_str_lst_to_type_lst(args.test_subj_IDs, str)
+    if args.sequential != False:
+        args.live_clients = convert_cmd_line_str_lst_to_type_lst(args.live_clients, str)
+        args.static_clients = convert_cmd_line_str_lst_to_type_lst(args.static_clients, str)
     
     # I always need to run on CPU only since I don't have Nvidia GPU available
     #os.environ["CUDA_VISIBLE_DEVICES"] = args.device_id

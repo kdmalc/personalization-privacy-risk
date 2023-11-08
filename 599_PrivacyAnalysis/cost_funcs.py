@@ -10,11 +10,13 @@ def hessian_cost_l2(F, alphaD, alphaE=1e-6):
 
 # set up gradient of cost:
 # d(c_L2(D))/d(D) = 2*(DF + HV - V+)*F.T + 2*alphaD*D
-def gradient_cost_l2(F, D, H, V, learning_batch, alphaF, alphaD, alphaE=1e-6, Nd=2, Ne=64, flatten=True):
+def gradient_cost_l2(F, D, H, V, learning_batch, alphaF, alphaD, alphaE=1e-6, 
+                     Nd=2, Ne=64, flatten=True):
     '''
     F: 64 channels x time EMG signals
     V: 2 x time target velocity
-    D: 2 (x y vel) x 64 channels decoder # TODO: we now have a timeseries component - consult Sam
+    D: 2 (x y vel) x 64 channels decoder 
+    # TODO: we now have a timeseries component - consult Sam
     H: 2 x 2 state transition matrix
     alphaE is 1e-6 for all conditions
     ''' 
@@ -46,9 +48,9 @@ def cost_l2(F, D, H, V, learning_batch, alphaF, alphaD, alphaE=1e-6, Nd=2, Ne=64
     Vminus = V[:,:-1]
     # Performance
     term1 = alphaE*(np.linalg.norm((D@F + H@Vminus - Vplus))**2)
-    # D Norm
+    # D Norm (Decoder Effort)
     term2 = alphaD*(np.linalg.norm(D)**2)
-    # F Norm
+    # F Norm (User Effort)
     term3 = alphaF*(np.linalg.norm(F)**2)
     return (term1 + term2 + term3)
 

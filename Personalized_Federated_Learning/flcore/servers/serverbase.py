@@ -10,6 +10,7 @@ import random
 from datetime import datetime
 #from flcore.pflniid_utils.dlg import DLG
 #from utils import node_creator
+import matplotlib.pyplot as plt
 
 
 class Server(object):
@@ -38,8 +39,7 @@ class Server(object):
         self.train_slow_clients = []
         self.send_slow_clients = []
 
-        # ... I have no idea what this is supposed to be fore anymore... IS IT FOR SEQ??
-        ## Apparently is used in recieve_models() ... okay
+        # This is used in recieve_models(), not super sure for what (or if I care)
         self.uploaded_weights = []
         self.uploaded_IDs = []
         self.uploaded_models = []
@@ -106,6 +106,8 @@ class Server(object):
         self.static_clients = args.static_clients
         self.static_vs_live_weighting = args.static_vs_live_weighting
         self.prev_model_directory = args.prev_model_directory
+        self.use_prev_pers_model = args.use_prev_pers_model
+        #self.prev_pers_model_directory = args.prev_pers_model_directory
 
 
     def set_clients(self, clientObj):  
@@ -125,7 +127,6 @@ class Server(object):
                                     send_slow=send_slow)
                 self.clients.append(client)
                 if self.sequential:
-                    # NOT FINISHED YET 
                     if client.ID in self.live_clients:
                         # Do I need to do anything? I don't think so...
                         pass
@@ -134,11 +135,13 @@ class Server(object):
                         ## This is not super robust. Assume the full path is the provided path and the file name is just the ID...
                         ### Does this need to be updated to include the file extension? Probably... .pt?
                         #path_to_trained_client_model = self.prev_model_directory + self.ID
-                        # HARD CODE: since all clients should be working off the same global model... 
-                        ## self.prev_model_directory is hardcoded file path w/ file for now...
-                        path_to_trained_client_model = self.prev_model_directory
-                        # It requires item_name, but I don't use it as of now, so just set it to None
-                        client.load_item(None, full_path_to_item=path_to_trained_client_model)
+                        if self.use_prev_pers_model:
+                            # path_to_trained_client_model = self.prev_pers_model_directory + self.ID
+                            raise("This is not supported yet")
+                        else:
+                            path_to_trained_client_model = self.prev_model_directory
+                        # Requires full path to model (eg with extension)
+                        client.load_item("FedAvg_server_global.pt", full_path_to_item=path_to_trained_client_model)
                 else:
                     client.load_train_data(client_init=True)
 
@@ -175,6 +178,10 @@ class Server(object):
                 #remaining_clients = [available_clients_dict[client_id] for client_id in remaining_client_ids[:num_to_sample - len(urgent_client_ids)]]
                 #sampled_clients.extend(remaining_clients)
                 selected_clients = [self.clients[client_id] for client_id in self.static_clients[:num_join_clients - len(self.live_clients)]]
+            else:
+                if self.global_round<2:
+                    print("SB: len(self.live_clients) > num_join_clients, so just sample the live clients")
+                selected_clients = list(np.random.choice(self.live_clients, num_join_clients, replace=False))
         else:
             selected_clients = list(np.random.choice(self.clients, num_join_clients, replace=False))
         return selected_clients
@@ -251,24 +258,23 @@ class Server(object):
             str directory_name: name of when the model was saved, likely in the form of %m-%d_%H-%M unless it was renamed (this is the model's directory)
             str type: Should be one of 'global', 'pers', or 'local'
         '''
-        model_path = os.path.join("models", self.dataset, directory_name, self.algorithm + "_server_" + type + ".pt")
+        model_path = os.path.join("Personalized_Federated_Learning\\models", self.dataset, directory_name, self.algorithm + "_server_" + type + ".pt")
+        # ^^ This really ought to be set somehow...
         assert (os.path.exists(model_path))
         self.global_model = torch.load(model_path)
 
-    def model_exists(self, directory_name, type):
-        '''
-            str directory_name: name of when the model was saved, likely in the form of %m-%d_%H-%M unless it was renamed (this is the model's directory)
-            str type: Should be one of 'global', 'pers', or 'local'
-        '''
-        model_path = os.path.join("models", self.dataset, directory_name, self.algorithm + "_server_" + type + ".pt")
-        return os.path.exists(model_path)
+    #def model_exists(self, directory_name, type):
+    #    '''
+    #        str directory_name: name of when the model was saved, likely in the form of %m-%d_%H-%M unless it was renamed (this is the model's directory)
+    #        str type: Should be one of 'global', 'pers', or 'local'
+    #   '''
+    #    model_path = os.path.join("Personalized_Federated_Learning\\models", self.dataset, directory_name, self.algorithm + "_server_" + type + ".pt")
+    #    return os.path.exists(model_path)
     
         
     def save_results(self, personalized=False, save_cost_func_comps=False, save_gradient=False):
-        # Dataset should be the directory name right...?
-        #algo = self.dataset + "_" + self.algorithm
+        # Dataset is one of the preceeding directory names
         algo = self.algorithm
-
         # get current date and time
         current_datetime = datetime.now().strftime("%m-%d_%H-%M")
         # convert datetime obj to string
@@ -278,19 +284,19 @@ class Server(object):
         if not os.path.exists(self.trial_result_path):
             os.makedirs(self.trial_result_path)
         
-        model_path = os.path.join("models", self.dataset, str_current_datetime)
-        if not os.path.exists(model_path):
-            os.makedirs(model_path)
-        model_path = os.path.join(model_path, self.algorithm + "_server_global.pt")
-        torch.save(self.global_model, model_path)
+        self.model_dir_path = os.path.join("Personalized_Federated_Learning\\models", self.dataset, self.algorithm, str_current_datetime)
+        if not os.path.exists(self.model_dir_path):
+            os.makedirs(self.model_dir_path)
+        model_file_path = os.path.join(self.model_dir_path, self.algorithm + "_server_global.pt")
+        torch.save(self.global_model, model_file_path)
 
         if personalized==True:
-            pers_model_path = os.path.join(model_path, self.algorithm + "_client_pers_model")
+            pers_model_file_path = os.path.join(self.model_dir_path, self.algorithm + "_client_pers_model")
             for c in self.clients:
-                if not os.path.exists(pers_model_path):
-                    print(f"SB pers model save made directory! {pers_model_path}")
-                    os.makedirs(pers_model_path)
-                torch.save(c.model, os.path.join(model_path, self.algorithm + "_client_pers_model", c.ID + "_pers_model.pt"))
+                if not os.path.exists(pers_model_file_path):
+                    print(f"SB pers model save made directory! {pers_model_file_path}")
+                    os.makedirs(pers_model_file_path)
+                torch.save(c.model, os.path.join(self.model_dir_path, self.algorithm + "_client_pers_model", c.ID + "_pers_model.pt"))
 
         param_log_str = (
             "BASE\n"
@@ -566,4 +572,19 @@ class Server(object):
         IDs = [c.ID for c in self.clients]
 
         return IDs, num_samples, tot_loss
+
+    def plot_results(self, plot_train=True, plot_test=True, my_title=None):
+        if plot_test:
+            plt.plot(range(len(self.rs_test_loss)), self.rs_test_loss, label='Test')
+        if plot_train:
+            plt.plot(range(len(self.rs_train_loss)), self.rs_train_loss, label='Train')
+        if my_title is None:
+            plt.title("Train/test loss")
+        else:
+            plt.title(my_title)
+        plt.xlabel("Iteration Number")
+        plt.ylabel("Loss")
+        plt.legend()
+        plt.show()
+        plt.savefig(self.trial_result_path + '\\TrainTestLossCurves.png', format='png')
     
