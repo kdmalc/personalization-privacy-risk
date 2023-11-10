@@ -164,20 +164,22 @@ class Server(object):
 
     def select_clients(self):
         if self.random_join_ratio:
-            num_join_clients = np.random.choice(range(self.num_join_clients, self.num_clients+1), 1, replace=False)[0]
+            num_join_clients = np.random.choice(
+                range(self.num_join_clients, self.num_clients+1), 1, replace=False)[0]
         else:
             num_join_clients = self.num_join_clients
         
-        #selected_clients = list(np.random.choice(self.clients, num_join_clients, replace=False))
         # Randomly select the remaining clients from the available list
         if self.sequential:
+            ########################################################################################
+            # This needs to be double checked lol
             if num_join_clients > len(self.live_clients):
                 #remaining_client_ids = [client.ID for client in self.clients if client.ID not in self.live_clients]
-                # ^I already have this actually, it's just self.static_clients
+                # ^I already have this actually, it's just self.static_clients. Might be better to do implicitly tho...
                 random.shuffle(self.static_clients)
-                #remaining_clients = [available_clients_dict[client_id] for client_id in remaining_client_ids[:num_to_sample - len(urgent_client_ids)]]
-                #sampled_clients.extend(remaining_clients)
-                selected_clients = [self.clients[client_id] for client_id in self.static_clients[:num_join_clients - len(self.live_clients)]]
+                selected_clients = [self.clients[client_id] 
+                                    for client_id in 
+                                    self.static_clients[:num_join_clients - len(self.live_clients)]]
             else:
                 if self.global_round<2:
                     print("SB: len(self.live_clients) > num_join_clients, so just sample the live clients")
@@ -187,23 +189,29 @@ class Server(object):
         return selected_clients
 
     def send_models(self):
-        print("SENDING GLOBAL MODEL TO CLIENTS")
+        if self.verbose:
+            print("SENDING GLOBAL MODEL TO CLIENTS")
         assert (len(self.clients) > 0)
 
         # The way they have it implies that EVERY CLIENT SETS TO THE GLOBAL MODEL EVERY ROUND...
         ## Go back and change this after the rest just to make sure it doesn't break the rest of the code
-        #for client in self.selected_clients:
-        for client in self.clients:
-            start_time = time.time()
-            
-            client.set_parameters(self.global_model)
+        # for client in self.clients: # This was the original
+        for client in self.selected_clients: # This is my updated version...
+            # If (seq is off) or (current client is the live seq client) then train as normal
+            if (self.sequential==False) or ((self.sequential==True) and (client in self.live_clients)):
+                start_time = time.time()
+                
+                client.set_parameters(self.global_model)
 
-            client.send_time_cost['num_rounds'] += 1
-            client.send_time_cost['total_cost'] += 2 * (time.time() - start_time)
+                client.send_time_cost['num_rounds'] += 1
+                client.send_time_cost['total_cost'] += 2 * (time.time() - start_time)
+            # If seq is on but you are a static client, your model shouldn't be overwritten, thus do not send
+            
 
     def receive_models(self):
         assert (len(self.selected_clients) > 0)
 
+        # I think this builds in clients dropping, which I have turned off
         active_clients = random.sample(
             self.selected_clients, int((1-self.client_drop_rate) * self.num_join_clients))
 
@@ -217,12 +225,10 @@ class Server(object):
                         client.send_time_cost['total_cost'] / client.send_time_cost['num_rounds']
             except ZeroDivisionError:
                 client_time_cost = 0
+            # Idk why they onyl consider clients below a time threshold... trying to ignore slow clients? Idk
             if client_time_cost <= self.time_threshold:
-                tot_samples += client.train_samples  # tot_samples += client.num_train_samples
+                tot_samples += client.train_samples
                 self.uploaded_IDs.append(client.ID)
-                # HAHA I think this comment is from them not me LOL
-                ## But what is going on here. Ask CGPT ig, idk if I need to change anything.
-                ### Seems like active clients are just the selected ones?
                 self.uploaded_weights.append(client.train_samples)  # What is going on here
                 self.uploaded_models.append(client.model)
         for i, w in enumerate(self.uploaded_weights):

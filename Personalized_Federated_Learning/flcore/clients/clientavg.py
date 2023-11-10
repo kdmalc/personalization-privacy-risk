@@ -1,6 +1,6 @@
 # PFLNIID
 
-#import torch
+import torch
 #import torch.nn as nn
 #import numpy as np
 import time
@@ -23,22 +23,25 @@ class clientAVG(Client):
         #        initialize_dp(self.model, self.optimizer, trainloader, self.dp_sigma)
         
         start_time = time.time()
-
-        max_local_steps = self.local_epochs
         #if self.train_slow:
         #    max_local_steps = np.random.randint(1, max_local_steps // 2)
 
         if self.verbose:
             print(f'Client {self.ID} Training')
-        #running_num_samples = 0
-        for step in range(max_local_steps):  # Local epochs the same as num GD steps, number of passes through the full training set (present update data)
-            for i, (x, y) in enumerate(trainloader):  # i currently have it set such that each tl only has 1 batch of 1200 (8/5/23)
-                if self.verbose:
-                    print(f"Step {step}, batch {i}")
-                self.cphs_training_subroutine(x, y)
-                
-        #epoch_loss = self.running_epoch_loss / len(trainloader['train'])  # From: epoch_loss = running_epoch_loss / len(dataloaders['train'])
-        #self.loss_log.append(epoch_loss)  
+        starting_weights = self.model.current_weights.clone()
+        for epoch in range(self.local_epochs):
+            for step in range(self.num_gradient_steps):
+                # Currently, each tl only has 1 batch of 1200 [eg 1 update] (8/5/23)
+                for i, (x, y) in enumerate(trainloader):
+                    if self.verbose:
+                        print(f"Epoch {epoch}, grad step {step}, batch {i}")
+                    self.cphs_training_subroutine(x, y)
+        # Do SmoothBatch if applicable
+        if self.smoothbatch_boolean:
+            with torch.no_grad():
+                for param in self.model.parameters():
+                    param.data = self.smoothbatch_learningrate*starting_weights + (1 - self.smoothbatch_learningrate)*param.data
+
 
         # self.model.cpu()
 

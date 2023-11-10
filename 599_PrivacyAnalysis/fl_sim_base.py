@@ -67,6 +67,10 @@ class TrainingMethods:
 
     def train_eta_scipyminstep(self, w, eta, F, D, H, V, learning_batch, 
                                alphaF, alphaD, D0, display_info, PCA_comps, full=False):
+        '''
+        full: when True, will run a complete minimization. When False, will only run eta gradient steps (ie 1).
+        '''
+        
         if full:
             out = minimize(
                 lambda D: cost_l2(F,D,H,V,learning_batch, alphaF,alphaD,Ne=PCA_comps), D0, method='BFGS', 

@@ -1,7 +1,20 @@
 import torch
-from math import isnan
+#from math import isnan
 
 class CPHSLoss2(torch.nn.modules.loss._Loss):
+    def __init__(self, lambdaF=0, lambdaD=1e-3, lambdaE=1e-6, Nd=2, Ne=64, return_cost_func_comps=False, verbose=False, dt=1/60, normalize_V=False) -> None:
+        ...
+
+    def forward(self, outputs, targets):
+        outputs = torch.transpose(outputs, 0, 1)
+        p_reference = torch.transpose(targets, 0, 1)
+        # Numerical integration of v_actual to get p_actual
+        p_actual = torch.cumsum(outputs, dim=1)*self.dt
+        self.V = (p_reference - p_actual)*self.dt
+        Vplus = self.V[:,1:]
+        # Performance
+        return self.lambdaE*(torch.linalg.matrix_norm(outputs[:,:-1] - Vplus)**2)
+    
     def __init__(self, lambdaF=0, lambdaD=1e-3, lambdaE=1e-6, Nd=2, Ne=64, return_cost_func_comps=False, verbose=False, dt=1/60, normalize_V=False) -> None:
         super().__init__()
         self.lambdaF = lambdaF

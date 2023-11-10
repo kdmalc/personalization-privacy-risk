@@ -252,7 +252,9 @@ def parse_args():
     parser.add_argument('-ldg', "--learning_rate_decay_gamma", type=float, default=0.99)
     parser.add_argument('-gr', "--global_rounds", type=int, default=100)  # KAI: Originally was 2000
     parser.add_argument('-ls', "--local_epochs", type=int, default=3, 
-                        help="Multiple update steps in one local epoch.")  # KAI: I think it was 1 originally.  I'm gonna keep it there.  Does this mean I can set batchsize to 1300 and cook? Is my setup capable or running multiple epochs? Implicitly I was doing 1 epoch before, using the full update data I believe...
+                        help="How many times a client should iterate through their current update dataset.")  # KAI: I think it was 1 originally.  I'm gonna keep it there.  Does this mean I can set batchsize to 1300 and cook? Is my setup capable or running multiple epochs? Implicitly I was doing 1 epoch before, using the full update data I believe...
+    parser.add_argument('-ngradsteps', "--num_gradient_steps", type=int, default=1, 
+                        help="How many gradient steps in one local epoch.")    
     #Local #FedAvg #APFL #FedMTL #pFedMe ## #Ditto #PerAvg
     ## pFedMe not working
     parser.add_argument('-algo', "--algorithm", type=str, default="FedAvg")
@@ -366,6 +368,10 @@ def parse_args():
                         help="Penalty term on performance error norm")
     parser.add_argument('-stup', "--starting_update", type=int, default=10,
                         help="Which update to start on (for CPHS Simulation). Use 0 or 10.")
+    parser.add_argument('-sbb', "--smoothbatch_boolean", type=bool, default=False,
+                        help="Boolean switch for whether or not to use SmoothBatch. See Madduri CPHS Paper.")
+    parser.add_argument('-sblr', "--smoothbatch_learningrate", type=float, default=True, #0.75 slow, 0.25 fast
+                        help="Value of alpha (mixing param) for SB. Alpha=1 uses only the optimal dec, Alpha=0 uses only the previous dec")
     ## Test Split Related
     parser.add_argument('-test_split_fraction', "--test_split_fraction", type=float, default=0.2,
                         help="Fraction of data to use for testing")

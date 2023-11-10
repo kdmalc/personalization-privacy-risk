@@ -182,7 +182,6 @@ class Client(ModelBase, TrainingMethods):
         self.p_test_reference = np.transpose(self.labels[lower_bound:upper_bound,:])
 
             
-            
     # 0: Main Loop
     def execute_training_loop(self):
         self.simulate_data_stream()

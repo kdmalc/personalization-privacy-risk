@@ -39,6 +39,7 @@ class Client(object):
         self.batch_size = args.batch_size
         self.learning_rate = args.local_learning_rate
         self.local_epochs = args.local_epochs
+        self.num_gradient_steps = args.num_gradient_steps
 
         # check BatchNorm
         self.has_BatchNorm = False
@@ -71,6 +72,9 @@ class Client(object):
         self.test_split_users = args.test_split_users
         self.learning_rate_decay = args.learning_rate_decay
         self.learning_rate_decay_gamma = args.learning_rate_decay_gamma
+        # Add these to get logged...
+        self.smoothbatch_boolean = args.smoothbatch_boolean
+        self.smoothbatch_learningrate = args.smoothbatch_learningrate
         ## Not logged params
         self.current_update = args.starting_update # This is logged by a different var in the server
         self.dt = args.dt
@@ -175,9 +179,16 @@ class Client(object):
     
     def simulate_data_streaming_xy(self, x, y, test_data=False):
         '''
+        Input:
+            x, y --> A single training example from the trainloader
+
+        Output: 
+            Sets self.F, self.V, self.y_ref
+
         This function sets F (transformed input data) and V (Vplus used in cost func)
-        Specifically: the loss function is its own class/object so it doesn't have access to these (F and V)
-        I no longer believe using F and V can be entirely avoided on the basis of model.output
+        Specifically: the loss function is its own class/object so it doesn't have 
+            access to these (F and V)
+        Must set F and V for model.output
         '''
 
         s_temp = x
@@ -193,14 +204,17 @@ class Client(object):
         # Apply PCA if applicable
         if self.pca_channels!=self.device_channels:
             pca = PCA(n_components=self.pca_channels)
-            s = torch.transpose(torch.tensor(pca.fit_transform(s_normed), dtype=torch.float32), 0, 1)
+            s = torch.transpose(torch.tensor(pca.fit_transform(s_normed), 
+                                             dtype=torch.float32), 0, 1)
         else:
             s = torch.transpose(s_normed, 0, 1)
 
         self.F = s[:,:-1]
         v_actual =  torch.matmul(self.model.weight, s)
-        p_actual = torch.cumsum(v_actual, dim=1)*self.dt  # Numerical integration of v_actual to get p_actual
-        self.V = (p_reference - p_actual)*self.dt  # I don't actually use V...
+        # Numerical integration of v_actual to get p_actual
+        p_actual = torch.cumsum(v_actual, dim=1)*self.dt
+        # I don't think I actually use V later on
+        self.V = (p_reference - p_actual)*self.dt
         self.y_ref = p_reference[:, :-1]  # To match the input
 
 
@@ -376,7 +390,8 @@ class Client(object):
         trainloader = self.load_train_data(eval=True)
         # self.model = self.load_model('model')
         # self.model.to(self.device)
-        #self.simulate_data_streaming(trainloader)  # ... idk if i need to be doing this ... hmmm
+        #self.simulate_data_streaming(trainloader) 
+        # ^^ idk if i need to be doing this ... this should already be run in the actual training process
         self.model.eval()
 
         train_num = 0
