@@ -28,7 +28,12 @@ class clientAVG(Client):
 
         if self.verbose:
             print(f'Client {self.ID} Training')
-        starting_weights = self.model.current_weights.clone()
+        # Save the client's starting weights for Smoothbatch
+        if self.smoothbatch_boolean:
+            starting_weights = {}
+            for name, param in self.model.named_parameters():
+                if param.requires_grad:
+                    starting_weights[name] = param.data.clone()
         for epoch in range(self.local_epochs):
             for step in range(self.num_gradient_steps):
                 # Currently, each tl only has 1 batch of 1200 [eg 1 update] (8/5/23)
@@ -39,8 +44,9 @@ class clientAVG(Client):
         # Do SmoothBatch if applicable
         if self.smoothbatch_boolean:
             with torch.no_grad():
-                for param in self.model.parameters():
-                    param.data = self.smoothbatch_learningrate*starting_weights + (1 - self.smoothbatch_learningrate)*param.data
+                for name, param in self.model.named_parameters():
+                    if param.requires_grad:
+                        param.data = self.smoothbatch_learningrate*starting_weights[name] + (1 - self.smoothbatch_learningrate)*param.data
 
 
         # self.model.cpu()
