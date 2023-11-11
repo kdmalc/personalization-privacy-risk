@@ -6,9 +6,9 @@ python -u Personalized_Federated_Learning\main.py -lr 1 -pca_ch 64 -algo FedAvg 
 
 
 # str(['METACPHS_S106', 'METACPHS_S107', 'METACPHS_S108', 'METACPHS_S109', 'METACPHS_S110', 'METACPHS_S111', 'METACPHS_S112', 'METACPHS_S113', 'METACPHS_S114', 'METACPHS_S115', 'METACPHS_S116', 'METACPHS_S117', 'METACPHS_S118', 'METACPHS_S119']),
-python -u main.py -lr 1 -pca_ch 64 -algo FedAvg -static_clients ['METACPHS_S108','METACPHS_S109','METACPHS_S110','METACPHS_S111','METACPHS_S112','METACPHS_S113','METACPHS_S114','METACPHS_S115','METACPHS_S116','METACPHS_S117'],  -live_clients ['METACPHS_S106','METACPHS_S107','METACPHS_S118','METACPHS_S119']
+python -u main.py -lr 1 -pca_ch 64 -algo FedAvg -static_clients ['METACPHS_S108','METACPHS_S109','METACPHS_S110','METACPHS_S111','METACPHS_S112','METACPHS_S113','METACPHS_S114','METACPHS_S115','METACPHS_S116','METACPHS_S117'],  -live_clients_queue ['METACPHS_S106','METACPHS_S107','METACPHS_S118','METACPHS_S119']
 # WITH DIRECTORY:
-python -u Personalized_Federated_Learning\main.py -lr 1 -pca_ch 64 -algo FedAvg -seq True -static_clients ['METACPHS_S108','METACPHS_S109','METACPHS_S110','METACPHS_S111','METACPHS_S112','METACPHS_S113','METACPHS_S114','METACPHS_S115','METACPHS_S116','METACPHS_S117'] -live_clients ['METACPHS_S106','METACPHS_S107','METACPHS_S118','METACPHS_S119']
+python -u Personalized_Federated_Learning\main.py -lr 1 -pca_ch 64 -algo FedAvg -seq True -static_clients ['METACPHS_S108','METACPHS_S109','METACPHS_S110','METACPHS_S111','METACPHS_S112','METACPHS_S113','METACPHS_S114','METACPHS_S115','METACPHS_S116','METACPHS_S117'], -live_clients_queue ['METACPHS_S106','METACPHS_S107','METACPHS_S118','METACPHS_S119']
 
 #parser.add_argument('-jr', "--join_ratio", type=float, default=0.3, help="Fraction of clients to be active in training per round")
 

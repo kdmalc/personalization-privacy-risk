@@ -415,8 +415,10 @@ def parse_args():
     parser.add_argument('-uppm', "--use_prev_pers_model", type=bool, default=False,
                         help="Boolean toggle for whether to use previously trained personalized models for the client inits")
     # default=str(['METACPHS_S106', 'METACPHS_S107', 'METACPHS_S108', 'METACPHS_S109', 'METACPHS_S110', 'METACPHS_S111', 'METACPHS_S112', 'METACPHS_S113', 'METACPHS_S114', 'METACPHS_S115', 'METACPHS_S116', 'METACPHS_S117', 'METACPHS_S118', 'METACPHS_S119']),
-    parser.add_argument('-live_clients', "--live_clients", type=str, default='[]',
-                        help="List of current subject ID strings (models will be trained and saved)")
+    parser.add_argument('-live_clients_queue', "--live_clients_queue", type=str, default='[]',
+                        help="List of current subject ID strings (models will be trained and saved) --> THEY ARE QUEUED SO ONLY ONE WILL TRAIN AT A TIME")
+    parser.add_argument('-nlsrpsq', "--num_liveseq_rounds_per_seqclient", type=int, default=25,
+                        help="Number of training rounds to do in a row on a single live (seq) client before advancing to the next seq client.")    
     parser.add_argument('-static_clients', "--static_clients", type=str, default='[]',
                         help="List of previously trained subject ID strings (models will be uploaded, used in training, but never updated)")
     parser.add_argument('-svlweight', "--static_vs_live_weighting", type=float, default=0.75,
@@ -445,7 +447,7 @@ def parse_args():
     if args.test_subj_IDs!=[]:
         args.test_subj_IDs = convert_cmd_line_str_lst_to_type_lst(args.test_subj_IDs, str)
     if args.sequential != False:
-        args.live_clients = convert_cmd_line_str_lst_to_type_lst(args.live_clients, str)
+        args.live_clients_queue = convert_cmd_line_str_lst_to_type_lst(args.live_clients_queue, str)
         args.static_clients = convert_cmd_line_str_lst_to_type_lst(args.static_clients, str)
     
     # I always need to run on CPU only since I don't have Nvidia GPU available

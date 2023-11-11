@@ -102,7 +102,10 @@ class Server(object):
         self.loss_threshold = args.loss_threshold
         ## SEQUENTIAL TRAINING PARAMS
         self.sequential = args.sequential
-        self.live_clients = args.live_clients
+        self.live_clients_queue = args.live_clients_queue
+        self.live_clients = [] # Empty list. Should only ever have 1 client in it for SEQUENTIAL
+        self.live_idx = 0
+        self.num_liveseq_rounds_per_seqclient = args.num_liveseq_rounds_per_seqclient
         self.static_clients = args.static_clients
         self.static_vs_live_weighting = args.static_vs_live_weighting
         self.prev_model_directory = args.prev_model_directory
@@ -117,33 +120,35 @@ class Server(object):
         base_data_path = 'C:\\Users\\kdmen\\Desktop\\Research\\Data\\Subject_Specific_Files\\'
         for i, train_slow, send_slow in zip(range(len(self.train_subj_IDs)), self.train_slow_clients, self.send_slow_clients):
             for j in self.condition_number_lst:
-                print(f"SB Set Client: iter {i}, cond number: {str(j)}")
-                client = clientObj(self.args, 
-                                    ID=self.train_subj_IDs[i], 
-                                    samples_path = base_data_path + 'S' + str(self.train_numerical_subj_IDs[i]) + "_TrainData_8by20770by64.npy", 
-                                    labels_path = base_data_path + 'S' + str(self.train_numerical_subj_IDs[i]) + "_Labels_8by20770by2.npy", 
-                                    condition_number = j-1, 
-                                    train_slow=train_slow, 
-                                    send_slow=send_slow)
-                self.clients.append(client)
-                if self.sequential:
-                    if client.ID in self.live_clients:
-                        # Do I need to do anything? I don't think so...
-                        pass
-                    elif client.ID in self.static_clients:
-                        # Load the client model
-                        ## This is not super robust. Assume the full path is the provided path and the file name is just the ID...
-                        ### Does this need to be updated to include the file extension? Probably... .pt?
-                        #path_to_trained_client_model = self.prev_model_directory + self.ID
-                        if self.use_prev_pers_model:
-                            # path_to_trained_client_model = self.prev_pers_model_directory + self.ID
-                            raise("This is not supported yet")
-                        else:
-                            path_to_trained_client_model = self.prev_model_directory
-                        # Requires full path to model (eg with extension)
-                        client.load_item("FedAvg_server_global.pt", full_path_to_item=path_to_trained_client_model)
+                if self.sequential and (client.ID in self.static_clients):
+                    # LOAD MODELS BUT NOT DATA
+                    # Load the client model
+                    ## This is not super robust. Assume the full path is the provided path and the file name is just the ID...
+                    ### Does this need to be updated to include the file extension? Probably... .pt?
+                    #path_to_trained_client_model = self.prev_model_directory + self.ID
+                    if self.use_prev_pers_model:
+                        # path_to_trained_client_model = self.prev_pers_model_directory + self.ID
+                        raise("This is not supported yet")
+                    else:
+                        path_to_trained_client_model = self.prev_model_directory
+                    # Need to print whether the personalized or locally fine-tuned model was used...
+                    #print()
+                    # Requires full path to model (eg with extension)
+                    client.load_item("FedAvg_server_global.pt", full_path_to_item=path_to_trained_client_model)
                 else:
+                    #if client.ID in self.live_clients_queue: --> # LOAD DATA BUT NOT MODELS
+                    print(f"SB Set Client: iter {i}, cond number: {str(j)}")
+                    client = clientObj(self.args, 
+                                        ID=self.train_subj_IDs[i], 
+                                        samples_path = base_data_path + 'S' + str(self.train_numerical_subj_IDs[i]) + "_TrainData_8by20770by64.npy", 
+                                        labels_path = base_data_path + 'S' + str(self.train_numerical_subj_IDs[i]) + "_Labels_8by20770by2.npy", 
+                                        condition_number = j-1, 
+                                        train_slow=train_slow, 
+                                        send_slow=send_slow)
+                    # This actually sets the training loader as opposed to loading the actual data (which is done above)
                     client.load_train_data(client_init=True)
+                self.clients.append(client)
+                
 
     # random select slow clients
     def select_slow_clients(self, slow_rate):
@@ -169,18 +174,38 @@ class Server(object):
         else:
             num_join_clients = self.num_join_clients
         
-        # Randomly select the remaining clients from the available list
         if self.sequential:
-            ########################################################################################
-            # This needs to be double checked lol
+            # Select first client in live_clients_queue if this is the first round
+            if self.global_round<2: # I don't remember if it is already incremented to 1 at this point
+                # Could probably fold this into the modulus check below...
+                print(f"SB sel_cli: Global round {self.global_round}: setting first live client")
+                self.live_clients = self.live_clients_queue[self.live_idx] 
+            elif self.global_round%self.num_liveseq_rounds_per_seqclient==0:
+                # ^Check if that client has been trained enough to switch
+                if self.live_idx < len(self.live_clients_queue):
+                    self.live_idx += 1
+                else:
+                    self.live_idx = 0
+                # Now select the next seq live client
+                self.live_clients = self.live_clients_queue[self.live_idx] 
+            assert(len(self.live_clients)==1)
+            
             if num_join_clients > len(self.live_clients):
                 #remaining_client_ids = [client.ID for client in self.clients if client.ID not in self.live_clients]
                 # ^I already have this actually, it's just self.static_clients. Might be better to do implicitly tho...
-                random.shuffle(self.static_clients)
-                selected_clients = [self.clients[client_id] 
-                                    for client_id in 
-                                    self.static_clients[:num_join_clients - len(self.live_clients)]]
-            else:
+                random.shuffle(self.static_clients) # Idk if I should be doing this honestly lol, cause idxs might get mixed up
+                #selected_clients = [self.clients[client_id] 
+                #                    for client_id in 
+                #                    self.static_clients[:(num_join_clients - len(self.live_clients))]]
+                # Select all the static (not-training/rehearsal) clients to be included
+                selected_clients = self.static_clients[:(num_join_clients - len(self.live_clients) + 1)]
+                # Add in the single live client
+                selected_clients.extend(self.live_clients)
+            else: #There are more live clients than total clients per round
+                raise ValueError(f"More live clients ({len(self.live_clients)}) than allowed clients per round ({num_join_clients})")
+                # This case isn't important right now. Ignore the below for now, maybe come back to it
+                ## Thus only use the live clients for training? That relegates the rest of the clients to just pretraining...
+                ## I would assume that we would get drift...
                 if self.global_round<2:
                     print("SB: len(self.live_clients) > num_join_clients, so just sample the live clients")
                 selected_clients = list(np.random.choice(self.live_clients, num_join_clients, replace=False))
