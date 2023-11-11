@@ -430,7 +430,7 @@ def parse_args():
     ## For FedAvg all clients have the same model so code has to change to reflect this
     ### Current saving regime is broken and saves Local correctly I believe but not FedAvg (no FedAvg directory even...)
     #### My default entry is the path with Latest FedAvg filename, despite what the help description says...
-    parser.add_argument('-pmd', "--prev_model_directory", type=str, default="C:\\Users\\kdmen\\Desktop\\Research\\personalization-privacy-risk\\Personalized_Federated_Learning\\models\\cphs\\FedAvg\\11-07_11-31\FedAvg_server_global.pt",
+    parser.add_argument('-pmd', "--prev_model_directory", type=str, default="C:\\Users\\kdmen\\Desktop\\Research\\personalization-privacy-risk\\Personalized_Federated_Learning\\models\\cphs\\FedAvg\\11-10_16-14\\FedAvg_server_global.pt",
                         help="Directory name containing all the prev clients models") 
     # This needs to be updated...
     #parser.add_argument('-ppmd', "--prev_pers_model_directory", type=str, default="C:\\Users\\kdmen\\Desktop\\Research\\personalization-privacy-risk\\Personalized_Federated_Learning\\models\\cphs\\FedAvg_server.pt",
