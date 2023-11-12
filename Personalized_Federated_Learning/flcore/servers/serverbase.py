@@ -11,6 +11,7 @@ from datetime import datetime
 #from flcore.pflniid_utils.dlg import DLG
 #from utils import node_creator
 import matplotlib.pyplot as plt
+from math import ceil
 
 
 class Server(object):
@@ -96,7 +97,10 @@ class Server(object):
         self.num_clients = len(self.train_subj_IDs) * len(self.condition_number_lst)
         self.join_ratio = args.join_ratio
         self.random_join_ratio = args.random_join_ratio
-        self.num_join_clients = int(self.num_clients * self.join_ratio)
+        self.num_join_clients = ceil(self.num_clients * self.join_ratio)
+        assert(self.num_join_clients>=1)
+        if self.num_join_clients==1:
+            print("num_join_clients IS JUST ONE (1) CLIENT!")
         # This might need to get changed, but works as long as last 3 chars are the numerical subject ID (eg we drop the header and 'S')
         self.train_numerical_subj_IDs = [id_str[-3:] for id_str in self.train_subj_IDs]
         self.loss_threshold = args.loss_threshold
@@ -143,7 +147,7 @@ class Server(object):
 
                 #if self.sequential and (self.train_subj_IDs[i] in self.static_client_IDs):
                 if self.sequential: # Load the prev global model for all clients actually
-                    print(f"SB Set Client: iter {i}, cond number: {str(j)}: LOADING MODEL: {self.train_subj_IDs[i]}")
+                    print(f"SB Set Client: LOADING MODEL: {self.train_subj_IDs[i]}")
                     # Load the client model
                     ## This is not super robust. Assume the full path is the provided path and the file name is just the ID...
                     ### Does this need to be updated to include the file extension? Probably... .pt?
@@ -196,6 +200,7 @@ class Server(object):
             if self.global_round<2: # I don't remember if it is already incremented to 1 at this point
                 # Could probably fold this into the modulus check below...
                 print(f"SB sel_cli: Global round {self.global_round}: setting first live client")
+                # List of client objects which match the current live_indices (presumably live_idx=0)
                 self.live_clients = [client_obj for client_obj in self.clients if client_obj.ID==self.live_client_IDs_queue[self.live_idx]]
             elif self.global_round%self.num_liveseq_rounds_per_seqclient==0:
                 # ^Check if that client has been trained enough to switch
@@ -218,6 +223,9 @@ class Server(object):
                 selected_clients = [client_obj for client_obj in self.clients if client_obj.ID in self.static_client_IDs[:(num_join_clients - len(self.live_clients))]]
                 # Add in the single live client
                 selected_clients.extend(self.live_clients)
+            elif num_join_clients==1:
+                # Only using live client, this is fine. Just be conscious you are making this choice
+                selected_clients = self.live_clients
             else: #There are more live clients than total clients per round
                 raise ValueError(f"More live clients ({len(self.live_clients)}) than allowed clients per round ({num_join_clients})")
                 # This case isn't important right now. Ignore the below for now, maybe come back to it

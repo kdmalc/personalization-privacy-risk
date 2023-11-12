@@ -124,7 +124,7 @@ def parse_args():
     #Local #FedAvg #APFL #FedMTL #pFedMe ## #Ditto #PerAvg
     ## pFedMe not working
     parser.add_argument('-algo', "--algorithm", type=str, default="FedAvg")
-    parser.add_argument('-jr', "--join_ratio", type=float, default=0.3,
+    parser.add_argument('-jr', "--join_ratio", type=float, default=0.05,  # Was 0.3, but I want to try with no hold backs (eg only live clients)
                         help="Fraction of clients to be active in training per round")
     parser.add_argument('-rjr', "--random_join_ratio", type=bool, default=False,
                         help="Random ratio of clients per round")
@@ -187,7 +187,7 @@ def parse_args():
     parser.add_argument('-run', "--run", type=bool, default=True,
                         help="If False, will set up the arg parser and args variable, but won't run")
     # PCA should probably be broken into 2 since 64 channels is device specific
-    parser.add_argument('-pca_ch', "--pca_channels", type=int, default=10,
+    parser.add_argument('-pca_ch', "--pca_channels", type=int, default=64, #was 10...
                         help="Number of principal components. 64 means do not use any PCA")
     parser.add_argument('-lF', "--lambdaF", type=float, default=0.0,
                         help="Penalty term for user EMG input (user effort)")
@@ -199,8 +199,8 @@ def parse_args():
                         help="Which update to start on (for CPHS Simulation). Use 0 or 10.")
     parser.add_argument('-sbb', "--smoothbatch_boolean", type=bool, default=False,
                         help="Boolean switch for whether or not to use SmoothBatch. See Madduri CPHS Paper.")
-    parser.add_argument('-sblr', "--smoothbatch_learningrate", type=float, default=True, #0.75 slow, 0.25 fast
-                        help="Value of alpha (mixing param) for SB. Alpha=1 uses only the optimal dec, Alpha=0 uses only the previous dec")
+    parser.add_argument('-sblr', "--smoothbatch_learningrate", type=float, default=0.75, #0.75 slow, 0.25 fast
+                        help="Value of alpha (mixing param) for SB. Alpha=1 uses only the prev dec, Alpha=0 uses only the new dec")
     ## Test Split Related
     parser.add_argument('-test_split_fraction', "--test_split_fraction", type=float, default=0.2,
                         help="Fraction of data to use for testing")
@@ -247,10 +247,11 @@ def parse_args():
                         help="Number of training rounds to do in a row on a single live (seq) client before advancing to the next seq client.")    
     parser.add_argument('-scids', "--static_client_IDs", type=str, default=str(['METACPHS_S108','METACPHS_S109','METACPHS_S110','METACPHS_S111','METACPHS_S112','METACPHS_S113','METACPHS_S114','METACPHS_S115','METACPHS_S116','METACPHS_S117']),
                         help="List of previously trained subject ID strings (models will be uploaded, used in training, but never updated)")
+    # This isn't implemented yet but is functionally true (rn have 1 live and 4 total thus 3 static for backweighting) 11/12/23
     parser.add_argument('-svlweight', "--static_vs_live_weighting", type=float, default=0.75,
                         help="Ratio between number of static clients and live clients present in each training round. Set completely arbitrarily for now.")
     parser.add_argument('-alltrsids', "--train_subj_IDs", type=str, default=str(['METACPHS_S106', 'METACPHS_S107', 'METACPHS_S108', 'METACPHS_S109', 'METACPHS_S110', 'METACPHS_S111', 'METACPHS_S112', 'METACPHS_S113', 'METACPHS_S114', 'METACPHS_S115', 'METACPHS_S116', 'METACPHS_S117', 'METACPHS_S118', 'METACPHS_S119']),
-                        help="Subject ID Codes for users to be trained")
+                        help="Subject ID Codes for ALL users to be in training (static and live). Also used in non-seq.")
     parser.add_argument('-pmd', "--prev_model_directory", type=str, default="C:\\Users\\kdmen\\Desktop\\Research\\personalization-privacy-risk\\Personalized_Federated_Learning\\models\\cphs\\FedAvg\\11-10_16-14\\FedAvg_server_global.pt",
                         help="Directory name containing all the prev clients models") 
     args = parser.parse_args()
@@ -284,7 +285,7 @@ if __name__ == "__main__":
     print("Local batch size: {}".format(args.batch_size))
     print("Local steps: {}".format(args.local_epochs))
     print("Local learing rate: {}".format(args.local_learning_rate))
-    print("Subjects in training data: {}".format(args.train_subj_IDs))
+    print("train_subj_IDs subjects: {}".format(args.train_subj_IDs))
     print("List of all condition numbers to train over: {}".format(args.condition_number_lst))
     #print("Local learing rate decay: {}".format(args.learning_rate_decay))
     #if args.learning_rate_decay:

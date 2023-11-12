@@ -473,7 +473,7 @@ if __name__ == "__main__":
     print("Local batch size: {}".format(args.batch_size))
     print("Local steps: {}".format(args.local_epochs))
     print("Local learing rate: {}".format(args.local_learning_rate))
-    print("Subjects in training data: {}".format(args.train_subj_IDs))
+    print("train_subj_IDs subjects: {}".format(args.train_subj_IDs))
     print("List of all condition numbers to train over: {}".format(args.condition_number_lst))
     #print("Local learing rate decay: {}".format(args.learning_rate_decay))
     #if args.learning_rate_decay:
