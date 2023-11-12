@@ -110,6 +110,10 @@ class Server(object):
         self.static_vs_live_weighting = args.static_vs_live_weighting
         self.prev_model_directory = args.prev_model_directory
         self.use_prev_pers_model = args.use_prev_pers_model
+        self.curr_live_rs_test_loss = []
+        self.prev_live_rs_test_loss = []
+        # Idk if I care about the train loss  
+        #self.rs_train_loss = []
         #self.prev_pers_model_directory = args.prev_pers_model_directory
 
 
@@ -120,22 +124,24 @@ class Server(object):
         base_data_path = 'C:\\Users\\kdmen\\Desktop\\Research\\Data\\Subject_Specific_Files\\'
         for i, train_slow, send_slow in zip(range(len(self.train_subj_IDs)), self.train_slow_clients, self.send_slow_clients):
             for j in self.condition_number_lst:
+                print(f"SB Set Client: iter {i}, cond number: {str(j)}: LOADING DATA: {self.train_subj_IDs[i]}")
+                #################################################################################
+                # For now, have to load the data because of how I set it up
+                # Look into changing this in the future...
+                ## This actually has to stay if I want to be able to run train/test_metrics() on the past clients
+                ## ^Since those functions require the local data in order to eval the model
+                client = clientObj(self.args, 
+                                    ID=self.train_subj_IDs[i], 
+                                    samples_path = base_data_path + 'S' + str(self.train_numerical_subj_IDs[i]) + "_TrainData_8by20770by64.npy", 
+                                    labels_path = base_data_path + 'S' + str(self.train_numerical_subj_IDs[i]) + "_Labels_8by20770by2.npy", 
+                                    condition_number = j-1, 
+                                    train_slow=train_slow, 
+                                    send_slow=send_slow)
+                client.load_train_data(client_init=True) # This has to be here otherwise load_test_data() breaks...
+                #################################################################################
+
                 if self.sequential and (self.train_subj_IDs[i] in self.static_client_IDs):
                     print(f"SB Set Client: iter {i}, cond number: {str(j)}: LOADING MODEL: {self.train_subj_IDs[i]}")
-
-                    #################################################################################
-                    # For now, have to load the data because of how I set it up
-                    # Look into changing this in the future...
-                    client = clientObj(self.args, 
-                                        ID=self.train_subj_IDs[i], 
-                                        samples_path = base_data_path + 'S' + str(self.train_numerical_subj_IDs[i]) + "_TrainData_8by20770by64.npy", 
-                                        labels_path = base_data_path + 'S' + str(self.train_numerical_subj_IDs[i]) + "_Labels_8by20770by2.npy", 
-                                        condition_number = j-1, 
-                                        train_slow=train_slow, 
-                                        send_slow=send_slow)
-                    client.load_train_data(client_init=True) # This has to be here otherwise load_test_data() breaks...
-                    #################################################################################
-
                     # LOAD MODELS BUT NOT DATA
                     # Load the client model
                     ## This is not super robust. Assume the full path is the provided path and the file name is just the ID...
@@ -150,18 +156,6 @@ class Server(object):
                     #print()
                     # Requires full path to model (eg with extension)
                     client.load_item("FedAvg_server_global.pt", full_path_to_item=path_to_trained_client_model)
-                else:
-                    #if client.ID in self.live_client_IDs_queue: --> # LOAD DATA BUT NOT MODELS
-                    print(f"SB Set Client: iter {i}, cond number: {str(j)}: LOADING DATA: {self.train_subj_IDs[i]}")
-                    client = clientObj(self.args, 
-                                        ID=self.train_subj_IDs[i], 
-                                        samples_path = base_data_path + 'S' + str(self.train_numerical_subj_IDs[i]) + "_TrainData_8by20770by64.npy", 
-                                        labels_path = base_data_path + 'S' + str(self.train_numerical_subj_IDs[i]) + "_Labels_8by20770by2.npy", 
-                                        condition_number = j-1, 
-                                        train_slow=train_slow, 
-                                        send_slow=send_slow)
-                    # This actually sets the training loader as opposed to loading the actual data (which is done above)
-                    client.load_train_data(client_init=True)
                 self.clients.append(client)
                 
 
@@ -176,11 +170,13 @@ class Server(object):
             slow_clients[i] = True
         return slow_clients
 
+
     def set_slow_clients(self):
         self.train_slow_clients = self.select_slow_clients(
             self.train_slow_rate)
         self.send_slow_clients = self.select_slow_clients(
             self.send_slow_rate)
+
 
     def select_clients(self):
         if self.random_join_ratio:
@@ -200,6 +196,11 @@ class Server(object):
                 self.live_idx += 1
                 if self.live_idx == len(self.live_client_IDs_queue):
                     self.live_idx = 0
+                # Put the current client in the prev_cli lst
+                ## First check that they are not already in the lst
+                finished_cli_ID = self.live_clients[0].ID
+                if finished_cli_ID not in self.prev_live_client_IDs:
+                    self.prev_live_client_IDs.append(finished_cli_ID)
                 # Now select the next seq live client
                 self.live_clients = [client_obj for client_obj in self.clients if client_obj.ID==self.live_client_IDs_queue[self.live_idx]]
             assert(len(self.live_clients)==1)
@@ -222,6 +223,7 @@ class Server(object):
         else:
             selected_clients = list(np.random.choice(self.clients, num_join_clients, replace=False))
         return selected_clients
+
 
     def send_models(self):
         if self.verbose:
@@ -269,6 +271,7 @@ class Server(object):
         for i, w in enumerate(self.uploaded_weights):
             self.uploaded_weights[i] = w / tot_samples
 
+
     def aggregate_parameters(self):
         assert (len(self.uploaded_models) > 0)
 
@@ -292,6 +295,7 @@ class Server(object):
         torch.save(self.global_model, model_path)
     '''
 
+
     def load_model(self, directory_name, type):
         '''
             Loads the specified model to become the current global model!
@@ -303,6 +307,7 @@ class Server(object):
         # ^^ This really ought to be set somehow...
         assert (os.path.exists(model_path))
         self.global_model = torch.load(model_path)
+
 
     #def model_exists(self, directory_name, type):
     #    '''
@@ -412,8 +417,10 @@ class Server(object):
             os.makedirs(self.save_folder_name)
         torch.save(item, os.path.join(self.save_folder_name, "server_" + item_name + ".pt"))
 
+
     def load_item(self, item_name):
         return torch.load(os.path.join(self.save_folder_name, "server_" + item_name + ".pt"))
+
 
     def test_metrics(self):
         if self.eval_new_clients and self.num_new_clients > 0:
@@ -456,9 +463,15 @@ class Server(object):
             else:
                 raise ValueError("This isn't supposed to run...")
         #IDs = [c.ID for c in self.clients]
-        return IDs, num_samples, tot_loss
+        if self.sequential:
+            seq_metrics = [curr_live_loss, curr_live_num_samples, curr_live_IDs, prev_live_loss, prev_live_num_samples, prev_live_IDs]
+        else:
+            seq_metrics = None
+        return IDs, num_samples, tot_loss, seq_metrics
+
 
     def train_metrics(self):
+        # I don't really like that this is here...
         self.global_round += 1
         
         if self.eval_new_clients and self.num_new_clients > 0:
@@ -466,22 +479,51 @@ class Server(object):
             # maps to depreceated values I think...
             print("KAI: Returned early for some reason, idk what this code is doing")
             return [0], [1], [0]
-        
+
         num_samples = []
-        losses = []
-        print(f"Serverbase train_metrics(): GLOBAL ROUND: {self.global_round}")
+        tot_loss = []
+        IDs = []
+        if self.sequential:
+            curr_live_loss = []
+            curr_live_num_samples = []
+            curr_live_IDs = []
+
+            prev_live_loss = []
+            prev_live_num_samples = []
+            prev_live_IDs = []
         for c in self.clients:
-            if self.verbose:
-                print(f"Serverbase train_metrics(): {c.ID}")
-            # Why is it setting it to this if this is in train_metrics not training... it wasn't updated.......
-            #c.last_global_round = self.global_round
-            cl, ns = c.train_metrics()
-            num_samples.append(ns)
-            losses.append(cl*1.0)
-
-        IDs = [c.ID for c in self.clients]
-
-        return IDs, num_samples, losses
+            tl, ns = c.test_metrics()
+            if (not self.sequential) or (self.sequential and c.ID in self.static_client_IDs):
+                # This is the ordinary nonseq sim case
+                ## Why is it setting it to this if this is in train_metrics not training... 
+                ## ^ Did I fix this / add it back in elsewhere? ...
+                #c.last_global_round = self.global_round
+                tot_loss.append(tl*1.0)
+                num_samples.append(ns)
+                IDs.append(c.ID)
+            elif self.sequential and c.ID in self.live_clients:
+                # If it is the currently live client:
+                ## I want to see its loss improving at the very least
+                curr_live_loss.append(tl*1.0)
+                curr_live_num_samples.append(ns)
+                curr_live_IDs.append(c.ID)
+            elif self.sequential and c.ID in self.prev_live_client_IDs:
+                # If it is a previously live client:
+                ## Intuitievly loss will go up but not too much hopefully
+                ## Don't want to erase the gains on prev clients from learning on new clients
+                prev_live_loss.append(tl*1.0)
+                prev_live_num_samples.append(ns)
+                prev_live_IDs.append(c.ID)
+            elif self.sequential:
+                raise ValueError("This isn't supposed to run...")
+            else:
+                raise ValueError("This isn't supposed to run...")
+        #IDs = [c.ID for c in self.clients]
+        if self.sequential:
+            seq_metrics = [curr_live_loss, curr_live_num_samples, curr_live_IDs, prev_live_loss, prev_live_num_samples, prev_live_IDs]
+        else:
+            seq_metrics = None
+        return IDs, num_samples, tot_loss, seq_metrics
 
     # evaluate selected clients
     def evaluate(self, train=True, test=True, acc=None, loss=None):
@@ -502,8 +544,18 @@ class Server(object):
             test_loss = stats[2]#*1.0  #It's already a float...
 
             if acc == None:
+                # Why does this use len instead of num_samples lol why am I even saving it
                 avg_test_loss = sum(test_loss)/len(test_loss)
                 self.rs_test_loss.append(avg_test_loss)
+
+                if self.sequential:
+                    # seq_stats <-- [curr_live_loss, curr_live_num_samples, curr_live_IDs, prev_live_loss, prev_live_num_samples, prev_live_IDs]
+                    # Hmm do I need to save/use the actual IDs at all? Do I care? Don't think so...
+                    seq_stats = stats[3]
+                    if len(seq_stats[0])!=0:
+                        self.curr_live_rs_test_loss.append(sum(seq_stats[0])/len(seq_stats[0]))
+                    if len(seq_stats[3])!=0:
+                        self.prev_live_rs_test_loss.append(sum(seq_stats[3])/len(seq_stats[3]))
             else:
                 acc.append(test_loss)
 
@@ -641,11 +693,20 @@ class Server(object):
 
         return IDs, num_samples, tot_loss
 
-    def plot_results(self, plot_train=True, plot_test=True, my_title=None):
+    def plot_results(self, plot_train=True, plot_test=True, plot_seq=True, my_title=None):
         if plot_test:
             plt.plot(range(len(self.rs_test_loss)), self.rs_test_loss, label='Test')
         if plot_train:
             plt.plot(range(len(self.rs_train_loss)), self.rs_train_loss, label='Train')
+        if plot_seq==True and self.sequential==True:
+            # Go back and do something about offsetting or setting loss to zero? 
+            ## Nah just offset here
+            cl_offset_diff = len(self.rs_test_loss) - len(self.curr_live_rs_test_loss)
+            pl_offset_diff = len(self.rs_test_loss) - len(self.prev_live_rs_test_loss)
+            cl_x_axis = np.array(range(len(self.curr_live_rs_test_loss))) + cl_offset_diff
+            pl_x_axis = np.array(range(len(self.prev_live_rs_test_loss))) + pl_offset_diff
+            plt.plot(cl_x_axis, self.curr_live_rs_test_loss, label='Current Live Testing')
+            plt.plot(pl_x_axis, self.prev_live_rs_test_loss, label='Previous Live Testing')
         if my_title is None:
             plt.title("Train/test loss")
         else:
