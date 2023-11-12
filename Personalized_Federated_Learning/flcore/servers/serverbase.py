@@ -708,12 +708,14 @@ class Server(object):
         if plot_seq==True and self.sequential==True:
             # Go back and do something about offsetting or setting loss to zero? 
             ## Nah just offset here
+            '''
             cl_offset_diff = len(self.rs_test_loss) - len(self.curr_live_rs_test_loss)
             pl_offset_diff = len(self.rs_test_loss) - len(self.prev_live_rs_test_loss)
             cl_x_axis = np.array(range(len(self.curr_live_rs_test_loss))) + cl_offset_diff
             pl_x_axis = np.array(range(len(self.prev_live_rs_test_loss))) + pl_offset_diff
             plt.plot(cl_x_axis, self.curr_live_rs_test_loss, label='Current Live Testing')
             plt.plot(pl_x_axis, self.prev_live_rs_test_loss, label='Previous Live Testing')
+            '''
         if my_title is None:
             plt.title("Train/test loss")
         else:
