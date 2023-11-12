@@ -141,22 +141,27 @@ class Server(object):
                 client.load_train_data(client_init=True) # This has to be here otherwise load_test_data() breaks...
                 #################################################################################
 
-                if self.sequential and (self.train_subj_IDs[i] in self.static_client_IDs):
+                #if self.sequential and (self.train_subj_IDs[i] in self.static_client_IDs):
+                if self.sequential: # Load the prev global model for all clients actually
                     print(f"SB Set Client: iter {i}, cond number: {str(j)}: LOADING MODEL: {self.train_subj_IDs[i]}")
-                    # LOAD MODELS BUT NOT DATA
                     # Load the client model
                     ## This is not super robust. Assume the full path is the provided path and the file name is just the ID...
                     ### Does this need to be updated to include the file extension? Probably... .pt?
                     #path_to_trained_client_model = self.prev_model_directory + self.ID
-                    if self.use_prev_pers_model:
+                    if (self.use_prev_pers_model==True) and (self.train_subj_IDs[i] in self.static_client_IDs):
+                        # Then load the previous personalized model
                         # path_to_trained_client_model = self.prev_pers_model_directory + self.ID
+                        # model_name = "somethingsomething_server_pers.pt" # Presumably include client ID...
                         raise("This is not supported yet")
                     else:
+                        # Else they do not have a personalized model already (eg fresh client)
+                        # Thus default to the global model
                         path_to_trained_client_model = self.prev_model_directory
+                        model_name = "FedAvg_server_global.pt"
                     # Need to print whether the personalized or locally fine-tuned model was used...
                     #print()
                     # Requires full path to model (eg with extension)
-                    client.load_item("FedAvg_server_global.pt", full_path_to_item=path_to_trained_client_model)
+                    client.load_item(model_name, full_path_to_item=path_to_trained_client_model)
                 self.clients.append(client)
                 
 
@@ -263,7 +268,7 @@ class Server(object):
                         client.send_time_cost['total_cost'] / client.send_time_cost['num_rounds']
             except ZeroDivisionError:
                 client_time_cost = 0
-            # Idk why they onyl consider clients below a time threshold... trying to ignore slow clients? Idk
+            # Idk why they only consider clients below a time threshold... trying to ignore slow clients? Idk
             if client_time_cost <= self.time_threshold:
                 tot_samples += client.train_samples
                 self.uploaded_IDs.append(client.ID)
@@ -706,16 +711,14 @@ class Server(object):
         if plot_train:
             plt.plot(range(len(self.rs_train_loss)), self.rs_train_loss, label='Train')
         if plot_seq==True and self.sequential==True:
-            # Go back and do something about offsetting or setting loss to zero? 
-            ## Nah just offset here
-            '''
+            # cl should be the same length
+            # pl should start late tho, I believe
             cl_offset_diff = len(self.rs_test_loss) - len(self.curr_live_rs_test_loss)
             pl_offset_diff = len(self.rs_test_loss) - len(self.prev_live_rs_test_loss)
             cl_x_axis = np.array(range(len(self.curr_live_rs_test_loss))) + cl_offset_diff
             pl_x_axis = np.array(range(len(self.prev_live_rs_test_loss))) + pl_offset_diff
             plt.plot(cl_x_axis, self.curr_live_rs_test_loss, label='Current Live Testing')
             plt.plot(pl_x_axis, self.prev_live_rs_test_loss, label='Previous Live Testing')
-            '''
         if my_title is None:
             plt.title("Train/test loss")
         else:

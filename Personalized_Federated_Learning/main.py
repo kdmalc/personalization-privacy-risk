@@ -419,7 +419,7 @@ def parse_args():
                         help="List of current subject ID strings (models will be trained and saved) --> THEY ARE QUEUED SO ONLY ONE WILL TRAIN AT A TIME")
     parser.add_argument('-nlsrpsq', "--num_liveseq_rounds_per_seqclient", type=int, default=25,
                         help="Number of training rounds to do in a row on a single live (seq) client before advancing to the next seq client.")    
-    parser.add_argument('--scids', "--static_client_IDs", type=str, default='[]',
+    parser.add_argument('-scids', "--static_client_IDs", type=str, default='[]',
                         help="List of previously trained subject ID strings (models will be uploaded, used in training, but never updated)")
     parser.add_argument('-svlweight', "--static_vs_live_weighting", type=float, default=0.75,
                         help="Ratio between number of static clients and live clients present in each training round. Set completely arbitrarily for now.")
@@ -446,9 +446,9 @@ def parse_args():
     args.train_subj_IDs = convert_cmd_line_str_lst_to_type_lst(args.train_subj_IDs, str)
     if args.test_subj_IDs!=[]:
         args.test_subj_IDs = convert_cmd_line_str_lst_to_type_lst(args.test_subj_IDs, str)
-    if args.sequential != False:
-        args.live_client_IDs_queue = convert_cmd_line_str_lst_to_type_lst(args.live_client_IDs_queue, str)
-        args.static_client_IDs = convert_cmd_line_str_lst_to_type_lst(args.static_client_IDs, str)
+    #if args.sequential != False:
+    args.live_client_IDs_queue = convert_cmd_line_str_lst_to_type_lst(args.live_client_IDs_queue, str)
+    args.static_client_IDs = convert_cmd_line_str_lst_to_type_lst(args.static_client_IDs, str)
     
     # I always need to run on CPU only since I don't have Nvidia GPU available
     #os.environ["CUDA_VISIBLE_DEVICES"] = args.device_id
