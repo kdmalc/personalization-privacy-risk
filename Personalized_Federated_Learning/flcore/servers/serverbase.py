@@ -102,11 +102,11 @@ class Server(object):
         self.loss_threshold = args.loss_threshold
         ## SEQUENTIAL TRAINING PARAMS
         self.sequential = args.sequential
-        self.live_clients_queue = args.live_clients_queue
+        self.live_client_IDs_queue = args.live_client_IDs_queue
         self.live_clients = [] # Empty list. Should only ever have 1 client in it for SEQUENTIAL
         self.live_idx = 0
         self.num_liveseq_rounds_per_seqclient = args.num_liveseq_rounds_per_seqclient
-        self.static_clients = args.static_clients
+        self.static_client_IDs = args.static_client_IDs
         self.static_vs_live_weighting = args.static_vs_live_weighting
         self.prev_model_directory = args.prev_model_directory
         self.use_prev_pers_model = args.use_prev_pers_model
@@ -120,7 +120,22 @@ class Server(object):
         base_data_path = 'C:\\Users\\kdmen\\Desktop\\Research\\Data\\Subject_Specific_Files\\'
         for i, train_slow, send_slow in zip(range(len(self.train_subj_IDs)), self.train_slow_clients, self.send_slow_clients):
             for j in self.condition_number_lst:
-                if self.sequential and (client.ID in self.static_clients):
+                if self.sequential and (self.train_subj_IDs[i] in self.static_client_IDs):
+                    print(f"SB Set Client: iter {i}, cond number: {str(j)}: LOADING MODEL: {self.train_subj_IDs[i]}")
+
+                    #################################################################################
+                    # For now, have to load the data because of how I set it up
+                    # Look into changing this in the future...
+                    client = clientObj(self.args, 
+                                        ID=self.train_subj_IDs[i], 
+                                        samples_path = base_data_path + 'S' + str(self.train_numerical_subj_IDs[i]) + "_TrainData_8by20770by64.npy", 
+                                        labels_path = base_data_path + 'S' + str(self.train_numerical_subj_IDs[i]) + "_Labels_8by20770by2.npy", 
+                                        condition_number = j-1, 
+                                        train_slow=train_slow, 
+                                        send_slow=send_slow)
+                    client.load_train_data(client_init=True) # This has to be here otherwise load_test_data() breaks...
+                    #################################################################################
+
                     # LOAD MODELS BUT NOT DATA
                     # Load the client model
                     ## This is not super robust. Assume the full path is the provided path and the file name is just the ID...
@@ -136,8 +151,8 @@ class Server(object):
                     # Requires full path to model (eg with extension)
                     client.load_item("FedAvg_server_global.pt", full_path_to_item=path_to_trained_client_model)
                 else:
-                    #if client.ID in self.live_clients_queue: --> # LOAD DATA BUT NOT MODELS
-                    print(f"SB Set Client: iter {i}, cond number: {str(j)}")
+                    #if client.ID in self.live_client_IDs_queue: --> # LOAD DATA BUT NOT MODELS
+                    print(f"SB Set Client: iter {i}, cond number: {str(j)}: LOADING DATA: {self.train_subj_IDs[i]}")
                     client = clientObj(self.args, 
                                         ID=self.train_subj_IDs[i], 
                                         samples_path = base_data_path + 'S' + str(self.train_numerical_subj_IDs[i]) + "_TrainData_8by20770by64.npy", 
@@ -175,30 +190,25 @@ class Server(object):
             num_join_clients = self.num_join_clients
         
         if self.sequential:
-            # Select first client in live_clients_queue if this is the first round
+            # Select first client in live_client_IDs_queue if this is the first round
             if self.global_round<2: # I don't remember if it is already incremented to 1 at this point
                 # Could probably fold this into the modulus check below...
                 print(f"SB sel_cli: Global round {self.global_round}: setting first live client")
-                self.live_clients = self.live_clients_queue[self.live_idx] 
+                self.live_clients = [client_obj for client_obj in self.clients if client_obj.ID==self.live_client_IDs_queue[self.live_idx]]
             elif self.global_round%self.num_liveseq_rounds_per_seqclient==0:
                 # ^Check if that client has been trained enough to switch
-                if self.live_idx < len(self.live_clients_queue):
-                    self.live_idx += 1
-                else:
+                self.live_idx += 1
+                if self.live_idx == len(self.live_client_IDs_queue):
                     self.live_idx = 0
                 # Now select the next seq live client
-                self.live_clients = self.live_clients_queue[self.live_idx] 
+                self.live_clients = [client_obj for client_obj in self.clients if client_obj.ID==self.live_client_IDs_queue[self.live_idx]]
             assert(len(self.live_clients)==1)
             
             if num_join_clients > len(self.live_clients):
                 #remaining_client_ids = [client.ID for client in self.clients if client.ID not in self.live_clients]
-                # ^I already have this actually, it's just self.static_clients. Might be better to do implicitly tho...
-                random.shuffle(self.static_clients) # Idk if I should be doing this honestly lol, cause idxs might get mixed up
-                #selected_clients = [self.clients[client_id] 
-                #                    for client_id in 
-                #                    self.static_clients[:(num_join_clients - len(self.live_clients))]]
-                # Select all the static (not-training/rehearsal) clients to be included
-                selected_clients = self.static_clients[:(num_join_clients - len(self.live_clients) + 1)]
+                # ^I already have this actually, it's just self.static_client_IDs. Might be better to do implicitly tho...
+                random.shuffle(self.static_client_IDs) # Idk if I should be doing this honestly lol, cause idxs might get mixed up
+                selected_clients = [client_obj for client_obj in self.clients if client_obj.ID in self.static_client_IDs[:(num_join_clients - len(self.live_clients))]]
                 # Add in the single live client
                 selected_clients.extend(self.live_clients)
             else: #There are more live clients than total clients per round
@@ -412,13 +422,40 @@ class Server(object):
         
         num_samples = []
         tot_loss = []
+        IDs = []
+        if self.sequential:
+            curr_live_loss = []
+            curr_live_num_samples = []
+            curr_live_IDs = []
+
+            prev_live_loss = []
+            prev_live_num_samples = []
+            prev_live_IDs = []
         for c in self.clients:
             tl, ns = c.test_metrics()
-            tot_loss.append(tl*1.0)
-            num_samples.append(ns)
-
-        IDs = [c.ID for c in self.clients]
-
+            if (not self.sequential) or (self.sequential and c.ID in self.static_client_IDs):
+                # This is the ordinary nonseq sim case
+                tot_loss.append(tl*1.0)
+                num_samples.append(ns)
+                IDs.append(c.ID)
+            elif self.sequential and c.ID in self.live_clients:
+                # If it is the currently live client:
+                ## I want to see its loss improving at the very least
+                curr_live_loss.append(tl*1.0)
+                curr_live_num_samples.append(ns)
+                curr_live_IDs.append(c.ID)
+            elif self.sequential and c.ID in self.prev_live_client_IDs:
+                # If it is a previously live client:
+                ## Intuitievly loss will go up but not too much hopefully
+                ## Don't want to erase the gains on prev clients from learning on new clients
+                prev_live_loss.append(tl*1.0)
+                prev_live_num_samples.append(ns)
+                prev_live_IDs.append(c.ID)
+            elif self.sequential:
+                raise ValueError("This isn't supposed to run...")
+            else:
+                raise ValueError("This isn't supposed to run...")
+        #IDs = [c.ID for c in self.clients]
         return IDs, num_samples, tot_loss
 
     def train_metrics(self):
