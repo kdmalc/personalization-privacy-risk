@@ -112,6 +112,7 @@ class Server(object):
         self.use_prev_pers_model = args.use_prev_pers_model
         self.curr_live_rs_test_loss = []
         self.prev_live_rs_test_loss = []
+        self.prev_live_client_IDs = []
         # Idk if I care about the train loss  
         #self.rs_train_loss = []
         #self.prev_pers_model_directory = args.prev_pers_model_directory
@@ -445,7 +446,7 @@ class Server(object):
                 tot_loss.append(tl*1.0)
                 num_samples.append(ns)
                 IDs.append(c.ID)
-            elif self.sequential and c.ID in self.live_clients:
+            elif self.sequential and c.ID in [lc.ID for lc in self.live_clients]:
                 # If it is the currently live client:
                 ## I want to see its loss improving at the very least
                 curr_live_loss.append(tl*1.0)
@@ -458,6 +459,9 @@ class Server(object):
                 prev_live_loss.append(tl*1.0)
                 prev_live_num_samples.append(ns)
                 prev_live_IDs.append(c.ID)
+            elif self.sequential and c.ID in self.live_client_IDs_queue:
+                # Eg it hasn't been trained/called yet
+                pass
             elif self.sequential:
                 raise ValueError("This isn't supposed to run...")
             else:
@@ -501,7 +505,7 @@ class Server(object):
                 tot_loss.append(tl*1.0)
                 num_samples.append(ns)
                 IDs.append(c.ID)
-            elif self.sequential and c.ID in self.live_clients:
+            elif self.sequential and c.ID in [lc.ID for lc in self.live_clients]:
                 # If it is the currently live client:
                 ## I want to see its loss improving at the very least
                 curr_live_loss.append(tl*1.0)
@@ -514,6 +518,9 @@ class Server(object):
                 prev_live_loss.append(tl*1.0)
                 prev_live_num_samples.append(ns)
                 prev_live_IDs.append(c.ID)
+            elif self.sequential and c.ID in self.live_client_IDs_queue:
+                # Eg it hasn't been trained/called yet
+                pass
             elif self.sequential:
                 raise ValueError("This isn't supposed to run...")
             else:
