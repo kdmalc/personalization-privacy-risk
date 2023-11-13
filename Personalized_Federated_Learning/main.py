@@ -76,7 +76,7 @@ def run(args):
 
         # Generate args.model
         if model_str == "LinearRegression":
-            args.model = torch.nn.Linear(args.pca_channels, 2, args.linear_model_bias)  #input_size, output_size
+            args.model = torch.nn.Linear(args.pca_channels, 2, args.linear_model_bias)  #input_size, output_size, bias boolean
         else:
             raise NotImplementedError
 
@@ -252,7 +252,7 @@ def parse_args():
     parser.add_argument('-ldg', "--learning_rate_decay_gamma", type=float, default=0.99)
     parser.add_argument('-gr', "--global_rounds", type=int, default=100)  # KAI: Originally was 2000
     parser.add_argument('-ls', "--local_epochs", type=int, default=3, 
-                        help="How many times a client should iterate through their current update dataset.")  # KAI: I think it was 1 originally.  I'm gonna keep it there.  Does this mean I can set batchsize to 1300 and cook? Is my setup capable or running multiple epochs? Implicitly I was doing 1 epoch before, using the full update data I believe...
+                        help="How many times a client should iterate through their current update dataset.")  
     parser.add_argument('-ngradsteps', "--num_gradient_steps", type=int, default=1, 
                         help="How many gradient steps in one local epoch.")    
     #Local #FedAvg #APFL #FedMTL #pFedMe ## #Ditto #PerAvg
@@ -279,7 +279,7 @@ def parse_args():
     parser.add_argument('-dlgg', "--dlg_gap", type=int, default=100)
     parser.add_argument('-bnpc', "--batch_num_per_client", type=int, default=None)  # Only used with DLG
     #############################################################################################################
-    parser.add_argument('-nnc', "--new_clients_ID_lst", type=str, default='[]')
+    parser.add_argument('-nnc', "--new_clients_ID_lst", type=str, default=str([]))
     #############################################################################################################
     parser.add_argument('-fte', "--fine_tuning_epoch", type=int, default=0)
     
@@ -390,7 +390,7 @@ def parse_args():
                         help="Normalize the input EMG signals and its labels. This is good practice.")
     parser.add_argument('-lrt', "--local_round_threshold", type=int, default=50,
                         help="Number of communication rounds per client until a client will advance to the next batch of streamed data")
-    # I think I depreciated debug_mode, double check it's removed
+    # I depreciated debug_mode, double check it's removed so I can delete it here
     parser.add_argument('-debug_mode', "--debug_mode", type=bool, default=False,
                         help="I THINK I KILLED THIS MODE: In debug mode, the code is run to minimize overhead time in order to debug as fast as possible.  Namely, the data is held at the server to decrease init time, and communication delays are ignored.")
     parser.add_argument('-con_num', "--condition_number_lst", type=str, default='[1]',
@@ -409,6 +409,8 @@ def parse_args():
     # This one is not integrated yet
     parser.add_argument('-rtm', "--run_train_metrics", type=bool, default=True,
                         help="Evaluate every client on the training data")  # I don't think this matters for local, since every client is being run anyways?
+    
+    # THIS IS ALL OLD COMPARED TO MAIN_SEQ.PY, USE THAT INSTEAD
     ## SEQUENTIAL TRAINING PARAMS
     parser.add_argument('-seq', "--sequential", type=bool, default=False,
                         help="Boolean toggle for whether sequential mode is on (for now, mixing current client with previously trained models)")

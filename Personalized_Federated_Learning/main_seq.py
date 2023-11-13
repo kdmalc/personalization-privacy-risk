@@ -116,11 +116,11 @@ def parse_args():
                         help="Local learning rate")
     parser.add_argument('-ld', "--learning_rate_decay", type=bool, default=False)
     parser.add_argument('-ldg', "--learning_rate_decay_gamma", type=float, default=0.99)
-    parser.add_argument('-gr', "--global_rounds", type=int, default=100)  # KAI: Originally was 2000
+    parser.add_argument('-gr', "--global_rounds", type=int, default=1500)  # KAI: Originally was 2000
     parser.add_argument('-ls', "--local_epochs", type=int, default=3, 
-                        help="How many times a client should iterate through their current update dataset.")  # KAI: I think it was 1 originally.  I'm gonna keep it there.  Does this mean I can set batchsize to 1300 and cook? Is my setup capable or running multiple epochs? Implicitly I was doing 1 epoch before, using the full update data I believe...
+                        help="How many times a client should iterate through their current update dataset.")
     parser.add_argument('-ngradsteps', "--num_gradient_steps", type=int, default=1, 
-                        help="How many gradient steps in one local epoch.")    
+                        help="How many gradient steps in one local epoch.")  # In 1 epoch or per overall iteration...? 
     #Local #FedAvg #APFL #FedMTL #pFedMe ## #Ditto #PerAvg
     ## pFedMe not working
     parser.add_argument('-algo', "--algorithm", type=str, default="FedAvg")
@@ -243,7 +243,7 @@ def parse_args():
                         help="Boolean toggle for whether to use previously trained personalized models for the client inits")
     parser.add_argument('-lcidsq', "--live_client_IDs_queue", type=str, default=str(['METACPHS_S106','METACPHS_S107','METACPHS_S118','METACPHS_S119']),
                         help="List of current subject ID strings (models will be trained and saved) --> THEY ARE QUEUED SO ONLY ONE WILL TRAIN AT A TIME")
-    parser.add_argument('-nlsrpsq', "--num_liveseq_rounds_per_seqclient", type=int, default=25,
+    parser.add_argument('-nlsrpsq', "--num_liveseq_rounds_per_seqclient", type=int, default=300,
                         help="Number of training rounds to do in a row on a single live (seq) client before advancing to the next seq client.")    
     parser.add_argument('-scids', "--static_client_IDs", type=str, default=str(['METACPHS_S108','METACPHS_S109','METACPHS_S110','METACPHS_S111','METACPHS_S112','METACPHS_S113','METACPHS_S114','METACPHS_S115','METACPHS_S116','METACPHS_S117']),
                         help="List of previously trained subject ID strings (models will be uploaded, used in training, but never updated)")
