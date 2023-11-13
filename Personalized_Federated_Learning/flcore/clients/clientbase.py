@@ -330,20 +330,28 @@ class Client(object):
         for param, new_param in zip(model.parameters(), new_params):
             param.data = new_param.data.clone()
 
-    def test_metrics(self, saved_model=None):
+    def test_metrics(self, saved_model=None, model_obj=None):
         '''Kai's docs: This function is for evaluating the model (on the testing data) during training
         Note that model.eval() is called so params aren't updated.'''
 
-        if saved_model != None:
-            self.model = self.load_model(saved_model)
-        self.model.to(self.device)
+        
+        if model_obj != None:
+            eval_model = model_obj
+        elif saved_model != None:
+            #self.model = self.load_model(saved_model)
+            eval_model = self.load_model(saved_model)
+        else:
+            eval_model = self.model
+        #self.model.to(self.device)
+        eval_model.to(self.device)
 
         testloaderfull = self.load_test_data()
         # Should I be simulate streaming with the testing data... 
         # no the defualt should be holding a subj or two out and testing on them...
         # Maybe it doesnt matter as much since I'm not doing classification, so bias wouldn't be subject level but rather time/task-progress level
         #self.simulate_data_streaming(testloaderfull)
-        self.model.eval()
+        eval_model.eval()
+        #self.model.eval()
 
         running_test_loss = 0
         num_samples = 0
@@ -359,7 +367,8 @@ class Client(object):
 
                 self.simulate_data_streaming_xy(x, y)
                 # D@s = predicted velocity
-                vel_pred = self.model(torch.transpose(self.F, 0, 1)) 
+                vel_pred = eval_model(torch.transpose(self.F, 0, 1))
+                #vel_pred = self.model(torch.transpose(self.F, 0, 1)) 
                 
                 if vel_pred.shape[0]!=self.y_ref.shape[0]:
                     #print("TRANSPOSING")
@@ -367,7 +376,8 @@ class Client(object):
                 else:
                     tvel_pred = vel_pred
                 t1 = self.loss_func(tvel_pred, self.y_ref)
-                t2 = self.lambdaD*(torch.linalg.matrix_norm((self.model.weight))**2)
+                t2 = self.lambdaD*(torch.linalg.matrix_norm((eval_model.weight))**2)
+                #t2 = self.lambdaD*(torch.linalg.matrix_norm((self.model.weight))**2)
                 t3 = self.lambdaF*(torch.linalg.matrix_norm((self.F))**2)
                 loss = t1 + t2 + t3
 
@@ -380,19 +390,30 @@ class Client(object):
         return running_test_loss, num_samples
     
 
-    def train_metrics(self):
+    def train_metrics(self, saved_model=None, model_obj=None):
         '''Kai's docs: This function is for evaluating the model (on the training data for some reason) during training
         Note that model.eval() is called so params aren't updated.'''
-
         if self.verbose:
             print("Client train_metrics()")
+
+        if model_obj != None:
+            eval_model = model_obj
+        elif saved_model != None:
+            #self.model = self.load_model(saved_model)
+            eval_model = self.load_model(saved_model)
+        else:
+            eval_model = self.model
+        #self.model.to(self.device)
+        #eval_model.to(self.device) # Idk if this needs to be run or not...
+
         # ITS GOTTA BE SUPER INEFFIECIENT TO RECREATE A NEW TL FOR EACH CLIENT EACH ROUND FOR TRAIN EVAL...
         trainloader = self.load_train_data(eval=True)
         # self.model = self.load_model('model')
         # self.model.to(self.device)
         #self.simulate_data_streaming(trainloader) 
         # ^^ idk if i need to be doing this ... this should already be run in the actual training process
-        self.model.eval()
+        eval_model.eval()
+        #self.model.eval()
 
         train_num = 0
         losses = 0
@@ -407,13 +428,15 @@ class Client(object):
                 y = y.to(self.device)
 
                 self.simulate_data_streaming_xy(x, y)
-                vel_pred = self.model(torch.transpose(self.F, 0, 1)) 
+                vel_pred = eval_model(torch.transpose(self.F, 0, 1)) 
+                #vel_pred = self.model(torch.transpose(self.F, 0, 1)) 
                 if vel_pred.shape[0]!=self.y_ref.shape[0]:
                     tvel_pred = torch.transpose(vel_pred, 0, 1)
                 else:
                     tvel_pred = vel_pred
                 t1 = self.loss_func(tvel_pred, self.y_ref)
-                t2 = self.lambdaD*(torch.linalg.matrix_norm((self.model.weight))**2)
+                t2 = self.lambdaD*(torch.linalg.matrix_norm((eval_model.weight))**2)
+                #t2 = self.lambdaD*(torch.linalg.matrix_norm((self.model.weight))**2)
                 t3 = self.lambdaF*(torch.linalg.matrix_norm((self.F))**2)
                 loss = t1 + t2 + t3
                 if self.verbose:

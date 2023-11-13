@@ -455,7 +455,11 @@ class Server(object):
             prev_live_num_samples = []
             prev_live_IDs = []
         for c in self.clients:
-            tl, ns = c.test_metrics()
+            if (self.sequential and c.ID in self.static_client_IDs):
+                tl, ns = c.test_metrics(model_obj=self.global_model)
+            else:
+                tl, ns = c.test_metrics()
+
             if (not self.sequential) or (self.sequential and c.ID in self.static_client_IDs):
                 # This is the ordinary nonseq sim case
                 tot_loss.append(tl*1.0)
@@ -511,7 +515,10 @@ class Server(object):
             prev_live_num_samples = []
             prev_live_IDs = []
         for c in self.clients:
-            tl, ns = c.train_metrics()
+            if (self.sequential and c.ID in self.static_client_IDs):
+                tl, ns = c.train_metrics(model_obj=self.global_model)
+            else:
+                tl, ns = c.train_metrics()
             if (not self.sequential) or (self.sequential and c.ID in self.static_client_IDs):
                 # This is the ordinary nonseq sim case, and also for static seq clients
                 tot_loss.append(tl*1.0)
@@ -562,7 +569,7 @@ class Server(object):
             #test_loss = sum(stats[2])*1.0  # Used to return test_acc, test_num, auc; idk what it is summing tho (or why auc wouldn't be a scalar...)
             test_loss = stats[2]#*1.0  #It's already a float...
 
-            if acc == None:
+            if acc == None:  # acc will always be None for regression
                 # Why does this use len instead of num_samples lol why am I even saving it
                 avg_test_loss = sum(test_loss)/len(test_loss)
                 self.rs_test_loss.append(avg_test_loss)
@@ -592,6 +599,7 @@ class Server(object):
             if loss == None:
                 avg_train_loss = sum(train_loss)/len(train_loss)
                 self.rs_train_loss.append(avg_train_loss)
+                # I'm not even recording the training seq metrics right now... don't really care
             else:
                 print("Server evaluate loss!=None!")
                 loss.append(train_loss)
@@ -630,6 +638,7 @@ class Server(object):
                 raise NotImplementedError
         return True
 
+
     # No idea what this does, I don't think it is used...
     def call_dlg(self, R):
         raise ValueError("call_dlg has not been developed yet")
@@ -662,15 +671,14 @@ class Server(object):
             if d is not None:
                 psnr_val += d
                 cnt += 1
-            
             # items.append((client_model, origin_grad, target_inputs))
                 
         if cnt > 0:
             print('PSNR value is {:.2f} dB'.format(psnr_val / cnt))
         else:
             print('PSNR error')
-
         # self.save_item(items, f'DLG_{R}')
+
 
     def set_new_clients(self, clientObj):
         if self.num_new_clients==0:
@@ -691,6 +699,7 @@ class Server(object):
                     self.clients.append(client)
                     #client.load_test_data(client_init=True)
 
+
     # fine-tuning on new clients
     def fine_tuning_new_clients(self):
         print("fine_tuning_new_clients USES GLOBAL MODEL!!!")
@@ -699,8 +708,12 @@ class Server(object):
             for _ in range(self.fine_tuning_epoch):
                 client.train()
 
+
     # evaluating on new clients
     def test_metrics_new_clients(self):
+        # UPDATE THIS FOR SEQUENTIAL????
+        # What's the diff even between this and my sequential?
+        ## My seq tests on live and prev clients, this is testing on entirely new
         num_samples = []
         tot_loss = []
         for c in self.clients:
