@@ -262,9 +262,9 @@ class Server(object):
     def receive_models(self):
         assert (len(self.selected_clients) > 0)
 
-        # I think this builds in clients dropping, which I have turned off
+        # This builds in clients dropping, which I have turned off by default
         active_clients = random.sample(
-            self.selected_clients, int((1-self.client_drop_rate) * self.num_join_clients))
+            self.selected_clients, ceil((1-self.client_drop_rate) * self.num_join_clients))
 
         self.uploaded_IDs = []
         self.uploaded_weights = []
@@ -276,12 +276,14 @@ class Server(object):
                         client.send_time_cost['total_cost'] / client.send_time_cost['num_rounds']
             except ZeroDivisionError:
                 client_time_cost = 0
-            # Idk why they only consider clients below a time threshold... trying to ignore slow clients? Idk
+            # Idk why they only consider clients below a time threshold... trying to ignore slow clients?
             if client_time_cost <= self.time_threshold:
                 tot_samples += client.train_samples
                 self.uploaded_IDs.append(client.ID)
                 self.uploaded_weights.append(client.train_samples)  # What is going on here
                 self.uploaded_models.append(client.model)
+            # Update client's last global round that it was included (eg to this round)
+            client.last_global_round = self.global_round
         for i, w in enumerate(self.uploaded_weights):
             self.uploaded_weights[i] = w / tot_samples
 
@@ -509,12 +511,9 @@ class Server(object):
             prev_live_num_samples = []
             prev_live_IDs = []
         for c in self.clients:
-            tl, ns = c.test_metrics()
+            tl, ns = c.train_metrics()
             if (not self.sequential) or (self.sequential and c.ID in self.static_client_IDs):
-                # This is the ordinary nonseq sim case
-                ## Why is it setting it to this if this is in train_metrics not training... 
-                ## ^ Did I fix this / add it back in elsewhere? ...
-                #c.last_global_round = self.global_round
+                # This is the ordinary nonseq sim case, and also for static seq clients
                 tot_loss.append(tl*1.0)
                 num_samples.append(ns)
                 IDs.append(c.ID)
