@@ -250,7 +250,7 @@ def parse_args():
                         help="Local learning rate")
     parser.add_argument('-ld', "--learning_rate_decay", type=bool, default=False)
     parser.add_argument('-ldg', "--learning_rate_decay_gamma", type=float, default=0.99)
-    parser.add_argument('-gr', "--global_rounds", type=int, default=100)  # KAI: Originally was 2000
+    parser.add_argument('-gr', "--global_rounds", type=int, default=5)  # KAI: Originally was 2000
     parser.add_argument('-ls', "--local_epochs", type=int, default=3, 
                         help="How many times a client should iterate through their current update dataset.")  
     parser.add_argument('-ngradsteps', "--num_gradient_steps", type=int, default=1, 
@@ -526,6 +526,7 @@ if __name__ == "__main__":
 
     if args.run:
         server_obj = run(args)
+        #server_obj.save_results(save_cost_func_comps=True, save_gradient=True)
     
     # print(prof.key_averages().table(sort_by="cpu_time_total", row_limit=20))
     # print(f"\nTotal time cost: {round(time.time()-total_start, 2)}s.")

@@ -334,15 +334,12 @@ class Client(object):
         '''Kai's docs: This function is for evaluating the model (on the testing data) during training
         Note that model.eval() is called so params aren't updated.'''
 
-        
         if model_obj != None:
             eval_model = model_obj
         elif saved_model != None:
-            #self.model = self.load_model(saved_model)
             eval_model = self.load_model(saved_model)
         else:
             eval_model = self.model
-        #self.model.to(self.device)
         eval_model.to(self.device)
 
         testloaderfull = self.load_test_data()
@@ -351,7 +348,6 @@ class Client(object):
         # Maybe it doesnt matter as much since I'm not doing classification, so bias wouldn't be subject level but rather time/task-progress level
         #self.simulate_data_streaming(testloaderfull)
         eval_model.eval()
-        #self.model.eval()
 
         running_test_loss = 0
         num_samples = 0
@@ -368,7 +364,6 @@ class Client(object):
                 self.simulate_data_streaming_xy(x, y)
                 # D@s = predicted velocity
                 vel_pred = eval_model(torch.transpose(self.F, 0, 1))
-                #vel_pred = self.model(torch.transpose(self.F, 0, 1)) 
                 
                 if vel_pred.shape[0]!=self.y_ref.shape[0]:
                     #print("TRANSPOSING")
@@ -377,7 +372,6 @@ class Client(object):
                     tvel_pred = vel_pred
                 t1 = self.loss_func(tvel_pred, self.y_ref)
                 t2 = self.lambdaD*(torch.linalg.matrix_norm((eval_model.weight))**2)
-                #t2 = self.lambdaD*(torch.linalg.matrix_norm((self.model.weight))**2)
                 t3 = self.lambdaF*(torch.linalg.matrix_norm((self.F))**2)
                 loss = t1 + t2 + t3
 

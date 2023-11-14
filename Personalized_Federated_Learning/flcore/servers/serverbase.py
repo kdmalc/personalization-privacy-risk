@@ -121,6 +121,15 @@ class Server(object):
         #self.rs_train_loss = []
         #self.prev_pers_model_directory = args.prev_pers_model_directory
 
+        # Dataset is one of the preceeding directory names
+        # get current date and time
+        current_datetime = datetime.now().strftime("%m-%d_%H-%M")
+        # convert datetime obj to string
+        self.str_current_datetime = str(current_datetime)
+        self.trial_result_path = self.result_path + self.str_current_datetime + "_" + self.algorithm
+        if not os.path.exists(self.trial_result_path):
+            os.makedirs(self.trial_result_path)
+
 
     def set_clients(self, clientObj):  
         if self.verbose:
@@ -335,22 +344,21 @@ class Server(object):
     
         
     def save_results(self, personalized=False, save_cost_func_comps=False, save_gradient=False):
-        # Dataset is one of the preceeding directory names
-        algo = self.algorithm
-        # get current date and time
-        current_datetime = datetime.now().strftime("%m-%d_%H-%M")
-        # convert datetime obj to string
-        str_current_datetime = str(current_datetime)
-
-        self.trial_result_path = self.result_path + str_current_datetime + "_" + algo
-        if not os.path.exists(self.trial_result_path):
-            os.makedirs(self.trial_result_path)
-        
-        self.model_dir_path = os.path.join("Personalized_Federated_Learning\\models", self.dataset, self.algorithm, str_current_datetime)
+        # Save Server Global Model
+        self.model_dir_path = os.path.join("Personalized_Federated_Learning\\models", self.dataset, self.algorithm, self.str_current_datetime)
         if not os.path.exists(self.model_dir_path):
             os.makedirs(self.model_dir_path)
         model_file_path = os.path.join(self.model_dir_path, self.algorithm + "_server_global.pt")
         torch.save(self.global_model, model_file_path)
+
+        # Save client's local/personalized models
+        if self.personalized_algo_bool:
+            client_algo_type = "Pers"
+        else:
+            client_algo_type = "Local"
+        client_model_path = os.path.join("Personalized_Federated_Learning\\models", self.dataset, client_algo_type, self.str_current_datetime)
+        for client in self.clients:
+            client.save_item(client.model, 'local_client_model', item_path=client_model_path)
 
         if personalized==True:
             pers_model_file_path = os.path.join(self.model_dir_path, self.algorithm + "_client_pers_model")
@@ -393,7 +401,7 @@ class Server(object):
 
         if (personalized==True and ((len(self.rs_test_loss_per))!=0)) or (personalized==False and ((len(self.rs_test_loss))!=0)):
             # Why would this run if run_train_metrics is False...
-            algo = algo + "_" + self.goal# + "_" + str(self.times)  # IDk what self.times represents...
+            algo = self.algorithm + "_" + self.goal# + "_" + str(self.times)  # IDk what self.times represents...
             file_path = self.trial_result_path + r"\{}.h5".format(algo)
             print("File path: " + file_path)
             #for client in self.clients:
