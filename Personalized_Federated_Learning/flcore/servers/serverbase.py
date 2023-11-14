@@ -754,6 +754,7 @@ class Server(object):
         plt.xlabel("Iteration Number")
         plt.ylabel("Loss")
         plt.legend()
-        plt.show()
         plt.savefig(self.trial_result_path + '\\TrainTestLossCurves.png', format='png')
+        plt.show()
+        
     
