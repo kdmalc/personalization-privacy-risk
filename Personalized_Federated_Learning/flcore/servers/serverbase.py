@@ -376,7 +376,7 @@ class Server(object):
             f"condition_number_lst = {self.condition_number_lst}\n"
             f"total effective clients = train_subj_IDs*condition_number_lst = {self.num_clients}\n"
             f"device_channels = {self.device_channels}\n"
-            "\nMODEL HYPERPARAMETERS\n"
+            "\n\nMODEL HYPERPARAMETERS\n"
             f"lambdaF = {self.lambdaF}\n"
             f"lambdaD = {self.lambdaD}\n"
             f"lambdaE = {self.lambdaE}\n"
@@ -388,14 +388,20 @@ class Server(object):
             f"learning_rate_decay_gamma = {self.learning_rate_decay_gamma}\n"
             f"pca_channels = {self.pca_channels}\n"
             f"normalize_data = {self.normalize_data}\n"
-            "\nFEDERATED LEARNING PARAMS\n"
+            "\n\nFEDERATED LEARNING PARAMS\n"
             f"starting_update = {self.args.starting_update}\n"
             f"local_round_threshold = {self.local_round_threshold}\n"
-            "\nTESTING\n"
+            "\n\nTESTING\n"
             f"test_split_fraction = {self.test_split_fraction}\n"
             f"test_split_each_update = {self.test_split_each_update}\n"
             f"test_split_users = {self.test_split_users}\n"
-            f"run_train_metrics = {self.run_train_metrics}")
+            f"run_train_metrics = {self.run_train_metrics}\n"
+            "\n\nSEQUENTIAL\n"
+            f"sequential = {self.sequential}\n"
+            f"live_client_IDs_queue = {self.live_client_IDs_queue}\n"
+            f"static_client_IDs = {self.static_client_IDs}\n"
+            f"num_liveseq_rounds_per_seqclient = {self.num_liveseq_rounds_per_seqclient}\n"
+            f"prev_model_directory = {self.prev_model_directory}")
         with open(self.trial_result_path+r'\param_log.txt', 'w') as file:
             file.write(param_log_str)
 
@@ -415,6 +421,9 @@ class Server(object):
                 else:
                     hf.create_dataset('rs_test_loss', data=self.rs_test_loss)
                     hf.create_dataset('rs_train_loss', data=self.rs_train_loss)
+                if self.sequential:
+                    hf.create_dataset('curr_live_rs_test_loss', data=self.curr_live_rs_test_loss)
+                    hf.create_dataset('prev_live_rs_test_loss', data=self.prev_live_rs_test_loss)
                 if save_cost_func_comps:
                     #print(f'cost_func_comps_log: \n {self.cost_func_comps_log}\n')                   
                     G1 = hf.create_group('cost_func_tuples_by_client')

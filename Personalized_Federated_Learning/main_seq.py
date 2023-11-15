@@ -100,6 +100,24 @@ def run(args):
 
 def parse_args():
     parser = argparse.ArgumentParser()
+
+    # THINGS I AM CURRENTLY CHANGING A LOT
+    parser.add_argument('-gr', "--global_rounds", type=int, default=100)  # KAI: Originally was 2000
+    parser.add_argument('-seq', "--sequential", type=bool, default=True,
+                        help="Boolean toggle for whether sequential mode is on (for now, mixing current client with previously trained models)")
+    parser.add_argument('-uppm', "--use_prev_pers_model", type=bool, default=False,
+                        help="Boolean toggle for whether to use previously trained personalized models for the client inits")
+    parser.add_argument('-lcidsq', "--live_client_IDs_queue", type=str, default=str(['METACPHS_S106','METACPHS_S107','METACPHS_S118','METACPHS_S119']),
+                        help="List of current subject ID strings (models will be trained and saved) --> THEY ARE QUEUED SO ONLY ONE WILL TRAIN AT A TIME")
+    parser.add_argument('-nlsrpsq', "--num_liveseq_rounds_per_seqclient", type=int, default=25,
+                        help="Number of training rounds to do in a row on a single live (seq) client before advancing to the next seq client.")    
+    parser.add_argument('-scids', "--static_client_IDs", type=str, default=str(['METACPHS_S108','METACPHS_S109','METACPHS_S110','METACPHS_S111','METACPHS_S112','METACPHS_S113','METACPHS_S114','METACPHS_S115','METACPHS_S116','METACPHS_S117']),
+                        help="List of previously trained subject ID strings (models will be uploaded, used in training, but never updated)")
+    parser.add_argument('-alltrsids', "--train_subj_IDs", type=str, default=str(['METACPHS_S106', 'METACPHS_S107', 'METACPHS_S108', 'METACPHS_S109', 'METACPHS_S110', 'METACPHS_S111', 'METACPHS_S112', 'METACPHS_S113', 'METACPHS_S114', 'METACPHS_S115', 'METACPHS_S116', 'METACPHS_S117', 'METACPHS_S118', 'METACPHS_S119']),
+                        help="Subject ID Codes for ALL users to be in training (static and live). Also used in non-seq.")
+    parser.add_argument('-pmd', "--prev_model_directory", type=str, default="C:\\Users\\kdmen\\Desktop\\Research\\personalization-privacy-risk\\Personalized_Federated_Learning\\models\\cphs\\FedAvg\\11-10_16-14\\FedAvg_server_global.pt",
+                        help="Directory name containing all the prev clients models") 
+
     # general
     parser.add_argument('-go', "--goal", type=str, default="test", 
                         help="The goal for this experiment")
@@ -116,7 +134,6 @@ def parse_args():
                         help="Local learning rate")
     parser.add_argument('-ld', "--learning_rate_decay", type=bool, default=False)
     parser.add_argument('-ldg', "--learning_rate_decay_gamma", type=float, default=0.99)
-    parser.add_argument('-gr', "--global_rounds", type=int, default=1500)  # KAI: Originally was 2000
     parser.add_argument('-ls', "--local_epochs", type=int, default=3, 
                         help="How many times a client should iterate through their current update dataset.")
     parser.add_argument('-ngradsteps', "--num_gradient_steps", type=int, default=1, 
@@ -237,23 +254,9 @@ def parse_args():
     parser.add_argument('-rtm', "--run_train_metrics", type=bool, default=True,
                         help="Evaluate every client on the training data")  # I don't think this matters for local, since every client is being run anyways?
     ## SEQUENTIAL TRAINING PARAMS
-    parser.add_argument('-seq', "--sequential", type=bool, default=True,
-                        help="Boolean toggle for whether sequential mode is on (for now, mixing current client with previously trained models)")
-    parser.add_argument('-uppm', "--use_prev_pers_model", type=bool, default=False,
-                        help="Boolean toggle for whether to use previously trained personalized models for the client inits")
-    parser.add_argument('-lcidsq', "--live_client_IDs_queue", type=str, default=str(['METACPHS_S106','METACPHS_S107','METACPHS_S118','METACPHS_S119']),
-                        help="List of current subject ID strings (models will be trained and saved) --> THEY ARE QUEUED SO ONLY ONE WILL TRAIN AT A TIME")
-    parser.add_argument('-nlsrpsq', "--num_liveseq_rounds_per_seqclient", type=int, default=300,
-                        help="Number of training rounds to do in a row on a single live (seq) client before advancing to the next seq client.")    
-    parser.add_argument('-scids', "--static_client_IDs", type=str, default=str(['METACPHS_S108','METACPHS_S109','METACPHS_S110','METACPHS_S111','METACPHS_S112','METACPHS_S113','METACPHS_S114','METACPHS_S115','METACPHS_S116','METACPHS_S117']),
-                        help="List of previously trained subject ID strings (models will be uploaded, used in training, but never updated)")
     # This isn't implemented yet but is functionally true (rn have 1 live and 4 total thus 3 static for backweighting) 11/12/23
     parser.add_argument('-svlweight', "--static_vs_live_weighting", type=float, default=0.75,
                         help="Ratio between number of static clients and live clients present in each training round. Set completely arbitrarily for now.")
-    parser.add_argument('-alltrsids', "--train_subj_IDs", type=str, default=str(['METACPHS_S106', 'METACPHS_S107', 'METACPHS_S108', 'METACPHS_S109', 'METACPHS_S110', 'METACPHS_S111', 'METACPHS_S112', 'METACPHS_S113', 'METACPHS_S114', 'METACPHS_S115', 'METACPHS_S116', 'METACPHS_S117', 'METACPHS_S118', 'METACPHS_S119']),
-                        help="Subject ID Codes for ALL users to be in training (static and live). Also used in non-seq.")
-    parser.add_argument('-pmd', "--prev_model_directory", type=str, default="C:\\Users\\kdmen\\Desktop\\Research\\personalization-privacy-risk\\Personalized_Federated_Learning\\models\\cphs\\FedAvg\\11-10_16-14\\FedAvg_server_global.pt",
-                        help="Directory name containing all the prev clients models") 
     args = parser.parse_args()
 
     args.condition_number_lst = convert_cmd_line_str_lst_to_type_lst(args.condition_number_lst, int)
