@@ -105,7 +105,7 @@ def parse_args():
     one_hundred_run = False
     long_run = False
     if short_run:
-        my_gr = 10
+        my_gr = 15 #10
         my_nlsrpsq = 5
     elif one_hundred_run:
         my_gr = 100

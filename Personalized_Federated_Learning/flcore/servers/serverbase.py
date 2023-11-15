@@ -208,7 +208,7 @@ class Server(object):
         
         if self.sequential:
             # Select first client in live_client_IDs_queue if this is the first round
-            if self.global_round<2: # I don't remember if it is already incremented to 1 at this point
+            if self.global_round==0: # I don't remember if it is already incremented to 1 at this point
                 # Could probably fold this into the modulus check below...
                 print(f"SB sel_cli: Global round {self.global_round}: setting first live client")
                 # List of client objects which match the current live_indices (presumably live_idx=0)
@@ -238,6 +238,14 @@ class Server(object):
                 for c in self.live_clients:
                     if c.ID in self.unseen_live_client_IDs:
                         self.unseen_live_client_IDs.remove(c.ID)
+
+                #if verbose:
+                print()
+                print("UPDATING TO NEW CLIENT!!!")
+                print(f"unseen_live_client_IDs: {self.unseen_live_client_IDs}")
+                print(f"live_clients: {self.live_clients[0].ID}")
+                print(f"prev_live_client_IDs: {self.prev_live_client_IDs}")
+                print()
                         
             assert(len(self.live_clients)==1)
             
