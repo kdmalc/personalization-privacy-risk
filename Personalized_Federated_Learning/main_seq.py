@@ -101,15 +101,30 @@ def run(args):
 def parse_args():
     parser = argparse.ArgumentParser()
 
+    short_run = True
+    one_hundred_run = False
+    long_run = False
+    if short_run:
+        my_gr = 10
+        my_nlsrpsq = 5
+    elif one_hundred_run:
+        my_gr = 100
+        my_nlsrpsq = 25
+    elif long_run:
+        my_gr = 500
+        my_nlsrpsq = 100
+    else:
+        raise ValueError("Set run length type bool")
+
     # THINGS I AM CURRENTLY CHANGING A LOT
-    parser.add_argument('-gr', "--global_rounds", type=int, default=100)  # KAI: Originally was 2000
+    parser.add_argument('-gr', "--global_rounds", type=int, default=my_gr)  # KAI: Originally was 2000
     parser.add_argument('-seq', "--sequential", type=bool, default=True,
                         help="Boolean toggle for whether sequential mode is on (for now, mixing current client with previously trained models)")
     parser.add_argument('-uppm', "--use_prev_pers_model", type=bool, default=False,
                         help="Boolean toggle for whether to use previously trained personalized models for the client inits")
     parser.add_argument('-lcidsq', "--live_client_IDs_queue", type=str, default=str(['METACPHS_S106','METACPHS_S107','METACPHS_S118','METACPHS_S119']),
                         help="List of current subject ID strings (models will be trained and saved) --> THEY ARE QUEUED SO ONLY ONE WILL TRAIN AT A TIME")
-    parser.add_argument('-nlsrpsq', "--num_liveseq_rounds_per_seqclient", type=int, default=25,
+    parser.add_argument('-nlsrpsq', "--num_liveseq_rounds_per_seqclient", type=int, default=my_nlsrpsq,
                         help="Number of training rounds to do in a row on a single live (seq) client before advancing to the next seq client.")    
     parser.add_argument('-scids', "--static_client_IDs", type=str, default=str(['METACPHS_S108','METACPHS_S109','METACPHS_S110','METACPHS_S111','METACPHS_S112','METACPHS_S113','METACPHS_S114','METACPHS_S115','METACPHS_S116','METACPHS_S117']),
                         help="List of previously trained subject ID strings (models will be uploaded, used in training, but never updated)")

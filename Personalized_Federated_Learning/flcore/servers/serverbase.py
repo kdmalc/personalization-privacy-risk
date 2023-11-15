@@ -116,6 +116,8 @@ class Server(object):
         self.use_prev_pers_model = args.use_prev_pers_model
         self.curr_live_rs_test_loss = []
         self.prev_live_rs_test_loss = []
+        self.unseen_live_rs_test_loss = []
+        self.unseen_live_client_IDs = copy.deepcopy(self.live_client_IDs_queue)
         self.prev_live_client_IDs = []
         # Idk if I care about the train loss  
         #self.rs_train_loss = []
@@ -211,8 +213,16 @@ class Server(object):
                 print(f"SB sel_cli: Global round {self.global_round}: setting first live client")
                 # List of client objects which match the current live_indices (presumably live_idx=0)
                 self.live_clients = [client_obj for client_obj in self.clients if client_obj.ID==self.live_client_IDs_queue[self.live_idx]]
+
+                # Remove the new live client from the unseen log
+                for c in self.live_clients:
+                    if c.ID in self.unseen_live_client_IDs:
+                        self.unseen_live_client_IDs.remove(c.ID)
+
             elif self.global_round%self.num_liveseq_rounds_per_seqclient==0:
                 # ^Check if that client has been trained enough to switch
+
+                # Now increment the client index
                 self.live_idx += 1
                 if self.live_idx == len(self.live_client_IDs_queue):
                     self.live_idx = 0
@@ -223,6 +233,12 @@ class Server(object):
                     self.prev_live_client_IDs.append(finished_cli_ID)
                 # Now select the next seq live client
                 self.live_clients = [client_obj for client_obj in self.clients if client_obj.ID==self.live_client_IDs_queue[self.live_idx]]
+
+                # Remove the new live client from the unseen log
+                for c in self.live_clients:
+                    if c.ID in self.unseen_live_client_IDs:
+                        self.unseen_live_client_IDs.remove(c.ID)
+                        
             assert(len(self.live_clients)==1)
             
             if num_join_clients > len(self.live_clients):
@@ -424,6 +440,7 @@ class Server(object):
                 if self.sequential:
                     hf.create_dataset('curr_live_rs_test_loss', data=self.curr_live_rs_test_loss)
                     hf.create_dataset('prev_live_rs_test_loss', data=self.prev_live_rs_test_loss)
+                    hf.create_dataset('unseen_live_rs_test_loss', data=self.unseen_live_rs_test_loss)
                 if save_cost_func_comps:
                     #print(f'cost_func_comps_log: \n {self.cost_func_comps_log}\n')                   
                     G1 = hf.create_group('cost_func_tuples_by_client')
@@ -471,6 +488,11 @@ class Server(object):
             prev_live_loss = []
             prev_live_num_samples = []
             prev_live_IDs = []
+
+            unseen_live_loss = []
+            unseen_live_num_samples = []
+            unseen_live_IDs = []
+
         for c in self.clients:
             #if (self.sequential and c.ID in self.static_client_IDs):
             if self.sequential:
@@ -500,6 +522,10 @@ class Server(object):
                 prev_live_loss.append(tl*1.0)
                 prev_live_num_samples.append(ns)
                 prev_live_IDs.append(c.ID)
+            elif self.sequential and c.ID in self.unseen_live_client_IDs:
+                unseen_live_loss.append(tl*1.0)
+                unseen_live_num_samples.append(ns)
+                unseen_live_IDs.append(c.ID)
             elif self.sequential and c.ID in self.live_client_IDs_queue:
                 # Eg it hasn't been trained/called yet
                 pass
@@ -509,13 +535,20 @@ class Server(object):
                 raise ValueError("This isn't supposed to run...")
         #IDs = [c.ID for c in self.clients]
         if self.sequential:
-            seq_metrics = [curr_live_loss, curr_live_num_samples, curr_live_IDs, prev_live_loss, prev_live_num_samples, prev_live_IDs]
+            seq_metrics = [curr_live_loss, curr_live_num_samples, curr_live_IDs, prev_live_loss, prev_live_num_samples, prev_live_IDs, unseen_live_loss, unseen_live_num_samples, unseen_live_IDs]
         else:
             seq_metrics = None
         return IDs, num_samples, tot_loss, seq_metrics
 
 
     def train_metrics(self):
+        '''
+        Never added unseen training loss to outputs returned... don't really care right now.
+        Presumably the train and test on the unseen clients is the same?
+        Really ought to switch to testing on entirely new clients...
+        This is a problem that is unaddressed with test_metrics() as well...
+        '''
+
         # I don't really like that this is here...
         self.global_round += 1
         
@@ -604,6 +637,8 @@ class Server(object):
                         self.curr_live_rs_test_loss.append(sum(seq_stats[0])/len(seq_stats[0]))
                     if len(seq_stats[3])!=0:
                         self.prev_live_rs_test_loss.append(sum(seq_stats[3])/len(seq_stats[3]))
+                    if len(seq_stats[6])!=0:
+                        self.unseen_live_rs_test_loss.append(sum(seq_stats[6])/len(seq_stats[6]))
             else:
                 acc.append(test_loss)
 
@@ -754,13 +789,21 @@ class Server(object):
             plt.plot(range(len(self.rs_train_loss)), self.rs_train_loss, label='Train')
         if plot_seq==True and self.sequential==True:
             # cl should be the same length
-            # pl should start late tho, I believe
+            ## Yah I have no idea why I need/have an offset here, it should always be being written to...
             cl_offset_diff = len(self.rs_test_loss) - len(self.curr_live_rs_test_loss)
-            pl_offset_diff = len(self.rs_test_loss) - len(self.prev_live_rs_test_loss)
             cl_x_axis = np.array(range(len(self.curr_live_rs_test_loss))) + cl_offset_diff
+
+            # pl should start late tho, I believe
+            pl_offset_diff = len(self.rs_test_loss) - len(self.prev_live_rs_test_loss)
             pl_x_axis = np.array(range(len(self.prev_live_rs_test_loss))) + pl_offset_diff
-            plt.plot(cl_x_axis, self.curr_live_rs_test_loss, label='Current Live Testing')
-            plt.plot(pl_x_axis, self.prev_live_rs_test_loss, label='Previous Live Testing')
+
+            # ul should be shorter but it just isn't written to at the end I think? 
+            ## So theoretically I shoudln't have to do anything at all here...
+            ul_x_axis = np.array(range(len(self.unseen_live_rs_test_loss)))
+
+            plt.plot(cl_x_axis, self.curr_live_rs_test_loss, label='Current Testing')
+            plt.plot(pl_x_axis, self.prev_live_rs_test_loss, label='Previous Testing')#, width=5, alpha=0.5)
+            plt.plot(ul_x_axis, self.unseen_live_rs_test_loss, label='Unseen Testing')
         if my_title is None:
             plt.title("Train/test loss")
         else:
