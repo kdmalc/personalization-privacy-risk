@@ -101,7 +101,7 @@ def run(args):
 def parse_args():
     parser = argparse.ArgumentParser()
 
-    short_run = True
+    short_run = False
     one_hundred_run = False
     long_run = False
     if short_run:
@@ -111,8 +111,8 @@ def parse_args():
         my_gr = 100
         my_nlsrpsq = 25
     elif long_run:
-        my_gr = 500
-        my_nlsrpsq = 100
+        my_gr = 1500
+        my_nlsrpsq = 400
     else:
         raise ValueError("Set run length type bool")
 
@@ -218,6 +218,8 @@ def parse_args():
     # SECTION: Kai's additional args
     parser.add_argument('-run', "--run", type=bool, default=True,
                         help="If False, will set up the arg parser and args variable, but won't run")
+    parser.add_argument('-scll', "--save_client_loss_logs", type=bool, default=True,
+                        help="Boolean determing whether or not to save each clients testing loss log")
     # PCA should probably be broken into 2 since 64 channels is device specific
     parser.add_argument('-pca_ch', "--pca_channels", type=int, default=64, #was 10...
                         help="Number of principal components. 64 means do not use any PCA")

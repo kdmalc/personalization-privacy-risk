@@ -89,7 +89,10 @@ class Client(object):
         self.ndp = args.num_decimal_points
         
         self.loss_func = CPHSLoss2(lambdaF=self.lambdaF, lambdaD=self.lambdaD, lambdaE=self.lambdaE)
+        # This is the training loss log written to during cphs_subrountine
         self.loss_log = []
+        # Testing loss log written to directly within client.test_metrics()
+        self.client_testing_log = []
         self.cost_func_comps_log = []
         self.gradient_norm_log = []
         #self.running_epoch_loss = []
@@ -380,7 +383,7 @@ class Client(object):
                 if self.verbose:
                     print(f"batch {i}, loss {test_loss:0,.5f}")
                 num_samples += x.size()[0]
-            
+        self.client_testing_log.append(sum(running_test_loss) / len(running_test_loss))   
         return running_test_loss, num_samples
     
 

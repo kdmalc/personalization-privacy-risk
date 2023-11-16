@@ -45,6 +45,7 @@ class Server(object):
         self.uploaded_IDs = []
         self.uploaded_models = []
 
+        self.save_client_loss_logs = args.save_client_loss_logs
         self.rs_test_loss = []
         self.rs_train_loss = []
         # Can't save dicts to HD5F files so use nested lists for now I guess
@@ -449,6 +450,14 @@ class Server(object):
                     hf.create_dataset('curr_live_rs_test_loss', data=self.curr_live_rs_test_loss)
                     hf.create_dataset('prev_live_rs_test_loss', data=self.prev_live_rs_test_loss)
                     hf.create_dataset('unseen_live_rs_test_loss', data=self.unseen_live_rs_test_loss)
+                if self.save_client_loss_logs:
+                    # Is there some way to save all of these to a group...
+                    group = hf.create_group('client_testing_logs')
+                    for c in self.clients:
+                        dataset_name = c.ID
+                        data = c.client_testing_log  # Replace this with your actual data
+                        group.create_dataset(dataset_name, data=data)
+                    pass
                 if save_cost_func_comps:
                     #print(f'cost_func_comps_log: \n {self.cost_func_comps_log}\n')                   
                     G1 = hf.create_group('cost_func_tuples_by_client')
