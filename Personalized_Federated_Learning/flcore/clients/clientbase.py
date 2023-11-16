@@ -10,7 +10,7 @@ from torch.utils.data import DataLoader
 
 from sklearn.decomposition import PCA
 from utils.processing_funcs import normalize_2D_tensor
-from utils.custom_loss_class2 import CPHSLoss2
+from utils.custom_loss_class import CPHSLoss
 from utils.emg_dataset_class import *
 
 
@@ -88,7 +88,7 @@ class Client(object):
         self.run_train_metrics = args.run_train_metrics
         self.ndp = args.num_decimal_points
         
-        self.loss_func = CPHSLoss2(lambdaF=self.lambdaF, lambdaD=self.lambdaD, lambdaE=self.lambdaE)
+        self.loss_func = CPHSLoss(lambdaF=self.lambdaF, lambdaD=self.lambdaD, lambdaE=self.lambdaE)
         # This is the training loss log written to during cphs_subrountine
         self.loss_log = []
         # Testing loss log written to directly within client.test_metrics()
@@ -383,7 +383,7 @@ class Client(object):
                 if self.verbose:
                     print(f"batch {i}, loss {test_loss:0,.5f}")
                 num_samples += x.size()[0]
-        self.client_testing_log.append(sum(running_test_loss) / len(running_test_loss))   
+        self.client_testing_log.append(running_test_loss / num_samples)   
         return running_test_loss, num_samples
     
 

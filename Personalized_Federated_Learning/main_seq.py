@@ -101,7 +101,7 @@ def run(args):
 def parse_args():
     parser = argparse.ArgumentParser()
 
-    short_run = False
+    short_run = True
     one_hundred_run = False
     long_run = False
     if short_run:
@@ -130,13 +130,13 @@ def parse_args():
                         help="List of previously trained subject ID strings (models will be uploaded, used in training, but never updated)")
     parser.add_argument('-alltrsids', "--train_subj_IDs", type=str, default=str(['METACPHS_S106', 'METACPHS_S107', 'METACPHS_S108', 'METACPHS_S109', 'METACPHS_S110', 'METACPHS_S111', 'METACPHS_S112', 'METACPHS_S113', 'METACPHS_S114', 'METACPHS_S115', 'METACPHS_S116', 'METACPHS_S117', 'METACPHS_S118', 'METACPHS_S119']),
                         help="Subject ID Codes for ALL users to be in training (static and live). Also used in non-seq.")
-    parser.add_argument('-pmd', "--prev_model_directory", type=str, default="C:\\Users\\kdmen\\Desktop\\Research\\personalization-privacy-risk\\Personalized_Federated_Learning\\models\\cphs\\FedAvg\\11-10_16-14\\FedAvg_server_global.pt",
+    parser.add_argument('-pmd', "--prev_model_directory", type=str, default="C:\\Users\\kdmen\\Desktop\\Research\\personalization-privacy-risk\\Personalized_Federated_Learning\\models\\cphs\\FedAvg\\FedAvg_LiveExclusion\\FedAvg_server_global.pt",
                         help="Directory name containing all the prev clients models") 
     parser.add_argument('-lrt', "--local_round_threshold", type=int, default=50,
                         help="Number of communication rounds per client until a client will advance to the next batch of streamed data")
     
 
-    
+
 
     # general
     parser.add_argument('-go', "--goal", type=str, default="test", 
