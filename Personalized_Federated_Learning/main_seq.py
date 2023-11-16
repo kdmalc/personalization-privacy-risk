@@ -132,6 +132,11 @@ def parse_args():
                         help="Subject ID Codes for ALL users to be in training (static and live). Also used in non-seq.")
     parser.add_argument('-pmd', "--prev_model_directory", type=str, default="C:\\Users\\kdmen\\Desktop\\Research\\personalization-privacy-risk\\Personalized_Federated_Learning\\models\\cphs\\FedAvg\\11-10_16-14\\FedAvg_server_global.pt",
                         help="Directory name containing all the prev clients models") 
+    parser.add_argument('-lrt', "--local_round_threshold", type=int, default=50,
+                        help="Number of communication rounds per client until a client will advance to the next batch of streamed data")
+    
+
+    
 
     # general
     parser.add_argument('-go', "--goal", type=str, default="test", 
@@ -251,8 +256,6 @@ def parse_args():
                         help="Delta time, amount of time (sec?) between measurements")
     parser.add_argument('-normalize_data', "--normalize_data", type=bool, default=True, # Only works when True!
                         help="Normalize the input EMG signals and its labels. This is good practice.")
-    parser.add_argument('-lrt', "--local_round_threshold", type=int, default=50,
-                        help="Number of communication rounds per client until a client will advance to the next batch of streamed data")
     # I think I depreciated debug_mode, double check it's removed
     parser.add_argument('-debug_mode', "--debug_mode", type=bool, default=False,
                         help="I THINK I KILLED THIS MODE: In debug mode, the code is run to minimize overhead time in order to debug as fast as possible.  Namely, the data is held at the server to decrease init time, and communication delays are ignored.")
