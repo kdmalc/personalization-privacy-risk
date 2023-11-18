@@ -314,22 +314,28 @@ class Server(object):
             if client_time_cost <= self.time_threshold:
                 tot_samples += client.train_samples
                 self.uploaded_IDs.append(client.ID)
-                self.uploaded_weights.append(client.train_samples)  # What is going on here
+                # This is w later (the weighting), right now is n_k
+                self.uploaded_weights.append(client.train_samples)
+                # This is the actual model (and params inside of it)
                 self.uploaded_models.append(client.model)
             # Update client's last global round that it was included (eg to this round)
             client.last_global_round = self.global_round
         for i, w in enumerate(self.uploaded_weights):
+            # This converts w to be n_k/N
             self.uploaded_weights[i] = w / tot_samples
 
 
     def aggregate_parameters(self):
         assert (len(self.uploaded_models) > 0)
 
+        # Make a deep copy of the received model
         self.global_model = copy.deepcopy(self.uploaded_models[0])
+        # Set global model params to zero
         for param in self.global_model.parameters():
             param.data.zero_()
             
         for w, client_model in zip(self.uploaded_weights, self.uploaded_models):
+            # Eg for each weighting and model pair that were uploaded:
             self.add_parameters(w, client_model)
 
     def add_parameters(self, w, client_model):
