@@ -101,8 +101,8 @@ def run(args):
 def parse_args():
     parser = argparse.ArgumentParser()
 
-    short_run = True
-    one_hundred_run = False
+    short_run = False
+    one_hundred_run = True
     long_run = False
     if short_run:
         my_gr = 15 #10
@@ -135,6 +135,10 @@ def parse_args():
     parser.add_argument('-lrt', "--local_round_threshold", type=int, default=50,
                         help="Number of communication rounds per client until a client will advance to the next batch of streamed data")
     
+    # PCA should probably be broken into 2 since 64 channels is device specific
+    # Now turning PCA off since the model is supposed to learn this dim reduc...
+    parser.add_argument('-pca_ch', "--pca_channels", type=int, default=64, #was 10...
+                        help="Number of principal components. 64 means do not use any PCA")
 
 
 
@@ -225,9 +229,6 @@ def parse_args():
                         help="If False, will set up the arg parser and args variable, but won't run")
     parser.add_argument('-scll', "--save_client_loss_logs", type=bool, default=True,
                         help="Boolean determing whether or not to save each clients testing loss log")
-    # PCA should probably be broken into 2 since 64 channels is device specific
-    parser.add_argument('-pca_ch', "--pca_channels", type=int, default=64, #was 10...
-                        help="Number of principal components. 64 means do not use any PCA")
     parser.add_argument('-lF', "--lambdaF", type=float, default=0.0,
                         help="Penalty term for user EMG input (user effort)")
     parser.add_argument('-lD', "--lambdaD", type=float, default=1e-3, #1e-3

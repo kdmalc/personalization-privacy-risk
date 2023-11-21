@@ -69,6 +69,7 @@ class Server(object):
         self.fine_tuning_epoch = args.fine_tuning_epoch
         
         # Kai's additional params
+        self.models_base_dir = "models"
         self.ndp = args.num_decimal_points
         self.global_round = 0
         self.test_split_fraction = args.test_split_fraction
@@ -359,7 +360,7 @@ class Server(object):
             str directory_name: name of when the model was saved, likely in the form of %m-%d_%H-%M unless it was renamed (this is the model's directory)
             str type: Should be one of 'global', 'pers', or 'local'
         '''
-        model_path = os.path.join("Personalized_Federated_Learning\\models", self.dataset, directory_name, self.algorithm + "_server_" + type + ".pt")
+        model_path = os.path.join(self.models_base_dir, self.dataset, directory_name, self.algorithm + "_server_" + type + ".pt")
         # ^^ This really ought to be set somehow...
         assert (os.path.exists(model_path))
         self.global_model = torch.load(model_path)
@@ -370,13 +371,13 @@ class Server(object):
     #        str directory_name: name of when the model was saved, likely in the form of %m-%d_%H-%M unless it was renamed (this is the model's directory)
     #        str type: Should be one of 'global', 'pers', or 'local'
     #   '''
-    #    model_path = os.path.join("Personalized_Federated_Learning\\models", self.dataset, directory_name, self.algorithm + "_server_" + type + ".pt")
+    #    model_path = os.path.join(self.models_base_dir, self.dataset, directory_name, self.algorithm + "_server_" + type + ".pt")
     #    return os.path.exists(model_path)
     
         
     def save_results(self, personalized=False, save_cost_func_comps=False, save_gradient=False):
         # Save Server Global Model
-        self.model_dir_path = os.path.join("Personalized_Federated_Learning\\models", self.dataset, self.algorithm, self.str_current_datetime)
+        self.model_dir_path = os.path.join(self.models_base_dir, self.dataset, self.algorithm, self.str_current_datetime)
         if not os.path.exists(self.model_dir_path):
             os.makedirs(self.model_dir_path)
         model_file_path = os.path.join(self.model_dir_path, self.algorithm + "_server_global.pt")
@@ -387,7 +388,7 @@ class Server(object):
             client_algo_type = "Pers"
         else:
             client_algo_type = "Local"
-        client_model_path = os.path.join("Personalized_Federated_Learning\\models", self.dataset, client_algo_type, self.str_current_datetime)
+        client_model_path = os.path.join(self.models_base_dir, self.dataset, client_algo_type, self.str_current_datetime)
         for client in self.clients:
             client.save_item(client.model, 'local_client_model', item_path=client_model_path)
 
