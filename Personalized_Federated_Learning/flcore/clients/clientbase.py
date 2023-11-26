@@ -333,14 +333,21 @@ class Client(object):
         for param, new_param in zip(model.parameters(), new_params):
             param.data = new_param.data.clone()
 
-    def test_metrics(self, saved_model=None, model_obj=None):
+    def test_metrics(self, saved_model_path=None, model_obj=None):
         '''Kai's docs: This function is for evaluating the model (on the testing data) during training
-        Note that model.eval() is called so params aren't updated.'''
+        Note that model.eval() is called so params aren't updated.
+        
+        Inputs:
+            saved_model_path: full path (absolute or relative from PFL(\CB?)) to .pt model object
+            OR
+            model_obj:
+            NOTE: setting both input params is unnecessary, only specify one. Otherwise an assertion will be raised
+            '''
 
         if model_obj != None:
             eval_model = model_obj
-        elif saved_model != None:
-            eval_model = self.load_model(saved_model)
+        elif saved_model_path != None:
+            eval_model = self.load_model(saved_model_path)
         else:
             eval_model = self.model
         eval_model.to(self.device)
@@ -387,7 +394,7 @@ class Client(object):
         return running_test_loss, num_samples
     
 
-    def train_metrics(self, saved_model=None, model_obj=None):
+    def train_metrics(self, saved_model_path=None, model_obj=None):
         '''Kai's docs: This function is for evaluating the model (on the training data for some reason) during training
         Note that model.eval() is called so params aren't updated.'''
         if self.verbose:
@@ -395,9 +402,8 @@ class Client(object):
 
         if model_obj != None:
             eval_model = model_obj
-        elif saved_model != None:
-            #self.model = self.load_model(saved_model)
-            eval_model = self.load_model(saved_model)
+        elif saved_model_path != None:
+            eval_model = self.load_model(saved_model_path)
         else:
             eval_model = self.model
         #self.model.to(self.device)
@@ -410,7 +416,6 @@ class Client(object):
         #self.simulate_data_streaming(trainloader) 
         # ^^ idk if i need to be doing this ... this should already be run in the actual training process
         eval_model.eval()
-        #self.model.eval()
 
         train_num = 0
         losses = 0

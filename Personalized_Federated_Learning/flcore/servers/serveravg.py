@@ -3,8 +3,8 @@
 import time
 from flcore.clients.clientavg import clientAVG
 from flcore.servers.serverbase import Server
-import os
-from datetime import datetime
+#import os
+#from datetime import datetime
 
 
 class FedAvg(Server):
