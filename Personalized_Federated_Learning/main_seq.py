@@ -225,6 +225,8 @@ def parse_args():
                         help="The iterations for solving quadratic subproblems")
 
     # SECTION: Kai's additional args
+    parser.add_argument('-taaoc', "--test_against_all_other_clients", type=bool, default=False,
+                        help="Boolean for whether or not to test each client's model on all other clients. As on 11/26 only supported for ServerLocal")
     parser.add_argument('-run', "--run", type=bool, default=True,
                         help="If False, will set up the arg parser and args variable, but won't run")
     parser.add_argument('-scll', "--save_client_loss_logs", type=bool, default=True,

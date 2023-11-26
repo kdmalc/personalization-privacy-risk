@@ -78,6 +78,7 @@ class Server(object):
         self.verbose = args.verbose
         self.slow_clients_bool = args.slow_clients_bool
         self.run_train_metrics = args.run_train_metrics
+        self.test_against_all_other_clients = args.test_against_all_other_clients
         self.result_path = r"C:\Users\kdmen\Desktop\Research\personalization-privacy-risk\Personalized_Federated_Learning\results\mdHM_" 
         # Not used on server but saved when logging
         self.pca_channels = args.pca_channels
@@ -457,6 +458,10 @@ class Server(object):
                     hf.create_dataset('curr_live_rs_test_loss', data=self.curr_live_rs_test_loss)
                     hf.create_dataset('prev_live_rs_test_loss', data=self.prev_live_rs_test_loss)
                     hf.create_dataset('unseen_live_rs_test_loss', data=self.unseen_live_rs_test_loss)
+                # Save cross-cli test log if necessary (SERVERLOCAL ONLY AS OF 11/26):
+                if self.test_against_all_other_clients:
+                    hf.create_dataset('cross_client_loss_array', data=self.clii_on_clij_loss)
+                    hf.create_dataset('cross_client_numsamples_array', data=self.clii_on_clij_numsamples)
                 if self.save_client_loss_logs:
                     # Is there some way to save all of these to a group...
                     group = hf.create_group('client_testing_logs')
@@ -807,10 +812,14 @@ class Server(object):
         return IDs, num_samples, tot_loss
 
     def plot_results(self, plot_train=True, plot_test=True, plot_seq=True, my_title=None):
-        if plot_test:
-            plt.plot(range(len(self.rs_test_loss)), self.rs_test_loss, label='Test')
-        if plot_train:
-            plt.plot(range(len(self.rs_train_loss)), self.rs_train_loss, label='Train')
+        if self.algorithm.upper() == 'LOCAL':
+            self.clii_on_clij_loss # 14x14xr
+            plt.plot()
+        else:
+            if plot_test:
+                plt.plot(range(len(self.rs_test_loss)), self.rs_test_loss, label='Test')
+            if plot_train:
+                plt.plot(range(len(self.rs_train_loss)), self.rs_train_loss, label='Train')
         if plot_seq==True and self.sequential==True:
             # cl should be the same length
             ## Yah I have no idea why I need/have an offset here, it should always be being written to...

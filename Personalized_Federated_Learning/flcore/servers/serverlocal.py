@@ -4,6 +4,7 @@ from flcore.clients.clientavg import clientAVG
 from flcore.servers.serverbase import Server
 from datetime import datetime
 import os
+import numpy as np
 
 
 class Local(Server):
@@ -14,10 +15,39 @@ class Local(Server):
         self.set_slow_clients()
         self.set_clients(clientAVG)
 
+        if self.test_against_all_other_clients:
+            # HARD CODE FOR NOW...
+            self.clii_on_clij_loss = np.zeros((len(self.clients), len(self.clients), self.global_rounds))
+            # Idk if I need this one...
+            self.clii_on_clij_numsamples = np.zeros((len(self.clients), len(self.clients), self.global_rounds))
+
         print(f"\nJoin ratio / total clients: {self.join_ratio} / {self.num_clients}")
         print("Finished creating server and clients.")
         
         # self.load_model()
+
+
+    def average_cross_client_losses(matrix):
+        print("AVERAGE_CROSS_CLIENT_LOSSES")
+        # Ensure the matrix is square
+        assert matrix.shape[0] == matrix.shape[1], "Input matrix must be square"
+
+        # Get the diagonal indices
+        diagonal_indices = np.diag_indices(matrix.shape[0])
+        print(diagonal_indices)
+        # Iterate over each row
+        for i in range(matrix.shape[0]):
+            # Exclude the diagonal element
+            non_diagonal_indices = np.setdiff1d(np.arange(matrix.shape[1]), i)
+            print(non_diagonal_indices)
+            # Calculate the average excluding the diagonal element
+            row_average = np.mean(matrix[i, non_diagonal_indices])
+            print(f"row_average.shape: {row_average.shape}, row_average[0:10]: {row_average[0:10]}")
+            # Save the average to the diagonal element
+            matrix[diagonal_indices[0][i], diagonal_indices[1][i]] = row_average
+            print(f"Diagonal indices used: ({diagonal_indices[0][i]}, {diagonal_indices[1][i]})")
+            print(f"matrix_diagonal.shape: {matrix[diagonal_indices[0][i], diagonal_indices[1][i]].shape}, matrix_diagonal[:10]: {matrix[diagonal_indices[0][i], diagonal_indices[1][i]][:10]}, matrix[i, i][0:10]: {matrix[i, i, :10]}")
+        return matrix
 
 
     def train(self):
@@ -46,11 +76,28 @@ class Local(Server):
                     if self.verbose:
                         print(f"Client {client.ID} loss: {client.loss_log[-1]:0,.3f}")
 
+            # Test current client's model on all other clients
+            if self.test_against_all_other_clients:
+                for idx_i in range(len(self.selected_clients)):
+                    # Select the current element
+                    client = self.selected_clients[idx_i]
+                    # Iterate through all other elements in the list
+                    for idx_j in range(len(self.selected_clients)):
+                        # Skip the current element
+                        if idx_i != idx_j:
+                            other_client = self.selected_clients[idx_j]
+                            
+                            # Now test the current client's model on the other_client
+                            self.clii_on_clij_loss[idx_i, idx_j, i], self.clii_on_clij_numsamples[idx_i, idx_j, i] = other_client.test_metrics(model_obj=client.model)
+
             #print()
 
             if self.auto_break and self.check_done(acc_lss=[self.rs_test_acc], top_cnt=self.top_cnt):
                 print("Breaking")
                 break
+
+        # Set the average in the diagonal 
+        self.clii_on_clij_loss = self.average_cross_client_losses(self.clii_on_clij_loss)
 
         self.evaluate(train=False, test=True)
         print("\nBest Loss.")
