@@ -1,6 +1,6 @@
 # Run via: sh <file_name>.sh
 
-nohup python -u main.py -lr 1 -pca_ch 64 -algo APFL
+nohup python -u main.py -pca_ch 64 -algo APFL
 
 #-lrt = 50
 #-al Alpha for APFL, (default: 1)

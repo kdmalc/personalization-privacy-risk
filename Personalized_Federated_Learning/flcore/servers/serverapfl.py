@@ -52,7 +52,7 @@ class APFL(Server):
         self.save_results()
 
         #####################################################
-        # Uhhhh I don't think my dataset can do this...
+        # Uhhhh I don't think my dataset can do this... --> It might be able to now? (11/26)
         ## Maybe I should implement the user test split in addition here?
         #self.eval_new_clients = True
         #self.set_new_clients(clientAPFL)

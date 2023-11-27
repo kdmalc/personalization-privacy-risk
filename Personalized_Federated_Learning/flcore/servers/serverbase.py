@@ -78,8 +78,10 @@ class Server(object):
         self.verbose = args.verbose
         self.slow_clients_bool = args.slow_clients_bool
         self.run_train_metrics = args.run_train_metrics
-        self.test_against_all_other_clients = args.test_against_all_other_clients
         self.result_path = r"C:\Users\kdmen\Desktop\Research\personalization-privacy-risk\Personalized_Federated_Learning\results\mdHM_" 
+        # serverlocal ONLY!
+        self.test_against_all_other_clients = args.test_against_all_other_clients
+        self.cross_client_modulus = args.cross_client_modulus
         # Not used on server but saved when logging
         self.pca_channels = args.pca_channels
         self.device_channels = args.device_channels
@@ -813,8 +815,23 @@ class Server(object):
 
     def plot_results(self, plot_train=True, plot_test=True, plot_seq=True, my_title=None):
         if self.algorithm.upper() == 'LOCAL':
-            self.clii_on_clij_loss # 14x14xr
-            plt.plot()
+            #self.clii_on_clij_loss --> 14x14xR (R is number of global rounds)
+            # I need to reduce this matrix down to 1x1x(r in R % ccm == 0)
+            # First, we only need the diagonal rows, as this is where the averages should be saved
+            avg_cc_nestedlst = [[] for _ in range(len(self.clients))]
+            for i in range(len(self.clients)):
+                for j in range(self.global_rounds):
+                    if j%self.cross_client_modulus==0:
+                        # ... why are all avg_cc_nestedlst entries the same......
+                        avg_cc_nestedlst[i].append(self.clii_on_clij_loss[i, i, j])
+            # Now, we need to extract every rth value, where r is set directly by ccm
+            ## Should be easy to do by filter...
+            # Make an x_axis determined by ccm:
+            spaced_xs = list(range(0, self.global_rounds, self.cross_client_modulus))
+            local_x_axis = [int(ele) for ele in spaced_xs]
+            for i in range(len(self.clients)):
+                # Fix this label... switch to subjectID
+                plt.plot(local_x_axis, avg_cc_nestedlst[i], label=self.clients[i].ID)
         else:
             if plot_test:
                 plt.plot(range(len(self.rs_test_loss)), self.rs_test_loss, label='Test')
@@ -843,7 +860,10 @@ class Server(object):
             plt.title(my_title)
         plt.xlabel("Iteration Number")
         plt.ylabel("Loss")
-        plt.legend()
+        if self.test_against_all_other_clients:
+            plt.legend(fontsize='small')
+        else:
+            plt.legend()
         plt.savefig(self.trial_result_path + '\\TrainTestLossCurves.png', format='png')
         plt.show()
         

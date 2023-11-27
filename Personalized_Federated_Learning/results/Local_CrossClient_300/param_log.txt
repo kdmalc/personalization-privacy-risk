@@ -1,5 +1,5 @@
 BASE
-algorithm = FedAvg
+algorithm = Local
 model = Linear(in_features=64, out_features=2, bias=True)
 train_subj_IDs = ['METACPHS_S106', 'METACPHS_S107', 'METACPHS_S108', 'METACPHS_S109', 'METACPHS_S110', 'METACPHS_S111', 'METACPHS_S112', 'METACPHS_S113', 'METACPHS_S114', 'METACPHS_S115', 'METACPHS_S116', 'METACPHS_S117', 'METACPHS_S118', 'METACPHS_S119']
 condition_number_lst = [1]
@@ -11,7 +11,7 @@ MODEL HYPERPARAMETERS
 lambdaF = 0.0
 lambdaD = 0.001
 lambdaE = 0.0001
-global_rounds = 25
+global_rounds = 300
 local_epochs = 3
 batch_size = 1202
 local_learning_rate = 1
@@ -34,8 +34,8 @@ run_train_metrics = True
 
 
 SEQUENTIAL
-sequential = True
-live_client_IDs_queue = ['METACPHS_S106', 'METACPHS_S107', 'METACPHS_S118', 'METACPHS_S119']
-static_client_IDs = ['METACPHS_S108', 'METACPHS_S109', 'METACPHS_S110', 'METACPHS_S111', 'METACPHS_S112', 'METACPHS_S113', 'METACPHS_S114', 'METACPHS_S115', 'METACPHS_S116', 'METACPHS_S117']
-num_liveseq_rounds_per_seqclient = 5
+sequential = False
+live_client_IDs_queue = []
+static_client_IDs = []
+num_liveseq_rounds_per_seqclient = 25
 prev_model_directory = C:\Users\kdmen\Desktop\Research\personalization-privacy-risk\Personalized_Federated_Learning\models\cphs\FedAvg\11-10_16-14\FedAvg_server_global.pt

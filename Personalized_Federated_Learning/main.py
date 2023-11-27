@@ -361,6 +361,8 @@ def parse_args():
                         help="Boolean determing whether or not to save each clients testing loss log")
     parser.add_argument('-taaoc', "--test_against_all_other_clients", type=bool, default=False,
                         help="Boolean for whether or not to test each client's model on all other clients. As on 11/26 only supported for ServerLocal")
+    parser.add_argument('-ccm', "--cross_client_modulus", type=int, default=5,
+                        help="Number of rounds between cross client testing (current_round%cross_client_modulus==0)")
     # PCA should probably be broken into 2 since 64 channels is device specific
     parser.add_argument('-pca_ch', "--pca_channels", type=int, default=10,
                         help="Number of principal components. 64 means do not use any PCA")
