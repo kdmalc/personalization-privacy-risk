@@ -132,9 +132,9 @@ class Local(Server):
         self.save_results(save_cost_func_comps=True, save_gradient=True)
         model_path = os.path.join("models", self.dataset, "Local", str(current_datetime))
 
-        trial_result_path = self.result_path + str_current_datetime
-        if not os.path.exists(trial_result_path):
-            os.makedirs(trial_result_path)
+        #trial_result_path = self.result_path + str_current_datetime
+        #if not os.path.exists(trial_result_path):
+        #    os.makedirs(trial_result_path)
 
         for client in self.clients:
             client.save_item(client.model, 'local_client_model', item_path=model_path)
