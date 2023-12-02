@@ -9,7 +9,7 @@ import os
 from torch.utils.data import DataLoader
 
 from sklearn.decomposition import PCA
-from utils.processing_funcs import normalize_2D_tensor
+from utils.processing_funcs import normalize_tensor
 from utils.custom_loss_class import CPHSLoss
 from utils.emg_dataset_class import *
 
@@ -205,8 +205,8 @@ class Client(object):
         # First, normalize the entire input data
         if self.normalize_data:
             # This is really scaling not norming
-            s_normed = normalize_2D_tensor(s_temp)
-            p_reference = normalize_2D_tensor(p_reference)
+            s_normed = normalize_tensor(s_temp)
+            p_reference = normalize_tensor(p_reference)
         else:
             s_normed = s_temp
         # Apply PCA if applicable
