@@ -233,6 +233,13 @@ def run(args):
 
 def parse_args():
     parser = argparse.ArgumentParser()
+
+    parser.add_argument('-gr', "--global_rounds", type=int, default=50)  # KAI: Originally was 2000
+    parser.add_argument('-lrt', "--local_round_threshold", type=int, default=25,
+                        help="Number of communication rounds per client until a client will advance to the next batch of streamed data")
+
+
+
     # general
     parser.add_argument('-go', "--goal", type=str, default="test", 
                         help="The goal for this experiment")
@@ -250,7 +257,6 @@ def parse_args():
                         help="Local learning rate")
     parser.add_argument('-ld', "--learning_rate_decay", type=bool, default=False)
     parser.add_argument('-ldg', "--learning_rate_decay_gamma", type=float, default=0.99)
-    parser.add_argument('-gr', "--global_rounds", type=int, default=100)  # KAI: Originally was 2000
     parser.add_argument('-ls', "--local_epochs", type=int, default=3, 
                         help="How many times a client should iterate through their current update dataset.")  
     parser.add_argument('-ngradsteps', "--num_gradient_steps", type=int, default=1, 
@@ -364,7 +370,7 @@ def parse_args():
     parser.add_argument('-ccm', "--cross_client_modulus", type=int, default=5,
                         help="Number of rounds between cross client testing (current_round%cross_client_modulus==0)")
     # PCA should probably be broken into 2 since 64 channels is device specific
-    parser.add_argument('-pca_ch', "--pca_channels", type=int, default=10,
+    parser.add_argument('-pca_ch', "--pca_channels", type=int, default=64,
                         help="Number of principal components. 64 means do not use any PCA")
     parser.add_argument('-lF', "--lambdaF", type=float, default=0.0,
                         help="Penalty term for user EMG input (user effort)")
@@ -394,8 +400,6 @@ def parse_args():
                         help="Delta time, amount of time (sec?) between measurements")
     parser.add_argument('-normalize_data', "--normalize_data", type=bool, default=True, # Only works when True!
                         help="Normalize the input EMG signals and its labels. This is good practice.")
-    parser.add_argument('-lrt', "--local_round_threshold", type=int, default=50,
-                        help="Number of communication rounds per client until a client will advance to the next batch of streamed data")
     # I depreciated debug_mode, double check it's removed so I can delete it here
     parser.add_argument('-debug_mode', "--debug_mode", type=bool, default=False,
                         help="I THINK I KILLED THIS MODE: In debug mode, the code is run to minimize overhead time in order to debug as fast as possible.  Namely, the data is held at the server to decrease init time, and communication delays are ignored.")

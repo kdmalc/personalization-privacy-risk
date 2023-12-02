@@ -99,8 +99,8 @@ def parse_args():
 
     # THINGS I AM CHANGING IN THIS FILE
     parser.add_argument('-algo', "--algorithm", type=str, default="Local")
-    parser.add_argument('-gr', "--global_rounds", type=int, default=300)  # KAI: Originally was 2000
-    parser.add_argument('-lrt', "--local_round_threshold", type=int, default=50,
+    parser.add_argument('-gr', "--global_rounds", type=int, default=50)  # KAI: Originally was 2000
+    parser.add_argument('-lrt', "--local_round_threshold", type=int, default=25,
                         help="Number of communication rounds per client until a client will advance to the next batch of streamed data")
     parser.add_argument('-taaoc', "--test_against_all_other_clients", type=bool, default=True,
                         help="Boolean for whether or not to test each client's model on all other clients. As on 11/26 only supported for ServerLocal")

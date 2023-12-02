@@ -101,8 +101,8 @@ def run(args):
 def parse_args():
     parser = argparse.ArgumentParser()
 
-    short_run = False
-    one_hundred_run = True
+    short_run = True
+    one_hundred_run = False
     long_run = False
     if short_run:
         my_gr = 15 #10
