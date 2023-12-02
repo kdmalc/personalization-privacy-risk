@@ -234,20 +234,16 @@ def run(args):
 def parse_args():
     parser = argparse.ArgumentParser()
 
+    # Use block2...
+    parser.add_argument('-con_num', "--condition_number_lst", type=str, default='[3]', # Use 3 and/or 7
+                        help="Which condition number (trial) to train on. Must be a list. By default, will iterate through all train_subjs for each cond (eg each cond_num gets its own client even for the same subject)")
+    #Local #FedAvg #APFL #FedMTL #pFedMe (not working) ## #Ditto #PerAvg
+    parser.add_argument('-algo', "--algorithm", type=str, default="FedAvg") # "Centralized"
+    parser.add_argument('-jr', "--join_ratio", type=float, default=0.3,
+                        help="Fraction of clients to be active in training per round")
     parser.add_argument('-gr', "--global_rounds", type=int, default=50)  # KAI: Originally was 2000
     parser.add_argument('-lrt', "--local_round_threshold", type=int, default=25,
                         help="Number of communication rounds per client until a client will advance to the next batch of streamed data")
-
-
-
-    # general
-    parser.add_argument('-go', "--goal", type=str, default="test", 
-                        help="The goal for this experiment")
-    parser.add_argument('-dev', "--device", type=str, default="cpu",  # KAI: Changed the default to cpu
-                        choices=["cpu", "cuda"])
-    parser.add_argument('-did', "--device_id", type=str, default="0")
-    parser.add_argument('-data', "--dataset", type=str, default="cphs")  # KAI: Changed the default to cphs (from mnist)
-    #parser.add_argument('-nb', "--num_classes", type=int, default=10)  # Not doing classification...
     parser.add_argument('-m', "--model", type=str, default="LinearRegression")  # KAI: Changed the default to Linear Regression
     # I have little confidence in this batch size being correct...
     parser.add_argument('-lbs', "--batch_size", type=int, default=1202)  # Setting it to a full update would be 1202... will this automatically run twice?
@@ -256,16 +252,19 @@ def parse_args():
     parser.add_argument('-lr', "--local_learning_rate", type=float, default=1,  #0.005
                         help="Local learning rate")
     parser.add_argument('-ld', "--learning_rate_decay", type=bool, default=False)
-    parser.add_argument('-ldg', "--learning_rate_decay_gamma", type=float, default=0.99)
     parser.add_argument('-ls', "--local_epochs", type=int, default=3, 
                         help="How many times a client should iterate through their current update dataset.")  
     parser.add_argument('-ngradsteps', "--num_gradient_steps", type=int, default=1, 
-                        help="How many gradient steps in one local epoch.")    
-    #Local #FedAvg #APFL #FedMTL #pFedMe ## #Ditto #PerAvg
-    ## pFedMe not working
-    parser.add_argument('-algo', "--algorithm", type=str, default="FedAvg")
-    parser.add_argument('-jr', "--join_ratio", type=float, default=0.3,
-                        help="Fraction of clients to be active in training per round")
+                        help="How many gradient steps in one local epoch.")  
+
+    # general
+    parser.add_argument('-go', "--goal", type=str, default="test", 
+                        help="The goal for this experiment")
+    parser.add_argument('-dev', "--device", type=str, default="cpu",  # KAI: Changed the default to cpu
+                        choices=["cpu", "cuda"])
+    parser.add_argument('-did', "--device_id", type=str, default="0")
+    parser.add_argument('-data', "--dataset", type=str, default="cphs")  # KAI: Changed the default to cphs (from mnist)    
+    parser.add_argument('-ldg', "--learning_rate_decay_gamma", type=float, default=0.99)
     parser.add_argument('-rjr', "--random_join_ratio", type=bool, default=False,
                         help="Random ratio of clients per round")
     parser.add_argument('-dp', "--privacy", type=bool, default=False,
@@ -361,6 +360,7 @@ def parse_args():
     '''
     
     # SECTION: Kai's additional args
+    # Idk if this one is even used/useful anymore (think it was for interfacing with ipynb?)
     parser.add_argument('-run', "--run", type=bool, default=True,
                         help="If False, will set up the arg parser and args variable, but won't run")
     parser.add_argument('-scll', "--save_client_loss_logs", type=bool, default=True,
@@ -372,17 +372,18 @@ def parse_args():
     # PCA should probably be broken into 2 since 64 channels is device specific
     parser.add_argument('-pca_ch', "--pca_channels", type=int, default=64,
                         help="Number of principal components. 64 means do not use any PCA")
+    parser.add_argument('-stup', "--starting_update", type=int, default=10,
+                        help="Which update to start on (for CPHS Simulation). Use 0 or 10.")
+    
     parser.add_argument('-lF', "--lambdaF", type=float, default=0.0,
                         help="Penalty term for user EMG input (user effort)")
     parser.add_argument('-lD', "--lambdaD", type=float, default=1e-3, #1e-3
                         help="Penalty term for the decoder norm (interface effort)")
     parser.add_argument('-lE', "--lambdaE", type=float, default=1e-4, #1e-4
                         help="Penalty term on performance error norm")
-    parser.add_argument('-stup', "--starting_update", type=int, default=10,
-                        help="Which update to start on (for CPHS Simulation). Use 0 or 10.")
     parser.add_argument('-sbb', "--smoothbatch_boolean", type=bool, default=False,
                         help="Boolean switch for whether or not to use SmoothBatch. See Madduri CPHS Paper.")
-    parser.add_argument('-sblr', "--smoothbatch_learningrate", type=float, default=True, #0.75 slow, 0.25 fast
+    parser.add_argument('-sblr', "--smoothbatch_learningrate", type=float, default=0.75, #0.75 slow, 0.25 fast
                         help="Value of alpha (mixing param) for SB. Alpha=1 uses only the optimal dec, Alpha=0 uses only the previous dec")
     ## Test Split Related
     parser.add_argument('-test_split_fraction', "--test_split_fraction", type=float, default=0.2,
@@ -398,13 +399,11 @@ def parse_args():
                         help="Number of recording channels with the used EMG device")
     parser.add_argument('-dt', "--dt", type=float, default=1/60,
                         help="Delta time, amount of time (sec?) between measurements")
-    parser.add_argument('-normalize_data', "--normalize_data", type=bool, default=True, # Only works when True!
-                        help="Normalize the input EMG signals and its labels. This is good practice.")
+    parser.add_argument('-normalize_data', "--normalize_data", type=bool, default=True, # Only works when True! ... what? Maybe things won't run if False is what I meant?
+                        help="Normalize (actually scales...) the input EMG signals and its labels. This is good practice.")
     # I depreciated debug_mode, double check it's removed so I can delete it here
     parser.add_argument('-debug_mode', "--debug_mode", type=bool, default=False,
                         help="I THINK I KILLED THIS MODE: In debug mode, the code is run to minimize overhead time in order to debug as fast as possible.  Namely, the data is held at the server to decrease init time, and communication delays are ignored.")
-    parser.add_argument('-con_num', "--condition_number_lst", type=str, default='[1]',
-                        help="Which condition number (trial) to train on. Must be a list. By default, will iterate through all train_subjs for each cond (eg each cond_num gets its own client even for the same subject)")
     parser.add_argument('-v', "--verbose", type=bool, default=False,
                         help="Print out a bunch of extra stuff")
     parser.add_argument('-slow_clients_bool', "--slow_clients_bool", type=bool, default=False,

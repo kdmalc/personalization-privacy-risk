@@ -215,7 +215,7 @@ def parse_args():
                         help="Penalty term on performance error norm")
     parser.add_argument('-sbb', "--smoothbatch_boolean", type=bool, default=False,
                         help="Boolean switch for whether or not to use SmoothBatch. See Madduri CPHS Paper.")
-    parser.add_argument('-sblr', "--smoothbatch_learningrate", type=float, default=True, #0.75 slow, 0.25 fast
+    parser.add_argument('-sblr', "--smoothbatch_learningrate", type=float, default=0.75, #0.75 slow, 0.25 fast
                         help="Value of alpha (mixing param) for SB. Alpha=1 uses only the optimal dec, Alpha=0 uses only the previous dec")
     ## Test Split Related
     parser.add_argument('-test_split_fraction', "--test_split_fraction", type=float, default=0.2,

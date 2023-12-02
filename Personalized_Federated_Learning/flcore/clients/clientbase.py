@@ -24,7 +24,7 @@ class Client(object):
     Base class for clients in federated learning.
     """
 
-    def __init__(self, args, ID, samples_path, labels_path, condition_number, **kwargs):
+    def __init__(self, args, ID, samples_path, labels_path, condition_number=None, **kwargs):
         # Why do I even have this take any arguments instead of just using args...
 
         self.model = copy.deepcopy(args.model)
@@ -82,7 +82,13 @@ class Client(object):
         self.last_global_round = 0
         self.update_ix=[0,  1200,  2402,  3604,  4806,  6008,  7210,  8412,  9614, 10816, 12018, 13220, 14422, 15624, 16826, 18028, 19230, 20432, 20769]
         assert (not (self.test_split_users and self.test_split_each_update)), "test_split_users and test_split_each_update cannot both be true (contradictory test conditions)"
-        self.condition_number = condition_number #args.condition_number
+        self.condition_number_lst = args.condition_number_lst
+        if condition_number!=None:
+            self.condition_number = condition_number
+        elif len(self.condition_number_lst)==1:
+            self.condition_number = self.condition_number_lst[0]
+        else:
+            self.condition_number = None
         self.verbose = args.verbose
         self.return_cost_func_comps = args.return_cost_func_comps
         self.run_train_metrics = args.run_train_metrics
@@ -112,7 +118,8 @@ class Client(object):
         #self.assert_tl_samples_match_npy(x, y)
         
         # Simulate datastreaming, eg set s, F and V
-        self.simulate_data_streaming_xy(x, y)
+        if self.algorithm!='Centralized':
+            self.simulate_data_streaming_xy(x, y)
 
         # Idk if this needs to happen if I'm just running it on cpu...
         # ^ If so it would need to happen in simulate data
@@ -130,13 +137,7 @@ class Client(object):
 
         # forward pass and loss
         # D@s = predicted velocity
-        #vel_pred = self.model(torch.transpose(self.F, 0, 1)) 
         vel_pred = self.model(self.F) 
-        if vel_pred.shape[0]!=self.y_ref.shape[0]:
-            print("RESHAPED")
-            tvel_pred = torch.transpose(vel_pred, 0, 1)
-        else:
-            tvel_pred = vel_pred
 
         # L2 regularization term
         l2_loss = 0
@@ -144,8 +145,7 @@ class Client(object):
             if 'weight' in name:
                 l2_loss += torch.norm(param, p=2)
 
-        t1 = self.loss_func(tvel_pred, self.y_ref)
-        #t2 = self.lambdaD*(torch.linalg.matrix_norm((self.model.weight))**2)
+        t1 = self.loss_func(vel_pred, self.y_ref)
         t2 = self.lambdaD*(l2_loss**2)
         t3 = self.lambdaF*(torch.linalg.matrix_norm((self.F))**2)
         # It's working right now so I'll turn this off for the slight speed boost
@@ -164,7 +164,6 @@ class Client(object):
             self.optimizer.zero_grad()
         
         # backward pass
-        #loss.backward(retain_graph=True)
         loss.backward()
         self.loss_log.append(loss.item())
         # This would need to be changed if you switch to a sequential (not single layer) model
@@ -204,7 +203,6 @@ class Client(object):
         '''
 
         s_temp = x
-        #p_reference = torch.transpose(y, 0, 1)
         p_reference = y
 
         # First, normalize the entire input data
@@ -217,22 +215,16 @@ class Client(object):
         # Apply PCA if applicable
         if self.pca_channels!=self.device_channels:
             pca = PCA(n_components=self.pca_channels)
-            #s = torch.transpose(torch.tensor(pca.fit_transform(s_normed), 
-            #                                 dtype=torch.float32), 0, 1)
             s = torch.tensor(pca.fit_transform(s_normed), dtype=torch.float32)
         else:
-            #s = torch.transpose(s_normed, 0, 1)
             s = s_normed
 
-        #self.F = s[:,:-1]
         self.F = s[:-1,:]
-        #v_actual =  torch.matmul(self.model.weight, s)
         v_actual =  self.model(s)
         # Numerical integration of v_actual to get p_actual
         p_actual = torch.cumsum(v_actual, dim=1)*self.dt
         # I don't think I actually use V later on
         self.V = (p_reference - p_actual)*self.dt
-        #self.y_ref = p_reference[:, :-1]  # To match the input
         self.y_ref = p_reference[:-1, :]  # To match the input
 
 
@@ -388,20 +380,14 @@ class Client(object):
 
                 self.simulate_data_streaming_xy(x, y)
                 # D@s = predicted velocity
-                #vel_pred = eval_model(torch.transpose(self.F, 0, 1))
                 vel_pred = eval_model(self.F)
-                if vel_pred.shape[0]!=self.y_ref.shape[0]:
-                    print("TRANSPOSING")
-                    tvel_pred = torch.transpose(vel_pred, 0, 1)
-                else:
-                    tvel_pred = vel_pred
 
                 # L2 regularization term
                 l2_loss = 0
                 for name, param in self.model.named_parameters():
                     if 'weight' in name:
                         l2_loss += torch.norm(param, p=2)
-                t1 = self.loss_func(tvel_pred, self.y_ref)
+                t1 = self.loss_func(vel_pred, self.y_ref)
                 t2 = self.lambdaD*(l2_loss**2)
                 t3 = self.lambdaF*(torch.linalg.matrix_norm((self.F))**2)
                 loss = t1 + t2 + t3
@@ -451,19 +437,14 @@ class Client(object):
                 y = y.to(self.device)
 
                 self.simulate_data_streaming_xy(x, y)
-                #vel_pred = eval_model(torch.transpose(self.F, 0, 1)) 
-                vel_pred = eval_model(self.F) 
-                if vel_pred.shape[0]!=self.y_ref.shape[0]:
-                    tvel_pred = torch.transpose(vel_pred, 0, 1)
-                else:
-                    tvel_pred = vel_pred
+                vel_pred = eval_model(self.F)
 
                 # L2 regularization term
                 l2_loss = 0
                 for name, param in eval_model.named_parameters():
                     if 'weight' in name:
                         l2_loss += torch.norm(param, p=2)
-                t1 = self.loss_func(tvel_pred, self.y_ref)
+                t1 = self.loss_func(vel_pred, self.y_ref)
                 t2 = self.lambdaD*(l2_loss**2)
                 t3 = self.lambdaF*(torch.linalg.matrix_norm((self.F))**2)
                 loss = t1 + t2 + t3
@@ -508,13 +489,13 @@ class Client(object):
     def pred_vel_and_gen_loss(self, log_cost_func_comps=True):
         '''This function is the forward pass and loss, computing our custom loss function and returning the loss object'''
         # D@s = predicted velocity
-        vel_pred = self.model(torch.transpose(self.F, 0, 1)) 
-        if vel_pred.shape[0]!=self.y_ref.shape[0]:
-            tvel_pred = torch.transpose(vel_pred, 0, 1)
-        else:
-            tvel_pred = vel_pred
-        t1 = self.loss_func(tvel_pred, self.y_ref)
-        t2 = self.lambdaD*(torch.linalg.matrix_norm((self.model.weight))**2)
+        vel_pred = self.model(self.F) 
+        l2_loss = 0
+        for name, param in self.model.named_parameters():
+            if 'weight' in name:
+                l2_loss += torch.norm(param, p=2)
+        t1 = self.loss_func(vel_pred, self.y_ref)
+        t2 = self.lambdaD*(l2_loss**2)
         t3 = self.lambdaF*(torch.linalg.matrix_norm((self.F))**2)
         loss = t1 + t2 + t3
         if log_cost_func_comps:
