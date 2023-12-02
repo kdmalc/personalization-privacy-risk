@@ -15,9 +15,6 @@ class CPHSLoss(torch.nn.modules.loss._Loss):
         self.dt = dt
         self.normalize_V = normalize_V
         self.verbose = verbose
-        self.term1_error = 0
-        self.term2_ld_decnorm = 0
-        self.term3_lf_emgnorm = 0
 
 
     def forward(self, outputs, targets):
@@ -25,16 +22,22 @@ class CPHSLoss(torch.nn.modules.loss._Loss):
         p_reference = torch.transpose(targets, 0, 1)
         # Numerical integration of v_actual to get p_actual
         p_actual = torch.cumsum(outputs, dim=1)*self.dt
-        self.V = (p_reference - p_actual)*self.dt
-        Vplus = self.V[:,1:]
+        V = (p_reference - p_actual)*self.dt
+        Vplus = V[:,1:]
+
+        # Uhh why can't I just return the t2 and t3 terms?
+        ## Because it only passes back 1 term? Or I don't know how the gradients propagate when I pass multiple back? ...
+        ## Could probably just try it ...
+        ## Could also just have a second, specific getter function...
+
         # Performance
         return self.lambdaE*(torch.linalg.matrix_norm(outputs[:,:-1] - Vplus)**2)
       
         
-    def update_FDV(self, F, D, V):
-        print("update_FDV")
-        self.F = F  # This isn't used currently
-        self.D = D  # Why was I using detach().clone() here on D?
-        self.V = V  
-        self.learning_batch = self.F.shape[0] # Idk if things need to be transposed or what... maybe it should be [1]
+    #def update_FDV(self, F, D, V):
+    #    print("update_FDV")
+    #    self.F = F  # This isn't used currently
+    #    self.D = D  # Why was I using detach().clone() here on D?
+    #    self.V = V  
+    #    self.learning_batch = self.F.shape[0] # Idk if things need to be transposed or what... maybe it should be [1]
        

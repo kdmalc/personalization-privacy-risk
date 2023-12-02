@@ -131,13 +131,18 @@ class Client(object):
         # forward pass and loss
         # D@s = predicted velocity
         vel_pred = self.model(torch.transpose(self.F, 0, 1)) 
-        
         if vel_pred.shape[0]!=self.y_ref.shape[0]:
             tvel_pred = torch.transpose(vel_pred, 0, 1)
         else:
             tvel_pred = vel_pred
+
+        # L2 regularization term
+        for param in self.model.parameters():
+            l2_loss += torch.norm(param, p=2)
+
         t1 = self.loss_func(tvel_pred, self.y_ref)
-        t2 = self.lambdaD*(torch.linalg.matrix_norm((self.model.weight))**2)
+        #t2 = self.lambdaD*(torch.linalg.matrix_norm((self.model.weight))**2)
+        t2 = self.lambdaD*(l2_loss**2)
         t3 = self.lambdaF*(torch.linalg.matrix_norm((self.F))**2)
         # It's working right now so I'll turn this off for the slight speed boost
         '''
@@ -213,7 +218,8 @@ class Client(object):
             s = torch.transpose(s_normed, 0, 1)
 
         self.F = s[:,:-1]
-        v_actual =  torch.matmul(self.model.weight, s)
+        #v_actual =  torch.matmul(self.model.weight, s)
+        v_actual =  self.model(s)
         # Numerical integration of v_actual to get p_actual
         p_actual = torch.cumsum(v_actual, dim=1)*self.dt
         # I don't think I actually use V later on
