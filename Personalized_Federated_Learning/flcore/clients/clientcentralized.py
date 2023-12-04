@@ -14,17 +14,22 @@ from utils.emg_dataset_class import *
 
 
 class clientCent(Client):
-    def __init__(self, args, ID, dir_path, condition_number_lst):
-        super().__init__(args, ID, None, None, condition_number_lst)
+    def __init__(self, args, ID, dir_path, condition_number_lst, **kwargs):
+        super().__init__(args, ID, None, None, condition_number_lst, **kwargs)
 
         self.dir_path = dir_path
+        self.test_subj_IDs = args.test_subj_IDs
+        self.test_sIDs = [fullID.split('_')[1] for fullID in self.test_subj_IDs]
 
-        # training_dataset_obj = CustomEMGDataset(self.cond_samples_npy[self.update_lower_bound:self.update_upper_bound,:], self.cond_labels_npy[self.update_lower_bound:self.update_upper_bound,:])
-        # Need to deal with these variables... not doing streaming right now...
-        #self.cond_samples_npy
-        #self.cond_labels_npy
-        #self.update_lower_bound = 0
-        #self.update_upper_bound = -1
+        ############################################################################
+        # TODO: SET THIS SOMEWHERE!!!
+        self.train_loader = self.load_train_data(client_init=True) # batch_size=None
+        ############################################################################
+
+        ############################################################################
+        # TODO: SET THIS SOMEWHERE!!!
+        self.test_loader = self.load_test_data()
+        ############################################################################
 
 
     def _load_train_data(self):
@@ -38,73 +43,72 @@ class clientCent(Client):
         if self.verbose:
             print(f"Client {self.ID} loading data file in [SHOULD ONLY RUN ONCE PER CLIENT]")
         # Load in client's data
-        # Get a list of all .npy files in the folder
-        #S107_TrainData_8by20770by64
-        #S107_Labels_8by20770by2
+        # Get a list of all .npy files in the folder (of form S107_TrainData_8by20770by64, S107_Labels_8by20770by2)
         file_list = [f for f in os.listdir(self.dir_path) if f.endswith('.npy')]
         # Initialize an empty array to store the concatenated data
-        giant_array = np.empty((0,))
+        self.cond_labels_npy = np.empty((0, 0))
+        self.cond_samples_npy = np.empty((0, 0))
+        self.test_labels = np.empty((0, 0))
+        self.test_samples = np.empty((0, 0))
         # Iterate through each .npy file and horizontally concatenate to the giant array
         for file_name in file_list:
             file_path = os.path.join(self.dir_path, file_name)
             data_array = np.load(file_path)
-            if "Labels" in file_name:
-                self.cond_labels_npy = data_array[self.condition_number,:,:]
-            elif "Data" in file_name:
-                self.cond_samples_npy = data_array[self.condition_number,:,:]
-            else:
-                raise ValueError("Did not find Labels or Data in filename...")
-            
-            giant_array = np.hstack((giant_array, data_array))
-
-        # Split data into train and test sets
-        if self.test_split_users:
-            # NOT FINISHED YET
-            raise ValueError("test_split_users not supported yet.  Stat hetero concern")
-            # Randomly pick the test_split_fraction of users to be completely held out of training to be used for testing
-            num_test_users = round(len(self.clients)*self.test_split_fraction)
-            # Pick/sample num_test_users from self.clients to be removed and put into self.testing_clients
-            self.testing_clients = [self.clients.pop(random.randrange(len(self.clients))) for _ in range(num_test_users)]
-            # ^Hmmm this requires a full rewrite of the code... 
-        elif self.test_split_each_update:
-            # Idk this might actually be supported just in a different function. I'm not sure. Don't plan on using it rn so who cares
-            raise ValueError("test_split_each_update not supported yet.  Idk if this is necessary to add")
-        else: 
-            testsplit_upper_bound = round((1-self.test_split_fraction)*(self.cond_samples_npy.shape[0]))
-        # Set the number of examples (used to be done on init) --> ... THIS IS ABOUT TRAIN/TEST SPLIT
-        self.train_samples = testsplit_upper_bound
-        self.test_samples = self.cond_samples_npy.shape[0] - testsplit_upper_bound
-        train_test_update_number_split = min(self.update_ix, key=lambda x:abs(x-testsplit_upper_bound))
-        self.max_training_update_upbound = self.update_ix.index(train_test_update_number_split)
-        self.test_split_idx = self.update_ix[self.max_training_update_upbound]
+            for cond_num in self.condition_number_lst:
+                # This is a bit of a hardcoded soln...
+                # Extract the subject ID from the string
+                subject_id = file_name.split('_')[0]
+                if (self.test_split_users==True) and (subject_id in self.test_sIDs):
+                    if "Labels" in file_name:
+                        loaded_labels = data_array[cond_num-1,:,:]
+                        #loaded_labels = torch.transpose(torch.tensor(data_array[cond_num-1,:,:]), 0, 1)
+                        if self.test_labels.size == 0:
+                            self.test_labels = loaded_labels
+                        else:
+                            #self.test_labels = np.hstack(self.test_labels, loaded_labels)
+                            #self.test_labels = torch.cat((self.test_labels, loaded_labels), dim=1)
+                            self.test_labels = np.vstack((self.test_labels, loaded_labels))
+                    elif "Data" in file_name:
+                        loaded_samples = data_array[cond_num-1,:,:]
+                        #loaded_samples = torch.transpose(torch.tensor(data_array[cond_num-1,:,:]), 0, 1)
+                        if self.test_samples.size == 0:
+                            self.test_samples = loaded_samples
+                        else:
+                            #self.test_samples = np.hstack(self.test_samples, loaded_samples)
+                            #self.test_samples = torch.cat((self.test_samples, loaded_samples), dim=1)
+                            self.test_samples = np.vstack((self.test_samples, loaded_samples))
+                    else:
+                        raise ValueError("Did not find Labels or Data in filename...")
+                else:    
+                    if "Labels" in file_name:
+                        loaded_labels = data_array[cond_num-1,:,:]
+                        #loaded_labels = torch.transpose(torch.tensor(data_array[cond_num-1,:,:]), 0, 1)
+                        if self.cond_labels_npy.size == 0:
+                            self.cond_labels_npy = loaded_labels
+                        else:
+                            #self.cond_labels_npy = np.hstack(self.cond_labels_npy, loaded_labels)
+                            #self.cond_labels_npy = torch.cat((self.cond_labels_npy, loaded_labels), dim=1)
+                            self.cond_labels_npy = np.vstack((self.cond_labels_npy, loaded_labels))
+                    elif "Data" in file_name:
+                        loaded_samples = data_array[cond_num-1,:,:]
+                        #loaded_samples = torch.transpose(torch.tensor(data_array[cond_num-1,:,:]), 0, 1)
+                        if self.cond_samples_npy.size == 0:
+                            self.cond_samples_npy = loaded_samples
+                        else:
+                            #self.cond_samples_npy = np.hstack(self.cond_samples_npy, loaded_samples)
+                            #self.cond_samples_npy = torch.cat((self.cond_samples_npy, loaded_samples), dim=1)
+                            self.cond_samples_npy = np.vstack((self.cond_samples_npy, loaded_samples))
+                    else:
+                        raise ValueError("Did not find Labels or Data in filename...")
         
 
-    # THIS IS ONLY CALLED IN TRAIN_METRICS()...
     def load_train_data(self, batch_size=None, eval=False, client_init=False):
         # Load full client dataasets
         if client_init:
             self._load_train_data()   # Returns nothing, sets self variables
-        '''
-        # Do I really want this here...
-        if eval==False:
-            self.local_round += 1
-            # Check if you need to advance the update
-            # ---> THIS IMPLIES THAT I AM CREATING A NEW TRAINING LOADER FOR EACH UPDATE... this is what I want actually I think
-            if (self.local_round%self.local_round_threshold==0) and (self.local_round>1) and (self.current_update < self.max_training_update_upbound):
-                self.current_update += 1
-                print(f"Client {self.ID} advances to update {self.current_update} on local round {self.local_round}")
-            # Slice the full client dataset based on the current update number
-            if self.current_update < self.max_training_update_upbound:
-                self.update_lower_bound = self.update_ix[self.current_update]
-                self.update_upper_bound = self.update_ix[self.current_update+1]
-            else:
-                self.update_lower_bound = self.update_ix[self.max_training_update_upbound - 1]
-                self.update_upper_bound = self.update_ix[self.max_training_update_upbound]
-        '''
 
         # Set the Dataset Obj
-        # Creates a new TL each time, but doesn't have to re-read in the data. May not be optimal
-        training_dataset_obj = CustomEMGDataset(self.cond_samples_npy[self.update_lower_bound:self.update_upper_bound,:], self.cond_labels_npy[self.update_lower_bound:self.update_upper_bound,:])
+        training_dataset_obj = CustomEMGDataset(self.cond_samples_npy, self.cond_labels_npy)
         X_data = torch.tensor(training_dataset_obj['x'], dtype=torch.float32)
         y_data = torch.tensor(training_dataset_obj['y'], dtype=torch.float32)
         training_data_for_dataloader = [(x, y) for x, y in zip(X_data, y_data)]
@@ -123,13 +127,10 @@ class clientCent(Client):
 
     def load_test_data(self, batch_size=None): 
         # Make sure this runs AFTER load_train_data so the data is already loaded in
-        if self.verbose:
-            print(f"Client {self.ID}: Setting Test DataLoader")
         if batch_size == None:
             batch_size = self.batch_size
 
-        #test_data = read_client_data(self.dataset, self.ID, self.current_update, is_train=False)
-        testing_dataset_obj = CustomEMGDataset(self.cond_samples_npy[self.test_split_idx:,:], self.cond_labels_npy[self.test_split_idx:,:])
+        testing_dataset_obj = CustomEMGDataset(self.test_samples, self.test_labels)
         X_data = torch.Tensor(testing_dataset_obj['x']).type(torch.float32)
         y_data = torch.Tensor(testing_dataset_obj['y']).type(torch.float32)
         testing_data_for_dataloader = [(x, y) for x, y in zip(X_data, y_data)]
@@ -140,6 +141,110 @@ class clientCent(Client):
             drop_last=False,  # Yah idk if this should be true or false or if it matters...
             shuffle=False) 
         return dl
+    
+
+    def test_metrics(self, saved_model_path=None, model_obj=None):
+        '''Kai's docs: This function is for evaluating the model (on the testing data) during training
+        Note that model.eval() is called so params aren't updated.
+        
+        Inputs:
+            saved_model_path: full path (absolute or relative from PFL(\CB?)) to .pt model object
+            OR
+            model_obj:
+            NOTE: setting both input params is unnecessary, only specify one. Otherwise an assertion will be raised
+            '''
+
+        if model_obj != None:
+            eval_model = model_obj
+        elif saved_model_path != None:
+            eval_model = self.load_model(saved_model_path)
+        else:
+            eval_model = self.model
+        eval_model.to(self.device)
+        eval_model.eval()
+
+        running_test_loss = 0
+        num_samples = 0
+        if self.verbose:
+            print(f'cb Client {self.ID} test_metrics()')
+
+        ###########################################################################################
+        print("CENTRALIZED TEST_METRICS!")
+        ###########################################################################################
+
+        with torch.no_grad():
+            for i, (x, y) in enumerate(self.test_loader):
+                if type(x) == type([]):
+                    x[0] = x[0].to(self.device)
+                else:
+                    x = x.to(self.device)
+                y = y.to(self.device)
+
+                self.simulate_data_streaming_xy(x, y)
+                # ^ Idk if this actaully needs to be called again here...
+                # D@s = predicted velocity
+                vel_pred = eval_model(self.F)
+
+                # L2 regularization term
+                l2_loss = 0
+                for name, param in self.model.named_parameters():
+                    if 'weight' in name:
+                        l2_loss += torch.norm(param, p=2)
+                t1 = self.loss_func(vel_pred, self.y_ref)
+                t2 = self.lambdaD*(l2_loss**2)
+                t3 = self.lambdaF*(torch.linalg.matrix_norm((self.F))**2)
+                loss = t1 + t2 + t3
+
+                test_loss = loss.item()  # Just get the actual loss function term
+                running_test_loss += test_loss
+                if self.verbose:
+                    print(f"batch {i}, loss {test_loss:0,.5f}")
+                num_samples += x.size()[0]
+        self.client_testing_log.append(running_test_loss / num_samples)   
+        return running_test_loss, num_samples
+    
+
+    def train_metrics(self, saved_model_path=None, model_obj=None):
+        '''Kai's docs: This function is for evaluating the model (on the training data for some reason) during training
+        Note that model.eval() is called so params aren't updated.'''
+        if model_obj != None:
+            eval_model = model_obj
+        elif saved_model_path != None:
+            eval_model = self.load_model(saved_model_path)
+        else:
+            eval_model = self.model
+        eval_model.eval()
+
+        train_num = 0
+        losses = 0
+        if self.verbose:
+            print(f'cb Client {self.ID} train_metrics()')
+        with torch.no_grad():
+            for i, (x, y) in enumerate(self.train_loader):
+                if type(x) == type([]):
+                    x[0] = x[0].to(self.device)
+                else:
+                    x = x.to(self.device)
+                y = y.to(self.device)
+
+                self.simulate_data_streaming_xy(x, y)
+                vel_pred = eval_model(self.F)
+
+                # L2 regularization term
+                l2_loss = 0
+                for name, param in eval_model.named_parameters():
+                    if 'weight' in name:
+                        l2_loss += torch.norm(param, p=2)
+                t1 = self.loss_func(vel_pred, self.y_ref)
+                t2 = self.lambdaD*(l2_loss**2)
+                t3 = self.lambdaF*(torch.linalg.matrix_norm((self.F))**2)
+                loss = t1 + t2 + t3
+                if self.verbose:
+                    print(f"batch {i}, loss {loss:0,.5f}")
+                train_num += self.y_ref.shape[0]
+                # ^ This is probably wrong now since I removed the transpose... (12/2/23)
+                losses += loss.item() #* y.shape[0]
+        return losses, train_num
 
 
     def train(self):
@@ -149,8 +254,6 @@ class clientCent(Client):
         
         start_time = time.time()
 
-        if self.verbose:
-            print(f'Client {self.ID} Training')
         # Save the client's starting weights for Smoothbatch
         if self.smoothbatch_boolean:
             starting_weights = {}
@@ -162,6 +265,11 @@ class clientCent(Client):
                 # Currently, each tl only has 1 batch of 1200 [eg 1 update] (8/5/23)
                 # ^ I don't think this is relevant anymore...?
                 for i, (x, y) in enumerate(trainloader):
+                    # self.simulate_data_streaming_xy()
+                    ## ^ So this gets called for each batch...? What is F then? Each batch... ...
+                    ## This is toggled in cphs_sub so I just turned it on there...
+                    #x = torch.transpose(x, 0, 1)
+                    #y = torch.transpose(y, 0, 1)
                     if self.verbose:
                         print(f"Epoch {epoch}, grad step {step}, batch {i}")
                     self.cphs_training_subroutine(x, y)
@@ -179,3 +287,5 @@ class clientCent(Client):
 
         self.train_time_cost['num_rounds'] += 1
         self.train_time_cost['total_cost'] += time.time() - start_time
+
+

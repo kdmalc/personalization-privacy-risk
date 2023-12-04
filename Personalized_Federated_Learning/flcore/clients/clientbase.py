@@ -118,8 +118,8 @@ class Client(object):
         #self.assert_tl_samples_match_npy(x, y)
         
         # Simulate datastreaming, eg set s, F and V
-        if self.algorithm!='Centralized':
-            self.simulate_data_streaming_xy(x, y)
+        #if self.algorithm!='Centralized':
+        self.simulate_data_streaming_xy(x, y)
 
         # Idk if this needs to happen if I'm just running it on cpu...
         # ^ If so it would need to happen in simulate data

@@ -12,22 +12,23 @@ class Centralized(Server):
         super().__init__(args, times)
 
         # HAVE TO NORMALIZE THE DATA ON MY OWN!! SIMULATE DATA STREAM DOES IT NORMALLY (that and PCA)...
+        # ^ IDK where this belongs... somewhere in train or cphs_subrountine or something...
 
-
+        base_data_path = 'C:\\Users\\kdmen\\Desktop\\Research\\Data\\Subject_Specific_Files\\'
+        client = clientCent(self.args, 
+                            ID="_ALL", 
+                            dir_path=base_data_path, 
+                            condition_number_lst = self.condition_number_lst, 
+                            train_slow=False, 
+                            send_slow=False)
+        self.selected_clients = [client] # This might not be necessary...
+        self.clients.append(client) # This is just technical debt... have to keep it or completely refactor...
+        #client.load_train_data(client_init=True) # This has to be here otherwise load_test_data() breaks...
+        # ^ Moved to init for clientCent I think...
 
         print("Finished creating server and client.")
         
         # self.load_model()
-
-
-    def load_centralized_data(self):
-        base_data_path = 'C:\\Users\\kdmen\\Desktop\\Research\\Data\\Subject_Specific_Files\\'
-        for i in range(self.num_clients):
-            for j in self.condition_number_lst:
-                print(f"SB Set Client: iter {i}, cond number: {str(j)}: LOADING DATA: {self.train_subj_IDs[i]}")
-                ID=self.train_subj_IDs[i], 
-                samples_path = base_data_path + 'S' + str(self.train_numerical_subj_IDs[i]) + "_TrainData_8by20770by64.npy", 
-                labels_path = base_data_path + 'S' + str(self.train_numerical_subj_IDs[i]) + "_Labels_8by20770by2.npy", 
 
 
     def train(self):
@@ -40,7 +41,8 @@ class Centralized(Server):
                     self.evaluate(train=self.run_train_metrics) 
 
             #print("CLIENT TRAINING")
-            client.train()
+            for client in self.selected_clients:
+                client.train()
 
             #print()
 

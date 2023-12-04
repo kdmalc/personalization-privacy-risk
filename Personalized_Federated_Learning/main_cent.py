@@ -25,34 +25,11 @@ from flcore.servers.serverpFedMe import pFedMe
 from flcore.servers.serverperavg import PerAvg
 from flcore.servers.servermtl import FedMTL
 from flcore.servers.serverlocal import Local
+from flcore.servers.servercentralized import Centralized
 #from flcore.servers.serverper import FedPer
 #from flcore.servers.serverscaffold import SCAFFOLD
 from flcore.servers.serverapfl import APFL
 from flcore.servers.serverditto import Ditto
-
-'''
-from flcore.servers.serverprox import FedProx
-from flcore.servers.serverfomo import FedFomo
-from flcore.servers.serveramp import FedAMP
-from flcore.servers.serverrep import FedRep
-from flcore.servers.serverphp import FedPHP
-from flcore.servers.serverbn import FedBN
-from flcore.servers.serverrod import FedROD
-from flcore.servers.serverproto import FedProto
-from flcore.servers.serverdyn import FedDyn
-from flcore.servers.servermoon import MOON
-from flcore.servers.serverbabu import FedBABU
-from flcore.servers.serverapple import APPLE
-from flcore.servers.servergen import FedGen
-from flcore.servers.serverdistill import FedDistill
-from flcore.servers.serverala import FedALA
-from flcore.servers.serverpac import FedPAC
-from flcore.servers.serverlg import LG_FedAvg
-from flcore.servers.servergc import FedGC
-from flcore.servers.serverfml import FML
-from flcore.servers.serverkd import FedKD
-from flcore.servers.serverpcl import FedPCL
-'''
 
 from flcore.pflniid_utils.result_utils import average_data
 from flcore.pflniid_utils.mem_utils import MemReporter
@@ -89,6 +66,8 @@ def run(args):
             #args.model.fc = nn.Identity()
             #args.model = BaseHeadSplit(args.model, args.head)
             server = FedAvg(args, i)
+        elif args.algorithm == "Centralized":
+            server = Centralized(args, i)
         elif args.algorithm == "Local":
             server = Local(args, i)
         elif args.algorithm == "APFL":
@@ -111,95 +90,6 @@ def run(args):
         else:
             raise NotImplementedError
         
-        '''
-        elif args.algorithm == "FedPer":
-            # FIX ARGS.HEAD --> LINEAR REGRESSION HAS NO FC
-            #args.head = copy.deepcopy(args.model.fc)
-            #args.model.fc = nn.Identity()
-            #args.model = BaseHeadSplit(args.model, args.head)
-            server = FedPer(args, i)
-        elif args.algorithm == "SCAFFOLD":
-            server = SCAFFOLD(args, i)
-        elif args.algorithm == "FedProx":
-            server = FedProx(args, i)
-        elif args.algorithm == "FedFomo":
-            server = FedFomo(args, i)
-        elif args.algorithm == "FedAMP":
-            server = FedAMP(args, i)
-        elif args.algorithm == "APFL":
-            server = APFL(args, i)
-            elif args.algorithm == "FedRep":
-            args.head = copy.deepcopy(args.model.fc)
-            args.model.fc = nn.Identity()
-            args.model = BaseHeadSplit(args.model, args.head)
-            server = FedRep(args, i)
-        elif args.algorithm == "FedPHP":
-            args.head = copy.deepcopy(args.model.fc)
-            args.model.fc = nn.Identity()
-            args.model = BaseHeadSplit(args.model, args.head)
-            server = FedPHP(args, i)
-        elif args.algorithm == "FedBN":
-            server = FedBN(args, i)
-        elif args.algorithm == "FedROD":
-            args.head = copy.deepcopy(args.model.fc)
-            args.model.fc = nn.Identity()
-            args.model = BaseHeadSplit(args.model, args.head)
-            server = FedROD(args, i)
-        elif args.algorithm == "FedProto":
-            args.head = copy.deepcopy(args.model.fc)
-            args.model.fc = nn.Identity()
-            args.model = BaseHeadSplit(args.model, args.head)
-            server = FedProto(args, i)
-        elif args.algorithm == "FedDyn":
-            server = FedDyn(args, i)
-        elif args.algorithm == "MOON":
-            args.head = copy.deepcopy(args.model.fc)
-            args.model.fc = nn.Identity()
-            args.model = BaseHeadSplit(args.model, args.head)
-            server = MOON(args, i)
-        elif args.algorithm == "FedBABU":
-            args.head = copy.deepcopy(args.model.fc)
-            args.model.fc = nn.Identity()
-            args.model = BaseHeadSplit(args.model, args.head)
-            server = FedBABU(args, i)
-        elif args.algorithm == "APPLE":
-            server = APPLE(args, i)
-        elif args.algorithm == "FedGen":
-            args.head = copy.deepcopy(args.model.fc)
-            args.model.fc = nn.Identity()
-            args.model = BaseHeadSplit(args.model, args.head)
-            server = FedGen(args, i)
-            elif args.algorithm == "FedDistill":
-            server = FedDistill(args, i)
-        elif args.algorithm == "FedALA":
-            server = FedALA(args, i)
-        elif args.algorithm == "FedPAC":
-            args.head = copy.deepcopy(args.model.fc)
-            args.model.fc = nn.Identity()
-            args.model = BaseHeadSplit(args.model, args.head)
-            server = FedPAC(args, i)
-        elif args.algorithm == "LG-FedAvg":
-            args.head = copy.deepcopy(args.model.fc)
-            args.model.fc = nn.Identity()
-            args.model = BaseHeadSplit(args.model, args.head)
-            server = LG_FedAvg(args, i)
-        elif args.algorithm == "FedGC":
-            args.head = copy.deepcopy(args.model.fc)
-            args.model.fc = nn.Identity()
-            args.model = BaseHeadSplit(args.model, args.head)
-            server = FedGC(args, i)
-        elif args.algorithm == "FML":
-            server = FML(args, i)
-        elif args.algorithm == "FedKD":
-            args.head = copy.deepcopy(args.model.fc)
-            args.model.fc = nn.Identity()
-            args.model = BaseHeadSplit(args.model, args.head)
-            server = FedKD(args, i)
-        elif args.algorithm == "FedPCL":
-            args.model.fc = nn.Identity()
-            server = FedPCL(args, i)
-        '''
-
         server.train()
         time_list.append(time.time()-start)
 
@@ -210,21 +100,6 @@ def run(args):
     if args.algorithm != "Local":
         average_data(server.trial_result_path, dataset=args.dataset, algorithm=args.algorithm, goal=args.goal, times=args.times)
         # Not super sure what "times" is, by default it is 1. Assuming it runs the process multiple times to average out the stochasticity?
-
-    # Idk why I was printing this...  
-    #print("Server's round, rs_train_loss, rs_test_loss (averaged over clients): ")
-    #print(server.rs_train_loss)  # I think this is a list...
-    #print("Server's rs_test_loss (averaged over clients): ")
-    #print(server.rs_test_loss)
-    #assert( len(server.rs_train_loss) == len(server.rs_test_loss))
-    #if args.run_train_metrics:
-    #    for i in range(len(server.rs_train_loss)):
-    #        print(f"Round {i}, Train Loss: {server.rs_train_loss[i]:0.5f}, Test Loss: {server.rs_test_loss[i]:0.5f}")
-    #        if i==(len(server.rs_train_loss)-1):
-    #            print(f"Final eval ({i+1}), Test Loss: {server.rs_test_loss[i+1]:0.5f}")
-    #else:
-    #    for i in range(len(server.rs_test_loss)):
-    #        print(f"Round {i}, Test Loss: {server.rs_test_loss[i]:0.5f}")
 
     print("All done!")
     reporter.report()
@@ -237,18 +112,22 @@ def parse_args():
     # Use block2...
     parser.add_argument('-con_num', "--condition_number_lst", type=str, default='[3]', # Use 3 and/or 7
                         help="Which condition number (trial) to train on. Must be a list. By default, will iterate through all train_subjs for each cond (eg each cond_num gets its own client even for the same subject)")
-    #Local #FedAvg #APFL #FedMTL #pFedMe (not working) ## #Ditto #PerAvg
-    parser.add_argument('-algo', "--algorithm", type=str, default="FedAvg") # "Centralized"
+    #Local #FedAvg #APFL #FedMTL #pFedMe (not working) # #Ditto #PerAvg # Centralized
+    parser.add_argument('-algo', "--algorithm", type=str, default="Centralized") 
+    # This shouldn't be relevant... hopefully never gets used lol
     parser.add_argument('-jr', "--join_ratio", type=float, default=0.3,
                         help="Fraction of clients to be active in training per round")
     parser.add_argument('-gr', "--global_rounds", type=int, default=50)  # KAI: Originally was 2000
+    # I think this is also irrelevant
     parser.add_argument('-lrt', "--local_round_threshold", type=int, default=25,
                         help="Number of communication rounds per client until a client will advance to the next batch of streamed data")
     parser.add_argument('-m', "--model", type=str, default="LinearRegression")  # KAI: Changed the default to Linear Regression
     # I have little confidence in this batch size being correct...
-    parser.add_argument('-lbs', "--batch_size", type=int, default=1202)  # Setting it to a full update would be 1202... will this automatically run twice?
+    # No idea what to do with batch_size as of now..., idek if the model is implemented (12/2/23)
+    parser.add_argument('-lbs', "--batch_size", type=int, default=64)  # Setting it to a full update would be 1202... will this automatically run twice?
     # The 1300 and the batch size are 2 separate things...
     # I want to restrict the given dataset to just the 1300, but then iterate in batches... or do I since we don't have that much data and can probably just use all the data at once? Make batch size match the update size? ...
+    # This should probably be lower
     parser.add_argument('-lr', "--local_learning_rate", type=float, default=1,  #0.005
                         help="Local learning rate")
     parser.add_argument('-ld', "--learning_rate_decay", type=bool, default=False)
@@ -261,10 +140,11 @@ def parse_args():
                         help="Fraction of data to use for testing")
     parser.add_argument('-test_split_each_update', "--test_split_each_update", type=bool, default=False,
                         help="Implement train/test split within each update or on the entire dataset")
-    parser.add_argument('-test_split_users', "--test_split_users", type=bool, default=False,
+    parser.add_argument('-test_split_users', "--test_split_users", type=bool, default=True,
                         help="Split testing data by holding out some users (fraction held out determined by test_split_fraction)")
-    parser.add_argument('-ts_ids', "--test_subj_IDs", type=str, default='[]',
+    parser.add_argument('-ts_ids', "--test_subj_IDs", type=str, default=str(['METACPHS_S110', 'METACPHS_S111', 'METACPHS_S112']),
                         help="List of subject ID strings of all subjects to be set to test only")
+    #default=str(['METACPHS_S106', 'METACPHS_S107', 'METACPHS_S108', 'METACPHS_S109', 'METACPHS_S113', 'METACPHS_S114', 'METACPHS_S115', 'METACPHS_S116', 'METACPHS_S117', 'METACPHS_S118', 'METACPHS_S119']),
 
     # general
     parser.add_argument('-go', "--goal", type=str, default="test", 
@@ -330,43 +210,6 @@ def parse_args():
     # FedMTL
     parser.add_argument('-itk', "--itk", type=int, default=4000,
                         help="The iterations for solving quadratic subproblems")
-    
-    '''
-    # SCAFFOLD
-    parser.add_argument('-slr', "--server_learning_rate", type=float, default=1.0)
-    # FedFomo
-    parser.add_argument('-M', "--M", type=int, default=5,
-                        help="Server only sends M client models to one client at each round")
-    # FedAMP
-    parser.add_argument('-alk', "--alphaK", type=float, default=1.0, 
-                        help="lambda/sqrt(GLOABL-ITRATION) according to the paper")
-    parser.add_argument('-sg', "--sigma", type=float, default=1.0)
-    
-    # MOON
-    parser.add_argument('-tau', "--tau", type=float, default=1.0)
-    # FedBABU
-    parser.add_argument('-fts', "--fine_tuning_steps", type=int, default=10)
-    # APPLE
-    parser.add_argument('-dlr', "--dr_learning_rate", type=float, default=0.0)
-    parser.add_argument('-L', "--L", type=float, default=1.0)
-    # FedGen
-    parser.add_argument('-nd', "--noise_dim", type=int, default=512)
-    parser.add_argument('-glr', "--generator_learning_rate", type=float, default=0.005)
-    parser.add_argument('-hd', "--hidden_dim", type=int, default=512)
-    parser.add_argument('-se', "--server_epochs", type=int, default=1000)
-    parser.add_argument('-lf', "--localize_feature_extractor", type=bool, default=False)
-    # SCAFFOLD
-    parser.add_argument('-slr', "--server_learning_rate", type=float, default=1.0)
-    # FedALA
-    parser.add_argument('-et', "--eta", type=float, default=1.0)
-    parser.add_argument('-s', "--rand_percent", type=int, default=80)
-    parser.add_argument('-p', "--layer_idx", type=int, default=2,
-                        help="More fine-graind than its original paper.")
-    # FedKD
-    parser.add_argument('-mlr', "--mentee_learning_rate", type=float, default=0.005)
-    parser.add_argument('-Ts', "--T_start", type=float, default=0.95)
-    parser.add_argument('-Te', "--T_end", type=float, default=0.98)
-    '''
     
     # SECTION: Kai's additional args
     # Idk if this one is even used/useful anymore (think it was for interfacing with ipynb?)
@@ -454,8 +297,7 @@ def parse_args():
 
     args.condition_number_lst = convert_cmd_line_str_lst_to_type_lst(args.condition_number_lst, int)
     args.train_subj_IDs = convert_cmd_line_str_lst_to_type_lst(args.train_subj_IDs, str)
-    if args.test_subj_IDs!=[]:
-        args.test_subj_IDs = convert_cmd_line_str_lst_to_type_lst(args.test_subj_IDs, str)
+    args.test_subj_IDs = convert_cmd_line_str_lst_to_type_lst(args.test_subj_IDs, str)
     #if args.sequential != False:
     args.live_client_IDs_queue = convert_cmd_line_str_lst_to_type_lst(args.live_client_IDs_queue, str)
     args.static_client_IDs = convert_cmd_line_str_lst_to_type_lst(args.static_client_IDs, str)
