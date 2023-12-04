@@ -34,6 +34,8 @@ from flcore.servers.serverditto import Ditto
 from flcore.pflniid_utils.result_utils import average_data
 from flcore.pflniid_utils.mem_utils import MemReporter
 
+from models.DNN_classes import *
+
 logger = logging.getLogger()
 logger.setLevel(logging.ERROR)
 
@@ -51,11 +53,26 @@ def run(args):
         print("Creating server and clients ...")
         start = time.time()
 
+        ####################################################################################################
         # Generate args.model
         if model_str == "LinearRegression":
             args.model = torch.nn.Linear(args.pca_channels, 2, args.linear_model_bias)  #input_size, output_size, bias boolean
+        elif model_str == "RNN":
+            # Initialize the RNN model
+            #rnn_model = RNNModel(D, hidden_size, 2)
+            args.model = RNNModel(args.input_size, args.hidden_size, args.output_size)
+        elif model_str == "LSTM":
+            # Initialize the LSTM model
+            #hidden_size = 64
+            #lstm_model = LSTMModel(D, hidden_size, output_size)
+            args.model = LSTMModel(args.input_size, args.hidden_size, args.output_size)
+        elif model_str == "GRU":
+            args.model = GRUModel(args.input_size, args.hidden_size, args.output_size)
+        elif model_str == "Transformer":
+            args.model = TransformerModel(args.input_size, args.output_size)
         else:
             raise NotImplementedError
+        ####################################################################################################
 
         print(args.model)
 
