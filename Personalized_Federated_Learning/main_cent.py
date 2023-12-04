@@ -126,6 +126,22 @@ def run(args):
 def parse_args():
     parser = argparse.ArgumentParser()
 
+    # DEEP LEARNING STUFF
+    parser.add_argument('-input_size', "--input_size", type=int, default=64)
+    parser.add_argument('-hidden_size', "--hidden_size", type=int, default=128)
+    parser.add_argument('-sequence_length', "--sequence_length", type=int, default=1000)
+    parser.add_argument('-output_size', "--output_size", type=int, default=2)
+
+    parser.add_argument('-m', "--model", type=str, default="RNN")  # KAI: Changed the default to Linear Regression
+    # I have little confidence in this batch size being correct...
+    # No idea what to do with batch_size as of now..., idek if the model is implemented (12/2/23)
+    parser.add_argument('-lbs', "--batch_size", type=int, default=64)  # Setting it to a full update would be 1202... will this automatically run twice?
+    # The 1300 and the batch size are 2 separate things...
+    # I want to restrict the given dataset to just the 1300, but then iterate in batches... or do I since we don't have that much data and can probably just use all the data at once? Make batch size match the update size? ...
+    # This should probably be lower
+    parser.add_argument('-lr', "--local_learning_rate", type=float, default=1,  #0.005
+                        help="Local learning rate")
+
     # Use block2...
     parser.add_argument('-con_num', "--condition_number_lst", type=str, default='[3]', # Use 3 and/or 7
                         help="Which condition number (trial) to train on. Must be a list. By default, will iterate through all train_subjs for each cond (eg each cond_num gets its own client even for the same subject)")
@@ -138,15 +154,6 @@ def parse_args():
     # I think this is also irrelevant
     parser.add_argument('-lrt', "--local_round_threshold", type=int, default=25,
                         help="Number of communication rounds per client until a client will advance to the next batch of streamed data")
-    parser.add_argument('-m', "--model", type=str, default="LinearRegression")  # KAI: Changed the default to Linear Regression
-    # I have little confidence in this batch size being correct...
-    # No idea what to do with batch_size as of now..., idek if the model is implemented (12/2/23)
-    parser.add_argument('-lbs', "--batch_size", type=int, default=64)  # Setting it to a full update would be 1202... will this automatically run twice?
-    # The 1300 and the batch size are 2 separate things...
-    # I want to restrict the given dataset to just the 1300, but then iterate in batches... or do I since we don't have that much data and can probably just use all the data at once? Make batch size match the update size? ...
-    # This should probably be lower
-    parser.add_argument('-lr', "--local_learning_rate", type=float, default=1,  #0.005
-                        help="Local learning rate")
     parser.add_argument('-ld', "--learning_rate_decay", type=bool, default=False)
     parser.add_argument('-ls', "--local_epochs", type=int, default=3, 
                         help="How many times a client should iterate through their current update dataset.")  

@@ -50,3 +50,35 @@ class CustomEMGDataset(torch.utils.data.Dataset):
             return self.labels
         else:
             raise("Not supposed to run")
+
+
+class EMG3DDataset(torch.utils.data.Dataset):
+    def __init__(self, emg_input, vel_labels, sequence_length, batch_size):
+        self.emg_input = emg_input
+        self.vel_labels = vel_labels
+        self.sequence_length = sequence_length
+        self.batch_size = batch_size
+        # Both of these should be the same...
+        self.total_samples = self.emg_input.shape[1] // self.sequence_length
+        self.total_labels = self.vel_labels.shape[1] // self.sequence_length
+        assert(self.total_samples == self.total_labels)
+
+    def __len__(self):
+        return self.total_samples
+
+    def __getitem__(self, idx):
+        #start_idx = idx * self.batch_size * self.sequence_length
+        #end_idx = (idx + 1) * self.batch_size * self.sequence_length
+        #batch_data = self.data[:, start_idx:end_idx].reshape(self.batch_size, self.sequence_length, -1)
+        ## Assuming you have target data, adjust the target retrieval accordingly
+        #batch_targets = self.targets[:, start_idx:end_idx].reshape(self.batch_size, self.sequence_length, -1)
+        #return batch_data, batch_targets
+    
+        start_idx = idx * self.batch_size * self.sequence_length
+        end_idx = (idx + 1) * self.batch_size * self.sequence_length
+        # Ensure the end index doesn't exceed the total number of samples
+        end_idx = min(end_idx, self.total_samples * self.sequence_length)
+        # Hmm should the reshape really be (batchsize, seq_length, model_inputs)... maybe it is implicitly this...
+        batch_data = self.data[:, start_idx:end_idx].reshape(-1, self.sequence_length, self.data.shape[0])
+        batch_targets = self.targets[:, start_idx:end_idx].reshape(-1, self.sequence_length, self.targets.shape[0])
+        return batch_data, batch_targets

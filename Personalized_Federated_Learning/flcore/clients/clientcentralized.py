@@ -6,7 +6,7 @@ from flcore.clients.clientbase import Client
 #import torch.nn as nn
 import numpy as np
 import os
-import random
+#import random
 from torch.utils.data import DataLoader
 from sklearn.decomposition import PCA
 from utils.processing_funcs import normalize_tensor
@@ -18,6 +18,7 @@ class clientCent(Client):
         super().__init__(args, ID, None, None, condition_number_lst, **kwargs)
 
         self.dir_path = dir_path
+        self.model_str = args.model
         self.test_subj_IDs = args.test_subj_IDs
         self.test_sIDs = [fullID.split('_')[1] for fullID in self.test_subj_IDs]
 
@@ -108,10 +109,15 @@ class clientCent(Client):
             self._load_train_data()   # Returns nothing, sets self variables
 
         # Set the Dataset Obj
-        training_dataset_obj = CustomEMGDataset(self.cond_samples_npy, self.cond_labels_npy)
-        X_data = torch.tensor(training_dataset_obj['x'], dtype=torch.float32)
-        y_data = torch.tensor(training_dataset_obj['y'], dtype=torch.float32)
-        training_data_for_dataloader = [(x, y) for x, y in zip(X_data, y_data)]
+        if self.model == "LinearRegression":
+            training_dataset_obj = CustomEMGDataset(self.cond_samples_npy, self.cond_labels_npy)
+            X_data = torch.tensor(training_dataset_obj['x'], dtype=torch.float32)
+            y_data = torch.tensor(training_dataset_obj['y'], dtype=torch.float32)
+            training_data_for_dataloader = [(x, y) for x, y in zip(X_data, y_data)]
+        else:
+            training_dataset_obj = EMG3DDataset(self.cond_samples_npy, self.cond_labels_npy, self.sequence_length, self.batch_size)
+            # This supposedly works idk
+            training_data_for_dataloader = training_dataset_obj
         
         if self.verbose:
             print(f"cb load_train_data(): Client {self.ID}: Setting Training DataLoader")

@@ -41,6 +41,11 @@ class Client(object):
         self.local_epochs = args.local_epochs
         self.num_gradient_steps = args.num_gradient_steps
 
+        # DEEP LEARNING
+        self.input_size = args.input_size
+        self.hidden_size = args.hidden_size
+        self.sequence_length = args.sequence_length
+        self.output_size = args.output_size
         # check BatchNorm
         self.has_BatchNorm = False
         for layer in self.model.children():
