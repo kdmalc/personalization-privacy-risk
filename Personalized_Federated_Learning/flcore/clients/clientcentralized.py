@@ -69,42 +69,30 @@ class clientCent(Client):
                 if (self.test_split_users==True) and (subject_id in self.test_sIDs):
                     if "Labels" in file_name:
                         loaded_labels = data_array[cond_num-1,:,:]
-                        #loaded_labels = torch.transpose(torch.tensor(data_array[cond_num-1,:,:]), 0, 1)
                         if self.test_labels.size == 0:
                             self.test_labels = loaded_labels
                         else:
-                            #self.test_labels = np.hstack(self.test_labels, loaded_labels)
-                            #self.test_labels = torch.cat((self.test_labels, loaded_labels), dim=1)
                             self.test_labels = np.vstack((self.test_labels, loaded_labels))
                     elif "Data" in file_name:
                         loaded_samples = data_array[cond_num-1,:,:]
-                        #loaded_samples = torch.transpose(torch.tensor(data_array[cond_num-1,:,:]), 0, 1)
                         if self.test_samples.size == 0:
                             self.test_samples = loaded_samples
                         else:
-                            #self.test_samples = np.hstack(self.test_samples, loaded_samples)
-                            #self.test_samples = torch.cat((self.test_samples, loaded_samples), dim=1)
                             self.test_samples = np.vstack((self.test_samples, loaded_samples))
                     else:
                         raise ValueError("Did not find Labels or Data in filename...")
                 else:    
                     if "Labels" in file_name:
                         loaded_labels = data_array[cond_num-1,:,:]
-                        #loaded_labels = torch.transpose(torch.tensor(data_array[cond_num-1,:,:]), 0, 1)
                         if self.cond_labels_npy.size == 0:
                             self.cond_labels_npy = loaded_labels
                         else:
-                            #self.cond_labels_npy = np.hstack(self.cond_labels_npy, loaded_labels)
-                            #self.cond_labels_npy = torch.cat((self.cond_labels_npy, loaded_labels), dim=1)
                             self.cond_labels_npy = np.vstack((self.cond_labels_npy, loaded_labels))
                     elif "Data" in file_name:
                         loaded_samples = data_array[cond_num-1,:,:]
-                        #loaded_samples = torch.transpose(torch.tensor(data_array[cond_num-1,:,:]), 0, 1)
                         if self.cond_samples_npy.size == 0:
                             self.cond_samples_npy = loaded_samples
                         else:
-                            #self.cond_samples_npy = np.hstack(self.cond_samples_npy, loaded_samples)
-                            #self.cond_samples_npy = torch.cat((self.cond_samples_npy, loaded_samples), dim=1)
                             self.cond_samples_npy = np.vstack((self.cond_samples_npy, loaded_samples))
                     else:
                         raise ValueError("Did not find Labels or Data in filename...")
@@ -123,9 +111,6 @@ class clientCent(Client):
             #training_data_for_dataloader = [(x, y) for x, y in zip(X_data, y_data)]
         else:
             training_dataset_obj = BasicDataset(self.cond_samples_npy, self.cond_labels_npy, self.sequence_length)
-            #training_dataset_obj = EMG3DDataset(self.cond_samples_npy, self.cond_labels_npy, self.input_size, self.output_size, self.sequence_length)
-            # This supposedly works idk
-            #training_data_for_dataloader = training_dataset_obj
 
         #print("TRAINING Dataset Length:", len(training_dataset_obj))
         
@@ -156,9 +141,6 @@ class clientCent(Client):
             #testing_data_for_dataloader = [(x, y) for x, y in zip(X_data, y_data)]
         else:
             testing_dataset_obj = BasicDataset(self.test_samples, self.test_labels, self.sequence_length)
-            #testing_dataset_obj = EMG3DDataset(self.test_samples, self.test_labels, self.input_size, self.output_size, self.sequence_length)
-            # This supposedly works idk
-            #testing_data_for_dataloader = testing_dataset_obj
 
         #print("TESTING Dataset Length:", len(testing_dataset_obj))
 
@@ -228,7 +210,7 @@ class clientCent(Client):
 
                 test_loss = loss.item()  # Just get the actual loss function term
                 running_test_loss += test_loss
-                print(f"batch {i}, loss {test_loss:0,.5f}")
+                #print(f"batch {i}, loss {test_loss:0,.5f}")
                 num_samples += x.size()[0]
         self.client_testing_log.append(running_test_loss / num_samples)   
         return running_test_loss, num_samples

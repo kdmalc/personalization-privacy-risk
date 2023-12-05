@@ -66,6 +66,7 @@ def run(args):
             #lstm_model = LSTMModel(D, hidden_size, output_size)
             args.model = LSTMModel(args.input_size, args.hidden_size, args.output_size)
         elif args.model_str == "GRU":
+            #args.model = GRUModel(args.input_size, args.hidden_size, args.output_size, args.sequence_length)
             args.model = GRUModel(args.input_size, args.hidden_size, args.output_size)
         elif args.model_str == "Transformer":
             args.model = TransformerModel(args.input_size, args.output_size)
@@ -127,21 +128,16 @@ def parse_args():
 
     # DEEP LEARNING STUFF
     parser.add_argument('-input_size', "--input_size", type=int, default=64)
-    parser.add_argument('-hidden_size', "--hidden_size", type=int, default=128)
-    parser.add_argument('-sequence_length', "--sequence_length", type=int, default=500)
+    parser.add_argument('-hidden_size', "--hidden_size", type=int, default=32)
+    parser.add_argument('-sequence_length', "--sequence_length", type=int, default=100)
     parser.add_argument('-output_size', "--output_size", type=int, default=2)
 
-    parser.add_argument('-gr', "--global_rounds", type=int, default=3)  # KAI: Originally was 2000
-    parser.add_argument('-eg', "--eval_gap", type=int, default=3,
+    parser.add_argument('-gr', "--global_rounds", type=int, default=25)  # KAI: Originally was 2000
+    parser.add_argument('-eg', "--eval_gap", type=int, default=1,
                         help="Rounds gap for evaluation")
-    parser.add_argument('-m', "--model_str", type=str, default="RNN")  # KAI: Changed the default to Linear Regression
-    # I have little confidence in this batch size being correct...
-    # No idea what to do with batch_size as of now..., idek if the model is implemented (12/2/23)
-    parser.add_argument('-lbs', "--batch_size", type=int, default=32)  # Setting it to a full update would be 1202... will this automatically run twice?
-    # The 1300 and the batch size are 2 separate things...
-    # I want to restrict the given dataset to just the 1300, but then iterate in batches... or do I since we don't have that much data and can probably just use all the data at once? Make batch size match the update size? ...
-    # This should probably be lower
-    parser.add_argument('-lr', "--local_learning_rate", type=float, default=0.01,
+    parser.add_argument('-m', "--model_str", type=str, default="LinearRegression")
+    parser.add_argument('-lbs', "--batch_size", type=int, default=1)
+    parser.add_argument('-lr', "--local_learning_rate", type=float, default=0.1,
                         help="Local learning rate")
 
     # Use block2...

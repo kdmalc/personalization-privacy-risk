@@ -57,6 +57,8 @@ from flcore.servers.serverpcl import FedPCL
 from flcore.pflniid_utils.result_utils import average_data
 from flcore.pflniid_utils.mem_utils import MemReporter
 
+from models.DNN_classes import *
+
 logger = logging.getLogger()
 logger.setLevel(logging.ERROR)
 
@@ -73,11 +75,27 @@ def run(args):
         print("Creating server and clients ...")
         start = time.time()
 
+        ####################################################################################################
         # Generate args.model
         if args.model_str == "LinearRegression":
             args.model = torch.nn.Linear(args.pca_channels, 2, args.linear_model_bias)  #input_size, output_size, bias boolean
+        elif args.model_str == "RNN":
+            # Initialize the RNN model
+            #rnn_model = RNNModel(D, hidden_size, 2)
+            args.model = RNNModel(args.input_size, args.hidden_size, args.output_size)
+        elif args.model_str == "LSTM":
+            # Initialize the LSTM model
+            #hidden_size = 64
+            #lstm_model = LSTMModel(D, hidden_size, output_size)
+            args.model = LSTMModel(args.input_size, args.hidden_size, args.output_size)
+        elif args.model_str == "GRU":
+            #args.model = GRUModel(args.input_size, args.hidden_size, args.output_size, args.sequence_length)
+            args.model = GRUModel(args.input_size, args.hidden_size, args.output_size)
+        elif args.model_str == "Transformer":
+            args.model = TransformerModel(args.input_size, args.output_size)
         else:
             raise NotImplementedError
+        ####################################################################################################
 
         print(args.model)
 
@@ -233,6 +251,18 @@ def run(args):
 def parse_args():
     parser = argparse.ArgumentParser()
 
+    # DEEP LEARNING STUFF
+    parser.add_argument('-input_size', "--input_size", type=int, default=64)
+    parser.add_argument('-hidden_size', "--hidden_size", type=int, default=32)
+    parser.add_argument('-sequence_length', "--sequence_length", type=int, default=1)
+    parser.add_argument('-output_size', "--output_size", type=int, default=2)
+
+    parser.add_argument('-gr', "--global_rounds", type=int, default=5)  # KAI: Originally was 2000
+    parser.add_argument('-m', "--model_str", type=str, default="RNN")
+    parser.add_argument('-lbs', "--batch_size", type=int, default=1) # Setting it to a full update would be 1202
+    parser.add_argument('-lr', "--local_learning_rate", type=float, default=0.1,
+                        help="Local learning rate")
+
     # Use block2...
     parser.add_argument('-con_num', "--condition_number_lst", type=str, default='[3]', # Use 3 and/or 7
                         help="Which condition number (trial) to train on. Must be a list. By default, will iterate through all train_subjs for each cond (eg each cond_num gets its own client even for the same subject)")
@@ -240,16 +270,8 @@ def parse_args():
     parser.add_argument('-algo', "--algorithm", type=str, default="FedAvg") # "Centralized"
     parser.add_argument('-jr', "--join_ratio", type=float, default=0.3,
                         help="Fraction of clients to be active in training per round")
-    parser.add_argument('-gr', "--global_rounds", type=int, default=50)  # KAI: Originally was 2000
     parser.add_argument('-lrt', "--local_round_threshold", type=int, default=25,
                         help="Number of communication rounds per client until a client will advance to the next batch of streamed data")
-    parser.add_argument('-m', "--model_str", type=str, default="LinearRegression")  # KAI: Changed the default to Linear Regression
-    # I have little confidence in this batch size being correct...
-    parser.add_argument('-lbs', "--batch_size", type=int, default=1202)  # Setting it to a full update would be 1202... will this automatically run twice?
-    # The 1300 and the batch size are 2 separate things...
-    # I want to restrict the given dataset to just the 1300, but then iterate in batches... or do I since we don't have that much data and can probably just use all the data at once? Make batch size match the update size? ...
-    parser.add_argument('-lr', "--local_learning_rate", type=float, default=1,  #0.005
-                        help="Local learning rate")
     parser.add_argument('-ld', "--learning_rate_decay", type=bool, default=False)
     parser.add_argument('-ls', "--local_epochs", type=int, default=3, 
                         help="How many times a client should iterate through their current update dataset.")  

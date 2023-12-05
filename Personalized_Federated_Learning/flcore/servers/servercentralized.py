@@ -28,13 +28,12 @@ class Centralized(Server):
     def train(self):
         #for i in range(self.global_rounds+1):  #Idk why they had +1... maybe their round0 did nothing but init?
         for i in range(self.global_rounds):
+            print(f"\n-------------Round number: {i}-------------")
             if i%self.eval_gap == 0:
-                print(f"\n-------------Round number: {i}-------------")
                 if i!=0:
                     #print("\nEvaluate personalized models")
                     self.evaluate(train=self.run_train_metrics) 
 
-            print("CLIENT TRAINING")
             for client in self.selected_clients:
                 client.train()
 

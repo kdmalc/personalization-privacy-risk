@@ -1,8 +1,8 @@
 BASE
 algorithm = Centralized
 model = RNNModel(
-  (rnn): RNN(64, 128, batch_first=True)
-  (fc): Linear(in_features=128, out_features=2, bias=True)
+  (rnn): RNN(64, 32, batch_first=True)
+  (fc): Linear(in_features=32, out_features=2, bias=True)
 )
 train_subj_IDs = ['METACPHS_S106', 'METACPHS_S107', 'METACPHS_S108', 'METACPHS_S109', 'METACPHS_S110', 'METACPHS_S111', 'METACPHS_S112', 'METACPHS_S113', 'METACPHS_S114', 'METACPHS_S115', 'METACPHS_S116', 'METACPHS_S117', 'METACPHS_S118', 'METACPHS_S119']
 condition_number_lst = [3]
@@ -14,10 +14,10 @@ MODEL HYPERPARAMETERS
 lambdaF = 0.0
 lambdaD = 0.001
 lambdaE = 0.0001
-global_rounds = 10
-local_epochs = 3
-batch_size = 64
-local_learning_rate = 1
+global_rounds = 25
+local_epochs = 1
+batch_size = 32
+local_learning_rate = 0.1
 learning_rate_decay = False
 learning_rate_decay_gamma = 0.99
 pca_channels = 64

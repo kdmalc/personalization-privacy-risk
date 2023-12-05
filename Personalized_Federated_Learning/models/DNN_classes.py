@@ -58,6 +58,21 @@ class LSTMModel(nn.Module):
     #    return output
 
 
+# Edited GRU to pass sequence length so that you get the full output...
+class GRUModelEDITED(nn.Module):
+    def __init__(self, input_size, hidden_size, output_size, sequence_length):
+        super(GRUModel, self).__init__()
+        self.gru = nn.GRU(input_size, hidden_size, batch_first=True)
+        self.fc = nn.Linear(hidden_size, sequence_length, output_size)
+
+    def forward(self, x):
+        # Output contains all hidden states for each time step
+        output, h_n = self.gru(x)
+
+        # You can use the entire sequence for further processing
+        return self.fc(output)
+
+
 class GRUModel(nn.Module):
     def __init__(self, input_size, hidden_size, output_size):
         super(GRUModel, self).__init__()

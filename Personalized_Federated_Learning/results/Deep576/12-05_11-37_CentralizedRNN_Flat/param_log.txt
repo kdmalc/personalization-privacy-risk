@@ -14,10 +14,10 @@ MODEL HYPERPARAMETERS
 lambdaF = 0.0
 lambdaD = 0.001
 lambdaE = 0.0001
-global_rounds = 10
-local_epochs = 3
-batch_size = 64
-local_learning_rate = 1
+global_rounds = 50
+local_epochs = 1
+batch_size = 32
+local_learning_rate = 0.01
 learning_rate_decay = False
 learning_rate_decay_gamma = 0.99
 pca_channels = 64
