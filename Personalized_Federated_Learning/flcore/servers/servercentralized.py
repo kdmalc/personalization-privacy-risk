@@ -4,15 +4,11 @@ from flcore.clients.clientcentralized import clientCent
 from flcore.servers.serverbase import Server
 from datetime import datetime
 import os
-import numpy as np
 
 
 class Centralized(Server):
     def __init__(self, args, times):
         super().__init__(args, times)
-
-        # HAVE TO NORMALIZE THE DATA ON MY OWN!! SIMULATE DATA STREAM DOES IT NORMALLY (that and PCA)...
-        # ^ IDK where this belongs... somewhere in train or cphs_subrountine or something...
 
         base_data_path = 'C:\\Users\\kdmen\\Desktop\\Research\\Data\\Subject_Specific_Files\\'
         client = clientCent(self.args, 
@@ -21,10 +17,8 @@ class Centralized(Server):
                             condition_number_lst = self.condition_number_lst, 
                             train_slow=False, 
                             send_slow=False)
-        self.selected_clients = [client] # This might not be necessary...
+        self.selected_clients = [client] 
         self.clients.append(client) # This is just technical debt... have to keep it or completely refactor...
-        #client.load_train_data(client_init=True) # This has to be here otherwise load_test_data() breaks...
-        # ^ Moved to init for clientCent I think...
 
         print("Finished creating server and client.")
         
@@ -42,7 +36,6 @@ class Centralized(Server):
 
             print("CLIENT TRAINING")
             for client in self.selected_clients:
-                print("only cli is training")
                 client.train()
 
             #print()

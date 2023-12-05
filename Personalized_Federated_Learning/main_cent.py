@@ -128,17 +128,20 @@ def parse_args():
     # DEEP LEARNING STUFF
     parser.add_argument('-input_size', "--input_size", type=int, default=64)
     parser.add_argument('-hidden_size', "--hidden_size", type=int, default=128)
-    parser.add_argument('-sequence_length', "--sequence_length", type=int, default=1000)
+    parser.add_argument('-sequence_length', "--sequence_length", type=int, default=500)
     parser.add_argument('-output_size', "--output_size", type=int, default=2)
 
+    parser.add_argument('-gr', "--global_rounds", type=int, default=3)  # KAI: Originally was 2000
+    parser.add_argument('-eg', "--eval_gap", type=int, default=3,
+                        help="Rounds gap for evaluation")
     parser.add_argument('-m', "--model_str", type=str, default="RNN")  # KAI: Changed the default to Linear Regression
     # I have little confidence in this batch size being correct...
     # No idea what to do with batch_size as of now..., idek if the model is implemented (12/2/23)
-    parser.add_argument('-lbs', "--batch_size", type=int, default=64)  # Setting it to a full update would be 1202... will this automatically run twice?
+    parser.add_argument('-lbs', "--batch_size", type=int, default=32)  # Setting it to a full update would be 1202... will this automatically run twice?
     # The 1300 and the batch size are 2 separate things...
     # I want to restrict the given dataset to just the 1300, but then iterate in batches... or do I since we don't have that much data and can probably just use all the data at once? Make batch size match the update size? ...
     # This should probably be lower
-    parser.add_argument('-lr', "--local_learning_rate", type=float, default=1,  #0.005
+    parser.add_argument('-lr', "--local_learning_rate", type=float, default=0.01,
                         help="Local learning rate")
 
     # Use block2...
@@ -149,12 +152,11 @@ def parse_args():
     # This shouldn't be relevant... hopefully never gets used lol
     parser.add_argument('-jr', "--join_ratio", type=float, default=0.3,
                         help="Fraction of clients to be active in training per round")
-    parser.add_argument('-gr', "--global_rounds", type=int, default=10)  # KAI: Originally was 2000
     # I think this is also irrelevant
     parser.add_argument('-lrt', "--local_round_threshold", type=int, default=25,
                         help="Number of communication rounds per client until a client will advance to the next batch of streamed data")
     parser.add_argument('-ld', "--learning_rate_decay", type=bool, default=False)
-    parser.add_argument('-ls', "--local_epochs", type=int, default=3, 
+    parser.add_argument('-ls', "--local_epochs", type=int, default=1, 
                         help="How many times a client should iterate through their current update dataset.")  
     parser.add_argument('-ngradsteps', "--num_gradient_steps", type=int, default=1, 
                         help="How many gradient steps in one local epoch.")  
@@ -185,8 +187,6 @@ def parse_args():
     parser.add_argument('-sfn', "--save_folder_name", type=str, default='items')
 
     # SECTION: Idk what these are lol
-    parser.add_argument('-eg', "--eval_gap", type=int, default=1,
-                        help="Rounds gap for evaluation")
     parser.add_argument('-pv', "--prev", type=int, default=0,
                         help="Previous Running times")
     parser.add_argument('-t', "--times", type=int, default=1,

@@ -158,17 +158,15 @@ class Client(object):
         t3 = self.lambdaF*(torch.linalg.matrix_norm((self.F))**2)
         if type(t3)==torch.Tensor:
             t3 = t3.sum()
-        print(f"CPHSSub loss t1: {t1}")
-        print(f"CPHSSub l2_loss: {l2_loss}")
+        #print(f"CPHSSub loss t1: {t1}")
+        #print(f"CPHSSub l2_loss: {l2_loss}")
         # It's working right now so I'll turn this off for the slight speed boost
-        '''
-        if np.isnan(t1.item()):
-            raise ValueError("CLIENTAVG: Error term is NAN...")
-        if np.isnan(t2.item()):
-            raise ValueError("CLIENTAVG: Decoder Effort term is NAN...")
-        if np.isnan(t3.item()):
-            raise ValueError("CLIENTAVG: User Effort term is NAN...")
-        '''
+        if np.isnan(t1.item()) or np.isinf(t1.item()):
+            raise ValueError("CLIENTBASE: Error term is NAN/inf..")
+        if np.isnan(t2.item()) or np.isinf(t2.item()):
+            raise ValueError("CLIENTBASE: Decoder Effort term is NAN/inf...")
+        #if np.isnan(t3.item()) or np.isinf(t3.item()):
+        #    raise ValueError("CLIENTBASE: User Effort term is NAN/inf...")
         loss = t1 + t2 + t3
         self.cost_func_comps_log = [(t1.item(), t2.item(), t3.item())]
 
@@ -385,8 +383,6 @@ class Client(object):
 
         testloaderfull = self.load_test_data()
         # Should I be simulate streaming with the testing data... 
-        # no the defualt should be holding a subj or two out and testing on them...
-        # Maybe it doesnt matter as much since I'm not doing classification, so bias wouldn't be subject level but rather time/task-progress level
         #self.simulate_data_streaming(testloaderfull)
         eval_model.eval()
 
