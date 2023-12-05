@@ -46,7 +46,6 @@ torch.manual_seed(0)
 def run(args):
     time_list = []
     reporter = MemReporter()
-    model_str = args.model
 
     for i in range(args.prev, args.times):
         print(f"\n============= Running time: {i}th =============")
@@ -55,20 +54,20 @@ def run(args):
 
         ####################################################################################################
         # Generate args.model
-        if model_str == "LinearRegression":
+        if args.model_str == "LinearRegression":
             args.model = torch.nn.Linear(args.pca_channels, 2, args.linear_model_bias)  #input_size, output_size, bias boolean
-        elif model_str == "RNN":
+        elif args.model_str == "RNN":
             # Initialize the RNN model
             #rnn_model = RNNModel(D, hidden_size, 2)
             args.model = RNNModel(args.input_size, args.hidden_size, args.output_size)
-        elif model_str == "LSTM":
+        elif args.model_str == "LSTM":
             # Initialize the LSTM model
             #hidden_size = 64
             #lstm_model = LSTMModel(D, hidden_size, output_size)
             args.model = LSTMModel(args.input_size, args.hidden_size, args.output_size)
-        elif model_str == "GRU":
+        elif args.model_str == "GRU":
             args.model = GRUModel(args.input_size, args.hidden_size, args.output_size)
-        elif model_str == "Transformer":
+        elif args.model_str == "Transformer":
             args.model = TransformerModel(args.input_size, args.output_size)
         else:
             raise NotImplementedError
@@ -132,7 +131,7 @@ def parse_args():
     parser.add_argument('-sequence_length', "--sequence_length", type=int, default=1000)
     parser.add_argument('-output_size', "--output_size", type=int, default=2)
 
-    parser.add_argument('-m', "--model", type=str, default="RNN")  # KAI: Changed the default to Linear Regression
+    parser.add_argument('-m', "--model_str", type=str, default="RNN")  # KAI: Changed the default to Linear Regression
     # I have little confidence in this batch size being correct...
     # No idea what to do with batch_size as of now..., idek if the model is implemented (12/2/23)
     parser.add_argument('-lbs', "--batch_size", type=int, default=64)  # Setting it to a full update would be 1202... will this automatically run twice?
@@ -150,7 +149,7 @@ def parse_args():
     # This shouldn't be relevant... hopefully never gets used lol
     parser.add_argument('-jr', "--join_ratio", type=float, default=0.3,
                         help="Fraction of clients to be active in training per round")
-    parser.add_argument('-gr', "--global_rounds", type=int, default=50)  # KAI: Originally was 2000
+    parser.add_argument('-gr', "--global_rounds", type=int, default=10)  # KAI: Originally was 2000
     # I think this is also irrelevant
     parser.add_argument('-lrt', "--local_round_threshold", type=int, default=25,
                         help="Number of communication rounds per client until a client will advance to the next batch of streamed data")
@@ -363,7 +362,7 @@ if __name__ == "__main__":
     #    print("Time threshold: {}".format(args.time_threshold))
     #print("Running times: {}".format(args.times))
     print("Dataset: {}".format(args.dataset))
-    print("Backbone (model): {}".format(args.model))
+    print("Backbone (model): {}".format(args.model_str))
     #print("Using device: {}".format(args.device))
     #print("Using DP: {}".format(args.privacy))
     #if args.privacy:

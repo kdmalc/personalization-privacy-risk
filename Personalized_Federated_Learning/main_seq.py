@@ -43,7 +43,6 @@ torch.manual_seed(0)
 def run(args):
     time_list = []
     reporter = MemReporter()
-    model_str = args.model
 
     for i in range(args.prev, args.times):
         print(f"\n============= Running time: {i}th =============")
@@ -51,7 +50,7 @@ def run(args):
         start = time.time()
 
         # Generate args.model
-        if model_str == "LinearRegression":
+        if args.model_str == "LinearRegression":
             args.model = torch.nn.Linear(args.pca_channels, 2, args.linear_model_bias)  #input_size, output_size
         else:
             raise NotImplementedError
@@ -149,7 +148,7 @@ def parse_args():
                         choices=["cpu", "cuda"])
     parser.add_argument('-did', "--device_id", type=str, default="0")
     parser.add_argument('-data', "--dataset", type=str, default="cphs")  # KAI: Changed the default to cphs (from mnist)
-    parser.add_argument('-m', "--model", type=str, default="LinearRegression")  # KAI: Changed the default to Linear Regression
+    parser.add_argument('-m', "--model_str", type=str, default="LinearRegression")  # KAI: Changed the default to Linear Regression
     # I have little confidence in this batch size being correct...
     parser.add_argument('-lbs', "--batch_size", type=int, default=1202)  # Setting it to a full update would be 1202... will this automatically run twice?
     # The 1300 and the batch size are 2 separate things...
@@ -327,7 +326,7 @@ if __name__ == "__main__":
     #    print("Time threshold: {}".format(args.time_threshold))
     #print("Running times: {}".format(args.times))
     print("Dataset: {}".format(args.dataset))
-    print("Backbone (model): {}".format(args.model))
+    print("Backbone (model): {}".format(args.model_str))
     #print("Using device: {}".format(args.device))
     #print("Using DP: {}".format(args.privacy))
     #if args.privacy:

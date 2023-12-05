@@ -28,6 +28,7 @@ class Client(object):
         # Why do I even have this take any arguments instead of just using args...
 
         self.model = copy.deepcopy(args.model)
+        self.model_str = args.model_str
         self.algorithm = args.algorithm
         self.dataset = args.dataset
         self.device = args.device
@@ -151,8 +152,14 @@ class Client(object):
                 l2_loss += torch.norm(param, p=2)
 
         t1 = self.loss_func(vel_pred, self.y_ref)
+        if type(t1)==torch.Tensor:
+            t1 = t1.sum()
         t2 = self.lambdaD*(l2_loss**2)
         t3 = self.lambdaF*(torch.linalg.matrix_norm((self.F))**2)
+        if type(t3)==torch.Tensor:
+            t3 = t3.sum()
+        print(f"CPHSSub loss t1: {t1}")
+        print(f"CPHSSub l2_loss: {l2_loss}")
         # It's working right now so I'll turn this off for the slight speed boost
         '''
         if np.isnan(t1.item()):
@@ -173,15 +180,27 @@ class Client(object):
         self.loss_log.append(loss.item())
         # This would need to be changed if you switch to a sequential (not single layer) model
         # Gradient norm
-        weight_grad = self.model.weight.grad
-        if weight_grad == None:
-            #print("Weight gradient is None...")
-            self.gradient_norm_log.append(-1)
+        # Uhh is this checking to see if it exists I guess?...
+        if self.model_str == 'LinearRegression':
+            weight_grad = self.model.weight.grad
+            if weight_grad == None:
+                print("Weight gradient is None...")
+                grad_norm = -1
+                self.gradient_norm_log.append(grad_norm)
+            else:
+                #grad_norm = torch.linalg.norm(self.model.weight.grad, ord='fro') 
+                # ^Equivalent to the below but its still a tensor
+                grad_norm = np.linalg.norm(self.model.weight.grad.detach().numpy())
+                self.gradient_norm_log.append(grad_norm)
         else:
-            #grad_norm = torch.linalg.norm(self.model.weight.grad, ord='fro') 
-            # ^Equivalent to the below but its still a tensor
-            grad_norm = np.linalg.norm(self.model.weight.grad.detach().numpy())
+            grad_norm = 0
+            for param in self.model.parameters():
+                if param.grad is not None:
+                    param_norm = param.grad.data.norm(2)
+                    grad_norm += param_norm.item() ** 2
+            grad_norm = grad_norm ** 0.5
             self.gradient_norm_log.append(grad_norm)
+        #print(f"grad_norm: {grad_norm}")
 
         # update weights
         self.optimizer.step()

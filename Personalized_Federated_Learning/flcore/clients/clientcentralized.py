@@ -23,13 +23,15 @@ class clientCent(Client):
         self.test_sIDs = [fullID.split('_')[1] for fullID in self.test_subj_IDs]
 
         ############################################################################
-        # TODO: SET THIS SOMEWHERE!!!
         self.train_loader = self.load_train_data(client_init=True) # batch_size=None
-        ############################################################################
+        print("TRAINLOADER")
+        for i, (x, y) in enumerate(self.train_loader):
+            print(f'Batch {i}, Batch Size: {x.shape}')
 
-        ############################################################################
-        # TODO: SET THIS SOMEWHERE!!!
         self.test_loader = self.load_test_data()
+        print("TESTLOADER")
+        for i, (x, y) in enumerate(self.test_loader):
+            print(f'Batch {i}, Batch Size: {x.shape}')
         ############################################################################
 
 
@@ -111,13 +113,14 @@ class clientCent(Client):
         # Set the Dataset Obj
         if self.model == "LinearRegression":
             training_dataset_obj = CustomEMGDataset(self.cond_samples_npy, self.cond_labels_npy)
-            X_data = torch.tensor(training_dataset_obj['x'], dtype=torch.float32)
-            y_data = torch.tensor(training_dataset_obj['y'], dtype=torch.float32)
-            training_data_for_dataloader = [(x, y) for x, y in zip(X_data, y_data)]
+            #X_data = torch.tensor(training_dataset_obj['x'], dtype=torch.float32)
+            #y_data = torch.tensor(training_dataset_obj['y'], dtype=torch.float32)
+            #training_data_for_dataloader = [(x, y) for x, y in zip(X_data, y_data)]
         else:
-            training_dataset_obj = EMG3DDataset(self.cond_samples_npy, self.cond_labels_npy, self.sequence_length, self.batch_size)
+            training_dataset_obj = BasicDataset(self.cond_samples_npy, self.cond_labels_npy, self.sequence_length)
+            #training_dataset_obj = EMG3DDataset(self.cond_samples_npy, self.cond_labels_npy, self.input_size, self.output_size, self.sequence_length)
             # This supposedly works idk
-            training_data_for_dataloader = training_dataset_obj
+            #training_data_for_dataloader = training_dataset_obj
         
         if self.verbose:
             print(f"cb load_train_data(): Client {self.ID}: Setting Training DataLoader")
@@ -125,9 +128,9 @@ class clientCent(Client):
         if batch_size == None:
             batch_size = self.batch_size
         dl = DataLoader(
-            dataset=training_data_for_dataloader,
+            dataset=training_dataset_obj,
             batch_size=batch_size, 
-            drop_last=False,  # Yah idk if this should be true or false or if it matters...
+            drop_last=True,
             shuffle=False) 
         return dl
 
@@ -136,15 +139,16 @@ class clientCent(Client):
         if batch_size == None:
             batch_size = self.batch_size
 
-        testing_dataset_obj = CustomEMGDataset(self.test_samples, self.test_labels)
-        X_data = torch.Tensor(testing_dataset_obj['x']).type(torch.float32)
-        y_data = torch.Tensor(testing_dataset_obj['y']).type(torch.float32)
-        testing_data_for_dataloader = [(x, y) for x, y in zip(X_data, y_data)]
+        testing_dataset_obj = BasicDataset(self.test_samples, self.test_labels, self.sequence_length)
+        #testing_dataset_obj = EMG3DDataset(self.test_samples, self.test_labels, self.input_size, self.output_size, self.sequence_length)
+        #X_data = torch.Tensor(testing_dataset_obj['x']).type(torch.float32)
+        #y_data = torch.Tensor(testing_dataset_obj['y']).type(torch.float32)
+        #testing_data_for_dataloader = [(x, y) for x, y in zip(X_data, y_data)]
 
         dl = DataLoader(
-            dataset=testing_data_for_dataloader,
+            dataset=testing_dataset_obj,
             batch_size=batch_size, 
-            drop_last=False,  # Yah idk if this should be true or false or if it matters...
+            drop_last=True,
             shuffle=False) 
         return dl
     
@@ -203,8 +207,7 @@ class clientCent(Client):
 
                 test_loss = loss.item()  # Just get the actual loss function term
                 running_test_loss += test_loss
-                if self.verbose:
-                    print(f"batch {i}, loss {test_loss:0,.5f}")
+                print(f"batch {i}, loss {test_loss:0,.5f}")
                 num_samples += x.size()[0]
         self.client_testing_log.append(running_test_loss / num_samples)   
         return running_test_loss, num_samples
@@ -254,6 +257,7 @@ class clientCent(Client):
 
 
     def train(self):
+        print("CC train loading train data")
         trainloader = self.load_train_data()
         # self.model.to(self.device)
         #self.model.train()
@@ -261,23 +265,24 @@ class clientCent(Client):
         start_time = time.time()
 
         # Save the client's starting weights for Smoothbatch
+        print("Smoothbatch stuff idk")
         if self.smoothbatch_boolean:
             starting_weights = {}
             for name, param in self.model.named_parameters():
                 if param.requires_grad:
                     starting_weights[name] = param.data.clone()
+
+        print("iterating through epochs")
         for epoch in range(self.local_epochs):
             for step in range(self.num_gradient_steps):
-                # Currently, each tl only has 1 batch of 1200 [eg 1 update] (8/5/23)
-                # ^ I don't think this is relevant anymore...?
+                print(f"Epoch {epoch}, grad step {step}")
                 for i, (x, y) in enumerate(trainloader):
                     # self.simulate_data_streaming_xy()
                     ## ^ So this gets called for each batch...? What is F then? Each batch... ...
                     ## This is toggled in cphs_sub so I just turned it on there...
                     #x = torch.transpose(x, 0, 1)
                     #y = torch.transpose(y, 0, 1)
-                    if self.verbose:
-                        print(f"Epoch {epoch}, grad step {step}, batch {i}")
+                    print(f"Batch {i}, x.shape: {x.shape}, y.shape: {y.shape}")
                     self.cphs_training_subroutine(x, y)
         # Do SmoothBatch if applicable
         if self.smoothbatch_boolean:

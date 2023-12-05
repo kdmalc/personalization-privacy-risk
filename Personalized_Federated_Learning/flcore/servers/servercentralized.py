@@ -40,8 +40,9 @@ class Centralized(Server):
                     #print("\nEvaluate personalized models")
                     self.evaluate(train=self.run_train_metrics) 
 
-            #print("CLIENT TRAINING")
+            print("CLIENT TRAINING")
             for client in self.selected_clients:
+                print("only cli is training")
                 client.train()
 
             #print()
