@@ -34,6 +34,32 @@ class RNNModel(nn.Module):
         return output
     
 
+class DynamicRNNModel(nn.Module):
+    def __init__(self, input_size, output_size, hidden_sizes=[],
+                 num_layers=1, rnn_type='RNN', batch_first=True):
+        super(DynamicRNNModel, self).__init__()
+        self.num_layers = num_layers
+        self.batch_first = batch_first
+        # Define the RNN layer(s)
+        if num_layers == 1:
+            self.rnn = getattr(nn, rnn_type)(input_size, hidden_sizes[0], batch_first=batch_first)
+        else:
+            rnn_layers = []
+            rnn_layers.append(getattr(nn, rnn_type)(input_size, hidden_sizes[0], batch_first=batch_first))
+            for i in range(1, num_layers):
+                rnn_layers.append(getattr(nn, rnn_type)(hidden_sizes[i - 1], hidden_sizes[i], batch_first=batch_first))
+            self.rnn = nn.Sequential(*rnn_layers)
+        # Define the fully connected layer
+        self.fc = nn.Linear(hidden_sizes[-1] if num_layers > 1 else hidden_sizes[0], output_size)
+
+    def forward(self, x):
+        rnn_out, _ = self.rnn(x)
+
+        # Fully connected layer
+        output = self.fc(rnn_out)
+        return output
+    
+
 # Define a simple LSTM model
 class LSTMModel(nn.Module):
     def __init__(self, input_size, hidden_size, output_size):

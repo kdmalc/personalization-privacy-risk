@@ -47,6 +47,7 @@ class Client(object):
         self.hidden_size = args.hidden_size
         self.sequence_length = args.sequence_length
         self.output_size = args.output_size
+        self.num_layers = args.num_layers
         # check BatchNorm
         self.has_BatchNorm = False
         for layer in self.model.children():

@@ -8,8 +8,6 @@ import numpy as np
 import os
 #import random
 from torch.utils.data import DataLoader
-from sklearn.decomposition import PCA
-from utils.processing_funcs import normalize_tensor
 from utils.emg_dataset_class import *
 
 
@@ -136,9 +134,6 @@ class clientCent(Client):
 
         if self.model_str == "LinearRegression":
             testing_dataset_obj = CustomEMGDataset(self.test_samples, self.test_labels)
-            #X_data = torch.Tensor(testing_dataset_obj['x']).type(torch.float32)
-            #y_data = torch.Tensor(testing_dataset_obj['y']).type(torch.float32)
-            #testing_data_for_dataloader = [(x, y) for x, y in zip(X_data, y_data)]
         else:
             testing_dataset_obj = BasicDataset(self.test_samples, self.test_labels, self.sequence_length)
 
@@ -282,7 +277,8 @@ class clientCent(Client):
                 print(f"Epoch {epoch}, grad step {step}")
                 for i, (x, y) in enumerate(trainloader):
                     #print(f"Batch {i}, x.shape: {x.shape}, y.shape: {y.shape}")
-                    self.cphs_training_subroutine(x, y)
+                    if x.numel() != 0:
+                        self.cphs_training_subroutine(x, y)
         # Do SmoothBatch if applicable
         if self.smoothbatch_boolean:
             with torch.no_grad():

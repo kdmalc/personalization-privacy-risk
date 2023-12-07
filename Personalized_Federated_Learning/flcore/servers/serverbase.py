@@ -82,6 +82,12 @@ class Server(object):
         # serverlocal ONLY!
         self.test_against_all_other_clients = args.test_against_all_other_clients
         self.cross_client_modulus = args.cross_client_modulus
+        # Deep learning stuff
+        self.num_layers = args.num_layers
+        self.input_size = args.input_size
+        self.hidden_size = args.hidden_size
+        self.sequence_length = args.sequence_length
+        self.output_size = args.output_size
         # Not used on server but saved when logging
         self.pca_channels = args.pca_channels
         self.device_channels = args.device_channels
@@ -423,6 +429,11 @@ class Server(object):
             f"learning_rate_decay_gamma = {self.learning_rate_decay_gamma}\n"
             f"pca_channels = {self.pca_channels}\n"
             f"normalize_data = {self.normalize_data}\n"
+            "\n\nDEEP NETWORK HYPERPARAMETERS\n"
+            f"input_size = {self.input_size}\n"
+            f"hidden_size = {self.hidden_size}\n"
+            f"sequence_length = {self.sequence_length}\n"
+            f"output_size = {self.output_size}\n"
             "\n\nFEDERATED LEARNING PARAMS\n"
             f"starting_update = {self.args.starting_update}\n"
             f"local_round_threshold = {self.local_round_threshold}\n"
