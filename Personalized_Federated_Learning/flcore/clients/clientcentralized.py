@@ -56,6 +56,11 @@ class clientCent(Client):
         self.cond_samples_npy = np.empty((0, 0))
         self.test_labels = np.empty((0, 0))
         self.test_samples = np.empty((0, 0))
+
+        # THIS SHOULD ONLY APPLY TO SIMULATIONS NOT REAL TIME RUNS!
+        starting_update_idx = self.update_ix[self.starting_update]
+        #[self.condition_number,starting_update_idx:,:]
+
         # Iterate through each .npy file and horizontally concatenate to the giant array
         for file_name in file_list:
             file_path = os.path.join(self.dir_path, file_name)
@@ -66,13 +71,13 @@ class clientCent(Client):
                 subject_id = file_name.split('_')[0]
                 if (self.test_split_users==True) and (subject_id in self.test_sIDs):
                     if "Labels" in file_name:
-                        loaded_labels = data_array[cond_num-1,:,:]
+                        loaded_labels = data_array[cond_num-1,starting_update_idx:,:]
                         if self.test_labels.size == 0:
                             self.test_labels = loaded_labels
                         else:
                             self.test_labels = np.vstack((self.test_labels, loaded_labels))
                     elif "Data" in file_name:
-                        loaded_samples = data_array[cond_num-1,:,:]
+                        loaded_samples = data_array[cond_num-1,starting_update_idx:,:]
                         if self.test_samples.size == 0:
                             self.test_samples = loaded_samples
                         else:
@@ -81,13 +86,13 @@ class clientCent(Client):
                         raise ValueError("Did not find Labels or Data in filename...")
                 else:    
                     if "Labels" in file_name:
-                        loaded_labels = data_array[cond_num-1,:,:]
+                        loaded_labels = data_array[cond_num-1,starting_update_idx:,:]
                         if self.cond_labels_npy.size == 0:
                             self.cond_labels_npy = loaded_labels
                         else:
                             self.cond_labels_npy = np.vstack((self.cond_labels_npy, loaded_labels))
                     elif "Data" in file_name:
-                        loaded_samples = data_array[cond_num-1,:,:]
+                        loaded_samples = data_array[cond_num-1,starting_update_idx:,:]
                         if self.cond_samples_npy.size == 0:
                             self.cond_samples_npy = loaded_samples
                         else:

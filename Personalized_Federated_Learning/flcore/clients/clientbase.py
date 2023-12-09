@@ -83,6 +83,7 @@ class Client(object):
         self.smoothbatch_boolean = args.smoothbatch_boolean
         self.smoothbatch_learningrate = args.smoothbatch_learningrate
         ## Not logged params
+        self.starting_update = args.starting_update
         self.current_update = args.starting_update # This is logged by a different var in the server
         self.dt = args.dt
         self.local_round = 0
@@ -267,8 +268,10 @@ class Client(object):
         with open(self.labels_path, 'rb') as handle:
             labels_npy = np.load(handle)
         # Select for given condition #THIS IS THE ACTUAL TRAINING DATA AND LABELS FOR THE GIVEN TRIAL
-        self.cond_samples_npy = samples_npy[self.condition_number,:,:]
-        self.cond_labels_npy = labels_npy[self.condition_number,:,:]
+        # THIS SHOULD ONLY APPLY TO SIMULATIONS NOT REAL TIME RUNS!
+        starting_update_idx = self.update_ix[self.starting_update]
+        self.cond_samples_npy = samples_npy[self.condition_number,starting_update_idx:,:]
+        self.cond_labels_npy = labels_npy[self.condition_number,starting_update_idx:,:]
         # Split data into train and test sets
         if self.test_split_users:
             # NOT FINISHED YET
