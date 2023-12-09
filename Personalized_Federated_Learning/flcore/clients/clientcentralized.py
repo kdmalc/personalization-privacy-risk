@@ -113,7 +113,7 @@ class clientCent(Client):
             #y_data = torch.tensor(training_dataset_obj['y'], dtype=torch.float32)
             #training_data_for_dataloader = [(x, y) for x, y in zip(X_data, y_data)]
         else:
-            training_dataset_obj = BasicDataset(self.cond_samples_npy, self.cond_labels_npy, self.sequence_length)
+            training_dataset_obj = DeepSeqLenDataset(self.cond_samples_npy, self.cond_labels_npy, self.sequence_length)
 
         #print("TRAINING Dataset Length:", len(training_dataset_obj))
         
@@ -140,7 +140,7 @@ class clientCent(Client):
         if self.model_str == "LinearRegression":
             testing_dataset_obj = CustomEMGDataset(self.test_samples, self.test_labels)
         else:
-            testing_dataset_obj = BasicDataset(self.test_samples, self.test_labels, self.sequence_length)
+            testing_dataset_obj = DeepSeqLenDataset(self.test_samples, self.test_labels, self.sequence_length)
 
         #print("TESTING Dataset Length:", len(testing_dataset_obj))
 

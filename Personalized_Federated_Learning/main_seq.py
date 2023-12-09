@@ -122,7 +122,7 @@ def parse_args():
     one_hundred_run = False
     long_run = False
     if short_run:
-        my_gr = 15 #10
+        my_gr = 10
         my_nlsrpsq = 5
     elif one_hundred_run:
         my_gr = 100
@@ -134,13 +134,17 @@ def parse_args():
         raise ValueError("Set run length type bool")
     
     # DEEP LEARNING STUFF
+    # This isn't used right now... need to add a way to make this hidden sizes a list or something...
+    parser.add_argument('-num_layers', "--num_layers", type=int, default=1)
+
     parser.add_argument('-input_size', "--input_size", type=int, default=64)
     parser.add_argument('-hidden_size', "--hidden_size", type=int, default=32)
     parser.add_argument('-sequence_length', "--sequence_length", type=int, default=1)
     parser.add_argument('-output_size', "--output_size", type=int, default=2)
 
     parser.add_argument('-m', "--model_str", type=str, default="RNN")  
-    parser.add_argument('-lbs', "--batch_size", type=int, default=1)
+    # Uhh how does batch size get used? Does it need to be 1202...
+    parser.add_argument('-lbs', "--batch_size", type=int, default=32)
     # For non-deep keep 1202:
     #parser.add_argument('-lbs', "--batch_size", type=int, default=1202)  # Setting it to a full update would be 1202
     parser.add_argument('-lr', "--local_learning_rate", type=float, default=0.1,

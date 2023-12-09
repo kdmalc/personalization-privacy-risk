@@ -29,6 +29,10 @@ class Client(object):
 
         self.model = copy.deepcopy(args.model)
         self.model_str = args.model_str
+        if self.model_str != "LinearRegression":
+            self.deep_bool = True
+        else:
+            self.deep_bool = False
         self.algorithm = args.algorithm
         self.dataset = args.dataset
         self.device = args.device
@@ -316,10 +320,12 @@ class Client(object):
 
         # Set the Dataset Obj
         # Creates a new TL each time, but doesn't have to re-read in the data. May not be optimal
-        training_dataset_obj = CustomEMGDataset(self.cond_samples_npy[self.update_lower_bound:self.update_upper_bound,:], self.cond_labels_npy[self.update_lower_bound:self.update_upper_bound,:])
-        X_data = torch.tensor(training_dataset_obj['x'], dtype=torch.float32)
-        y_data = torch.tensor(training_dataset_obj['y'], dtype=torch.float32)
-        training_data_for_dataloader = [(x, y) for x, y in zip(X_data, y_data)]
+        training_samples = self.cond_samples_npy[self.update_lower_bound:self.update_upper_bound,:]
+        training_labels = self.cond_labels_npy[self.update_lower_bound:self.update_upper_bound,:]
+        if self.deep_bool:
+            training_dataset_obj = DeepSeqLenDataset(training_samples, training_labels, self.sequence_length)
+        else:
+            training_dataset_obj = CustomEMGDataset(training_samples, training_labels)
         
         if self.verbose:
             print(f"cb load_train_data(): Client {self.ID}: Setting Training DataLoader")
@@ -327,7 +333,7 @@ class Client(object):
         if batch_size == None:
             batch_size = self.batch_size
         dl = DataLoader(
-            dataset=training_data_for_dataloader,
+            dataset=training_dataset_obj,
             batch_size=batch_size, 
             drop_last=False,  # Yah idk if this should be true or false or if it matters...
             shuffle=False) 
@@ -340,16 +346,17 @@ class Client(object):
         if batch_size == None:
             batch_size = self.batch_size
 
-        #test_data = read_client_data(self.dataset, self.ID, self.current_update, is_train=False)
-        testing_dataset_obj = CustomEMGDataset(self.cond_samples_npy[self.test_split_idx:,:], self.cond_labels_npy[self.test_split_idx:,:])
-        X_data = torch.Tensor(testing_dataset_obj['x']).type(torch.float32)
-        y_data = torch.Tensor(testing_dataset_obj['y']).type(torch.float32)
-        testing_data_for_dataloader = [(x, y) for x, y in zip(X_data, y_data)]
+        testing_samples = self.cond_samples_npy[self.test_split_idx:,:]
+        testing_labels = self.cond_labels_npy[self.test_split_idx:,:]
+        if self.deep_bool:
+            testing_dataset_obj = DeepSeqLenDataset(testing_samples, testing_labels, self.sequence_length)
+        else:
+            testing_dataset_obj = CustomEMGDataset(testing_samples, testing_labels)
 
         dl = DataLoader(
-            dataset=testing_data_for_dataloader,
+            dataset=testing_dataset_obj,
             batch_size=batch_size, 
-            drop_last=False,  # Yah idk if this should be true or false or if it matters...
+            drop_last=True,  # Yah idk if this should be true or false or if it matters...
             shuffle=False) 
         return dl
         

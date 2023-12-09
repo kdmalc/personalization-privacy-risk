@@ -43,7 +43,7 @@ class CustomEMGDataset(torch.utils.data.Dataset):
         return self.dataset[idx], self.labels[idx]
         
 
-class BasicDataset(torch.utils.data.Dataset):
+class DeepSeqLenDataset(torch.utils.data.Dataset):
     def __init__(self, samples, labels, sequence_length):
         self.samples = torch.Tensor(samples)
         self.labels = torch.Tensor(labels)

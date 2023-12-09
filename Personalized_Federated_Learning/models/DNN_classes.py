@@ -33,7 +33,23 @@ class RNNModel(nn.Module):
         output = self.fc(rnn_out)
         return output
     
+# This is a bit of a hard coded solution...
+class DeepRNNModel(nn.Module):
+    def __init__(self, input_size, hidden_size, output_size):
+        super(RNNModel, self).__init__()
+        self.rnn = nn.RNN(input_size, hidden_size, batch_first=True)
+        self.fc = nn.Linear(hidden_size, output_size)
 
+    def forward(self, x):
+        # RNN input: (batch_size, seq_len, input_size)
+        # Output: (batch_size, seq_len, hidden_size)
+        rnn_out, _ = self.rnn(x)
+
+        # Fully connected layer
+        output = self.fc(rnn_out)
+        return output
+
+# Hidden size as a list isn't supported yet...
 class DynamicRNNModel(nn.Module):
     def __init__(self, input_size, output_size, hidden_sizes=[],
                  num_layers=1, rnn_type='RNN', batch_first=True):
