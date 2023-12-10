@@ -118,15 +118,15 @@ def run(args):
 def parse_args():
     parser = argparse.ArgumentParser()
 
-    short_run = True
-    one_hundred_run = False
+    short_run = False
+    one_hundred_run = True
     long_run = False
     if short_run:
         my_gr = 10
         my_nlsrpsq = 5
     elif one_hundred_run:
         my_gr = 100
-        my_nlsrpsq = 25
+        my_nlsrpsq = 400 #25
     elif long_run:
         my_gr = 1500
         my_nlsrpsq = 400
@@ -139,19 +139,20 @@ def parse_args():
 
     parser.add_argument('-input_size', "--input_size", type=int, default=64)
     parser.add_argument('-hidden_size', "--hidden_size", type=int, default=32)
-    parser.add_argument('-sequence_length', "--sequence_length", type=int, default=10)
+    parser.add_argument('-sequence_length', "--sequence_length", type=int, default=1)
     parser.add_argument('-output_size', "--output_size", type=int, default=2)
 
-    parser.add_argument('-m', "--model_str", type=str, default="RNN")  
+    parser.add_argument('-m', "--model_str", type=str, default="LinearRegression")  
     # Uhh how does batch size get used? Does it need to be 1202...
-    parser.add_argument('-lbs', "--batch_size", type=int, default=32)
-    # For non-deep keep 1202:
-    #parser.add_argument('-lbs', "--batch_size", type=int, default=1202)  # Setting it to a full update would be 1202
-    parser.add_argument('-lr', "--local_learning_rate", type=float, default=0.1,
+    parser.add_argument('-lbs', "--batch_size", type=int, default=1202)
+    # For non-deep keep 1202: --> Idk if this is necessary actually, I think it will work regardless
+    parser.add_argument('-lr', "--local_learning_rate", type=float, default=1,
                         help="Local learning rate")
 
     # THINGS I AM CURRENTLY CHANGING A LOT
     parser.add_argument('-gr', "--global_rounds", type=int, default=my_gr)  # KAI: Originally was 2000
+    parser.add_argument('-stup', "--starting_update", type=int, default=10,
+                        help="Which update to start on (for CPHS Simulation). Use 0 or 10.")
     parser.add_argument('-seq', "--sequential", type=bool, default=True,
                         help="Boolean toggle for whether sequential mode is on (for now, mixing current client with previously trained models)")
     parser.add_argument('-uppm', "--use_prev_pers_model", type=bool, default=False,
@@ -260,6 +261,7 @@ def parse_args():
                         help="Boolean for whether or not to test each client's model on all other clients. As on 11/26 only supported for ServerLocal")
     parser.add_argument('-ccm', "--cross_client_modulus", type=int, default=5,
                         help="Number of rounds between cross client testing (current_round%cross_client_modulus==0)")
+    # I think this one can be depreciated...
     parser.add_argument('-run', "--run", type=bool, default=True,
                         help="If False, will set up the arg parser and args variable, but won't run")
     parser.add_argument('-scll', "--save_client_loss_logs", type=bool, default=True,
@@ -270,8 +272,6 @@ def parse_args():
                         help="Penalty term for the decoder norm (interface effort)")
     parser.add_argument('-lE', "--lambdaE", type=float, default=1e-4, #1e-4
                         help="Penalty term on performance error norm")
-    parser.add_argument('-stup', "--starting_update", type=int, default=10,
-                        help="Which update to start on (for CPHS Simulation). Use 0 or 10.")
     parser.add_argument('-sbb', "--smoothbatch_boolean", type=bool, default=False,
                         help="Boolean switch for whether or not to use SmoothBatch. See Madduri CPHS Paper.")
     parser.add_argument('-sblr', "--smoothbatch_learningrate", type=float, default=0.75, #0.75 slow, 0.25 fast

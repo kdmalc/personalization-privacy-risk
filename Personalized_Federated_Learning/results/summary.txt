@@ -1,7 +1,0 @@
-Defaults:
-PCA=10
-Bias=True
-BatchSize=1202
-JoinRatio=0.3
-LearningRate=1
-LearningRateDecay=False

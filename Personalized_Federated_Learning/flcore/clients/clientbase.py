@@ -328,15 +328,17 @@ class Client(object):
         training_samples = self.cond_samples_npy[self.update_lower_bound:self.update_upper_bound,:]
         training_labels = self.cond_labels_npy[self.update_lower_bound:self.update_upper_bound,:]
 
-        print("CB: load_train_data()")
-        print(f"training_samples.shape: {training_samples.shape}")
-        print(f"training_labels.shape: {training_labels.shape}")
-        print()
+        #print("CB: load_train_data()")
+        #print(f"training_samples.shape: {training_samples.shape}")
+        #print(f"training_labels.shape: {training_labels.shape}")
+        #print()
 
         if self.deep_bool:
             training_dataset_obj = DeepSeqLenDataset(training_samples, training_labels, self.sequence_length)
         else:
             training_dataset_obj = CustomEMGDataset(training_samples, training_labels)
+            # IF THIS ONE IS FAILING IT IS PROBABLY BECAUSE THE BATCH_SIZE IS 1202 SO THE LAST (ONLY) UPDATE IS GETTING DROPPED
+            #print("Size of CustomEMGDataset: ", len(training_dataset_obj))
         
         if self.verbose:
             print(f"cb load_train_data(): Client {self.ID}: Setting Training DataLoader")
@@ -478,7 +480,7 @@ class Client(object):
             print(f'cb Client {self.ID} train_metrics()')
         with torch.no_grad():
             for i, (x, y) in enumerate(trainloader):
-                print(f"i: {i}; x.shape: {x.shape}, y.shape: {y.shape}")
+                #print(f"i: {i}; x.shape: {x.shape}, y.shape: {y.shape}")
                 if type(x) == type([]):
                     x[0] = x[0].to(self.device)
                 else:
