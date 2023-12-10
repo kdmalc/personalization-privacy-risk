@@ -139,7 +139,7 @@ def parse_args():
 
     parser.add_argument('-input_size', "--input_size", type=int, default=64)
     parser.add_argument('-hidden_size', "--hidden_size", type=int, default=32)
-    parser.add_argument('-sequence_length', "--sequence_length", type=int, default=1)
+    parser.add_argument('-sequence_length', "--sequence_length", type=int, default=10)
     parser.add_argument('-output_size', "--output_size", type=int, default=2)
 
     parser.add_argument('-m', "--model_str", type=str, default="RNN")  

@@ -27,19 +27,6 @@ class CustomEMGDataset(torch.utils.data.Dataset):
         return len(self.dataset)
     
     def __getitem__(self, idx):
-        # I'm not sure what causes the 'x' and 'y' indexing issue but I think this shouldn't be happening
-        ## Eg if it is then I need to fix it
-        ### DEPRECIATED CODE:
-        # It appears that I am only using x/y as the inputs for idx anyways...
-        #if type(idx)==int:
-        #    return self.dataset[idx], self.labels[idx]
-        #elif (idx.lower()=='x'): # or ('train' in idx.lower()):
-        #    return self.dataset
-        #elif (idx.lower()=='y'): # or ('test' in idx.lower()):
-        #    return self.labels
-        #else:
-        #    raise("Not supposed to run")
-        
         return self.dataset[idx], self.labels[idx]
         
 

@@ -304,7 +304,9 @@ class Client(object):
             self._load_train_data()   # Returns nothing, sets self variables
         # Do I really want this here...
         if eval==False:
+            # THIS SHOULD NOT BE UPDATED HERE LOL
             self.local_round += 1
+
             # Check if you need to advance the update
             # ---> THIS IMPLIES THAT I AM CREATING A NEW TRAINING LOADER FOR EACH UPDATE... this is what I want actually I think
             if (self.local_round%self.local_round_threshold==0) and (self.local_round>1) and (self.current_update < self.max_training_update_upbound):
@@ -317,11 +319,20 @@ class Client(object):
             else:
                 self.update_lower_bound = self.update_ix[self.max_training_update_upbound - 1]
                 self.update_upper_bound = self.update_ix[self.max_training_update_upbound]
+        else:
+            # There is no update, so no need to update/set the self.bounds above
+            pass
 
         # Set the Dataset Obj
         # Creates a new TL each time, but doesn't have to re-read in the data. May not be optimal
         training_samples = self.cond_samples_npy[self.update_lower_bound:self.update_upper_bound,:]
         training_labels = self.cond_labels_npy[self.update_lower_bound:self.update_upper_bound,:]
+
+        print("CB: load_train_data()")
+        print(f"training_samples.shape: {training_samples.shape}")
+        print(f"training_labels.shape: {training_labels.shape}")
+        print()
+
         if self.deep_bool:
             training_dataset_obj = DeepSeqLenDataset(training_samples, training_labels, self.sequence_length)
         else:
@@ -335,7 +346,7 @@ class Client(object):
         dl = DataLoader(
             dataset=training_dataset_obj,
             batch_size=batch_size, 
-            drop_last=False,  # Yah idk if this should be true or false or if it matters...
+            drop_last=True,  # Yah idk if this should be true or false or if it matters...
             shuffle=False) 
         return dl
 
@@ -393,6 +404,7 @@ class Client(object):
         eval_model.to(self.device)
 
         testloaderfull = self.load_test_data()
+        assert(len(testloaderfull)!=0)
         # Should I be simulate streaming with the testing data... 
         #self.simulate_data_streaming(testloaderfull)
         eval_model.eval()
@@ -419,8 +431,12 @@ class Client(object):
                     if 'weight' in name:
                         l2_loss += torch.norm(param, p=2)
                 t1 = self.loss_func(vel_pred, self.y_ref)
+                if type(t1)==torch.Tensor:
+                    t1 = t1.sum()
                 t2 = self.lambdaD*(l2_loss**2)
                 t3 = self.lambdaF*(torch.linalg.matrix_norm((self.F))**2)
+                if type(t3)==torch.Tensor:
+                    t3 = t3.sum()
                 loss = t1 + t2 + t3
 
                 test_loss = loss.item()  # Just get the actual loss function term
@@ -448,9 +464,10 @@ class Client(object):
         #eval_model.to(self.device) # Idk if this needs to be run or not...
 
         # ITS GOTTA BE SUPER INEFFIECIENT TO RECREATE A NEW TL FOR EACH CLIENT EACH ROUND FOR TRAIN EVAL...
+        ## How do I just reuse the existing training loader from the streamed training data?
         trainloader = self.load_train_data(eval=True)
-        # self.model = self.load_model('model')
-        # self.model.to(self.device)
+        assert(len(trainloader)!=0)
+
         #self.simulate_data_streaming(trainloader) 
         # ^^ idk if i need to be doing this ... this should already be run in the actual training process
         eval_model.eval()
@@ -461,6 +478,7 @@ class Client(object):
             print(f'cb Client {self.ID} train_metrics()')
         with torch.no_grad():
             for i, (x, y) in enumerate(trainloader):
+                print(f"i: {i}; x.shape: {x.shape}, y.shape: {y.shape}")
                 if type(x) == type([]):
                     x[0] = x[0].to(self.device)
                 else:
@@ -476,9 +494,14 @@ class Client(object):
                     if 'weight' in name:
                         l2_loss += torch.norm(param, p=2)
                 t1 = self.loss_func(vel_pred, self.y_ref)
+                if type(t1)==torch.Tensor:
+                    t1 = t1.sum()
                 t2 = self.lambdaD*(l2_loss**2)
                 t3 = self.lambdaF*(torch.linalg.matrix_norm((self.F))**2)
+                if type(t3)==torch.Tensor:
+                    t3 = t3.sum()
                 loss = t1 + t2 + t3
+
                 if self.verbose:
                     print(f"batch {i}, loss {loss:0,.5f}")
                 train_num += self.y_ref.shape[0]  # Why is this y.shape and not x.shape?... I guess they are the same row dims?
