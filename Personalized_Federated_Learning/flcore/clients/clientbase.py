@@ -116,47 +116,53 @@ class Client(object):
         #self.running_epoch_loss = []
         self.testing_clients = []
 
-        self.optimizer = torch.optim.SGD(self.model.parameters(), lr=self.learning_rate)
+        if args.optimizer_str.upper() == "ADAM":
+            self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.learning_rate)
+        elif args.optimizer_str.upper() == "SGD":
+            self.optimizer = torch.optim.SGD(self.model.parameters(), lr=self.learning_rate)
+        elif args.optimizer_str.upper() == "ADAGRAD":
+            self.optimizer = torch.optim.Adagrad(self.model.parameters(), lr=self.learning_rate)
+        elif args.optimizer_str.upper() == "RMSprop":
+            self.optimizer = torch.optim.RMSprop(self.model.parameters(), lr=self.learning_rate)
+        elif args.optimizer_str.upper() == "ADAMW":
+            self.optimizer = torch.optim.AdamW(self.model.parameters(), lr=self.learning_rate)
+        else:
+            # Trying Adam as the default...
+            self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.learning_rate)
+            #self.optimizer = torch.optim.SGD(self.model.parameters(), lr=self.learning_rate)
+
         self.learning_rate_scheduler = torch.optim.lr_scheduler.ExponentialLR(
             optimizer=self.optimizer, 
             gamma=args.learning_rate_decay_gamma
         )
         self.learning_rate_decay = args.learning_rate_decay
-        
-    
-    def cphs_training_subroutine(self, x, y):
-        # Assert that the dataloader data corresponds to the correct update data
-        # I think trainloader is fine so I can turn it off once tl has been verified
-        #self.assert_tl_samples_match_npy(x, y)
-        
-        # Simulate datastreaming, eg set s, F and V
-        #if self.algorithm!='Centralized':
+
+        self.ewc_bool = args.ewc_bool
+        self.fisher_mult = args.fisher_mult
+        self.regularizers = None  # This gets set later, so this is fine for now...
+
+        # Note this double dipping
+        self.check_loss_for_nan_inf = args.debug_mode
+
+
+    # GOAL IS TO CONSOLIDATE EVERYTHING SHARED BETWEEN TRAIN_METRICS, TEST_METRICS, AND CPHS_TRAINING_SUBROUTINE
+    def shared_loss_calc(self, x, y, model, special_modes=None):
+        if type(x) == type([]):
+            x[0] = x[0].to(self.device)
+        else:
+            x = x.to(self.device)
+        y = y.to(self.device)
+
         self.simulate_data_streaming_xy(x, y)
 
-        # Idk if this needs to happen if I'm just running it on cpu...
-        # ^ If so it would need to happen in simulate data
-        #if type(x) == type([]):
-        #    x[0] = x[0].to(self.device)
-        #else:
-        #    x = x.to(self.device)
-        #y = y.to(self.device)
-        #if self.train_slow:
-        #    time.sleep(0.1 * np.abs(np.random.rand()))
-        
-        if self.algorithm!='APFL':
-            # reset gradient so it doesn't accumulate
-            self.optimizer.zero_grad()
-
-        # forward pass and loss
         # D@s = predicted velocity
-        vel_pred = self.model(self.F) 
+        vel_pred = model(self.F)
 
-        # L2 regularization term
+        # L2 regularization term (from CPHS formulation)
         l2_loss = 0
-        for name, param in self.model.named_parameters():
+        for name, param in model.named_parameters():
             if 'weight' in name:
                 l2_loss += torch.norm(param, p=2)
-
         t1 = self.loss_func(vel_pred, self.y_ref)
         if type(t1)==torch.Tensor:
             t1 = t1.sum()
@@ -164,24 +170,58 @@ class Client(object):
         t3 = self.lambdaF*(torch.linalg.matrix_norm((self.F))**2)
         if type(t3)==torch.Tensor:
             t3 = t3.sum()
-        #print(f"CPHSSub loss t1: {t1}")
-        #print(f"CPHSSub l2_loss: {l2_loss}")
-        # It's working right now so I'll turn this off for the slight speed boost
-        if np.isnan(t1.item()) or np.isinf(t1.item()):
-            raise ValueError("CLIENTBASE: Error term is NAN/inf..")
-        if np.isnan(t2.item()) or np.isinf(t2.item()):
-            raise ValueError("CLIENTBASE: Decoder Effort term is NAN/inf...")
-        #if np.isnan(t3.item()) or np.isinf(t3.item()):
-        #    raise ValueError("CLIENTBASE: User Effort term is NAN/inf...")
-        loss = t1 + t2 + t3
-        self.cost_func_comps_log = [(t1.item(), t2.item(), t3.item())]
+
+        if self.verbose:
+            print(f"CPHSSub loss t1: {t1}")
+            print(f"CPHSSub l2_loss: {l2_loss}")
+        if self.check_loss_for_nan_inf:
+            # It's working right now so I'll turn this off for the slight speed boost
+            if np.isnan(t1.item()) or np.isinf(t1.item()):
+                raise ValueError("CLIENTBASE: Error term is NAN/inf..")
+            if np.isnan(t2.item()) or np.isinf(t2.item()):
+                raise ValueError("CLIENTBASE: Decoder Effort term is NAN/inf...")
+            if np.isnan(t3.item()) or np.isinf(t3.item()):
+                raise ValueError("CLIENTBASE: User Effort term is NAN/inf...")
+
+        # Apply additional regularizers (eg for continual learning)
+        reg_sum = 0
+        if self.regularizers!=None:
+            if type(self.regularizers)==list:
+                for reg_term in self.regularizers:
+                    # This isn't quite correct, would need to be reg_term.penalty or something...
+                    reg_sum += reg_term.penalty()
+            else:
+                reg_sum = reg_term.penalty()
+
+        if special_modes.upper()=="CPHS":
+            self.cost_func_comps_log = [(t1.item(), t2.item(), t3.item())]
+
+        loss = t1 + t2 + t3 + reg_sum
+        num_samples = x.size()[0]
+        return loss, num_samples
+    
+
+    def cphs_training_subroutine(self, x, y):
+        # uhhh how do I set self.regularizers... unless I pass it in...
+
+        # Assert that the dataloader data corresponds to the correct update data
+        # I think trainloader is fine so I can turn it off once tl has been verified
+        #self.assert_tl_samples_match_npy(x, y)
+
+        # Idk if train/test metrics need to be running this for APFL too
+        ## PFL-NONIID did not...
+        if self.algorithm!='APFL':
+            # reset gradient so it doesn't accumulate
+            self.optimizer.zero_grad()
+        
+        loss_obj, num_samples = self.shared_loss_calc(x, y, self.model, special_modes="CPHS")
 
         if self.algorithm=='APFL':
             self.optimizer.zero_grad()
         
         # backward pass
-        loss.backward()
-        self.loss_log.append(loss.item())
+        loss_obj.backward()
+        self.loss_log.append(loss_obj.item())
         # This would need to be changed if you switch to a sequential (not single layer) model
         # Gradient norm
         # Uhh is this checking to see if it exists I guess?...
@@ -210,7 +250,7 @@ class Client(object):
         self.optimizer.step()
 
         if self.verbose:
-            print(f"Client {self.ID}; update {self.current_update}; x.size(): {x.size()}; loss: {loss.item():0.5f}")
+            print(f"Client {self.ID}; update {self.current_update}; x.size(): {x.size()}; loss: {loss_obj.item():0.5f}")
         #print(f"Model ID / Object: {id(self.model)}; {self.model}") --> #They all appear to be different...
         #self.running_epoch_loss.append(loss.item() * x.size(0))  # From: running_epoch_loss.append(loss.item() * images.size(0))
         #running_num_samples += x.size(0)
@@ -334,10 +374,14 @@ class Client(object):
         #print()
 
         if self.deep_bool:
+            if self.sequence_length*self.batch_size > training_samples.shape[0]:
+                raise ValueError("sl*bs > num training samples: thus trainloader will be empty")
             training_dataset_obj = DeepSeqLenDataset(training_samples, training_labels, self.sequence_length)
+            #print("Size of CustomEMGDataset: ", len(training_dataset_obj))
         else:
+            if self.batch_size > training_samples.shape[0]:
+                raise ValueError("bs > num training samples: thus trainloader will be empty")
             training_dataset_obj = CustomEMGDataset(training_samples, training_labels)
-            # IF THIS ONE IS FAILING IT IS PROBABLY BECAUSE THE BATCH_SIZE IS 1202 SO THE LAST (ONLY) UPDATE IS GETTING DROPPED
             #print("Size of CustomEMGDataset: ", len(training_dataset_obj))
         
         if self.verbose:
@@ -417,6 +461,10 @@ class Client(object):
             print(f'cb Client {self.ID} test_metrics()')
         with torch.no_grad():
             for i, (x, y) in enumerate(testloaderfull):
+                #loss_obj, num_samples = self.shared_loss_calc(x, y, self.model, special_modes="CPHS")
+                #if self.verbose:
+                #    print(f"batch {i}, loss {test_loss:0,.5f}")
+
                 if type(x) == type([]):
                     x[0] = x[0].to(self.device)
                 else:
@@ -441,10 +489,9 @@ class Client(object):
                     t3 = t3.sum()
                 loss = t1 + t2 + t3
 
+                ############################################################################
                 test_loss = loss.item()  # Just get the actual loss function term
                 running_test_loss += test_loss
-                if self.verbose:
-                    print(f"batch {i}, loss {test_loss:0,.5f}")
                 num_samples += x.size()[0]
         self.client_testing_log.append(running_test_loss / num_samples)   
         return running_test_loss, num_samples
@@ -480,6 +527,10 @@ class Client(object):
             print(f'cb Client {self.ID} train_metrics()')
         with torch.no_grad():
             for i, (x, y) in enumerate(trainloader):
+                #loss_obj, num_samples = self.shared_loss_calc(x, y, self.model, special_modes="CPHS")
+                #if self.verbose:
+                #    print(f"batch {i}, loss {test_loss:0,.5f}")
+
                 #print(f"i: {i}; x.shape: {x.shape}, y.shape: {y.shape}")
                 if type(x) == type([]):
                     x[0] = x[0].to(self.device)
@@ -504,8 +555,9 @@ class Client(object):
                     t3 = t3.sum()
                 loss = t1 + t2 + t3
 
-                if self.verbose:
-                    print(f"batch {i}, loss {loss:0,.5f}")
+                ############################################################################
+                #if self.verbose:
+                #    print(f"batch {i}, loss {loss:0,.5f}")
                 train_num += self.y_ref.shape[0]  # Why is this y.shape and not x.shape?... I guess they are the same row dims?
                 # Why are they multiplying by y.shape[0] here...
                 # ^ This is probably wrong now since I removed the transpose... (12/2/23)

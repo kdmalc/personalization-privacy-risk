@@ -3,12 +3,11 @@
 import torch
 import time
 from flcore.clients.clientbase import Client
-#import torch.nn as nn
 import numpy as np
 import os
-#import random
 from torch.utils.data import DataLoader
 from utils.emg_dataset_class import *
+from continual_learning.ewc import *
 
 
 class clientCent(Client):
@@ -269,6 +268,13 @@ class clientCent(Client):
         #self.model.train()
         
         start_time = time.time()
+
+        if self.ewc_bool:
+            # Initialize EWC
+            self.regularizers = EWC(self.model, trainloader, fisher_multiplier=self.fisher_mult)
+        else:
+            # Eg it stays None
+            self.regularizers = None
 
         # Save the client's starting weights for Smoothbatch
         if self.smoothbatch_boolean:

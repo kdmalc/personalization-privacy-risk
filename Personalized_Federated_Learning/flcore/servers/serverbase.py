@@ -70,11 +70,17 @@ class Server(object):
         
         # Kai's additional params
         self.models_base_dir = "models"
+        self.model_str = args.model_str
+        if self.model_str != "LinearRegression":
+            self.deep_bool = True
+        else:
+            self.deep_bool = False
         self.ndp = args.num_decimal_points
         self.global_round = 0
         self.test_split_fraction = args.test_split_fraction
         self.debug_mode = args.debug_mode
-        self.global_update = args.starting_update
+        self.starting_update = args.starting_update
+        self.global_update = args.starting_update # Where is global_update even used lol
         self.verbose = args.verbose
         self.slow_clients_bool = args.slow_clients_bool
         self.run_train_metrics = args.run_train_metrics
@@ -142,6 +148,10 @@ class Server(object):
         self.trial_result_path = self.result_path + self.str_current_datetime + "_" + self.algorithm
         if not os.path.exists(self.trial_result_path):
             os.makedirs(self.trial_result_path)
+
+        self.ewc_bool = args.ewc_bool
+        self.fisher_mult = args.fisher_mult
+        self.optimizer_str = args.optimizer_str
 
 
     def set_clients(self, clientObj):  
@@ -409,13 +419,53 @@ class Server(object):
                     os.makedirs(pers_model_file_path)
                 torch.save(c.model, os.path.join(self.model_dir_path, self.algorithm + "_client_pers_model", c.ID + "_pers_model.pt"))
 
+        #sequential_base_str = ("\n\nSEQUENTIAL\n"
+        #    f"sequential = {self.sequential}\n")
+        #if self.sequential:
+        #    sequential_base_str += (f"live_client_IDs_queue = {self.live_client_IDs_queue}\n"
+        #    f"static_client_IDs = {self.static_client_IDs}\n"
+        #    f"num_liveseq_rounds_per_seqclient = {self.num_liveseq_rounds_per_seqclient}\n"
+        #    f"prev_model_directory = {self.prev_model_directory}")
+        sequential_base_list = [
+            "\n\nSEQUENTIAL\n",
+            f"sequential = {self.sequential}\n"]
+        if self.sequential:
+            sequential_base_list.extend([
+                f"live_client_IDs_queue = {self.live_client_IDs_queue}\n",
+                f"static_client_IDs = {self.static_client_IDs}\n",
+                f"num_liveseq_rounds_per_seqclient = {self.num_liveseq_rounds_per_seqclient}\n",
+                f"prev_model_directory = {self.prev_model_directory}"])
+        sequential_base_str = ''.join(sequential_base_list)
+
+        continual_base_str = ("\n\nCONTINUAL LEARNING PARAMS\n"
+            f"ewc_bool = {self.ewc_bool}\n"
+            f"fisher_multiplier = {self.fisher_mult}\n")
+        
+        #deep_base_str = ("\n\nDEEP NETWORK HYPERPARAMETERS\n")
+        #if self.deep_bool:
+        #    deep_base_str += (f"hidden_size = {self.hidden_size}\n"
+        #    f"sequence_length = {self.sequence_length}\n")
+        deep_base_list = ["\n\nDEEP NETWORK HYPERPARAMETERS\n"]
+        if self.deep_bool:
+            deep_base_list.extend([
+                f"hidden_size = {self.hidden_size}\n"
+                f"sequence_length = {self.sequence_length}\n"])
+        deep_base_str = ''.join(deep_base_list)
+        
+        # Theoretically could toggle this...
+        federated_base_str = ("\n\nFEDERATED LEARNING PARAMS\n"
+            f"local_round_threshold = {self.local_round_threshold}\n")
+
+        cphs_base_str = ("\n\nSIMULATION PARAMS\n"
+            f"starting_update = {self.starting_update}\n"
+            f"train_subj_IDs = {self.train_subj_IDs}\n"
+            f"condition_number_lst = {self.condition_number_lst}\n"
+            f"total effective clients = train_subj_IDs*condition_number_lst = {self.num_clients}\n")
+
         param_log_str = (
             "BASE\n"
             f"algorithm = {self.algorithm}\n"
             f"model = {self.global_model}\n"
-            f"train_subj_IDs = {self.train_subj_IDs}\n"
-            f"condition_number_lst = {self.condition_number_lst}\n"
-            f"total effective clients = train_subj_IDs*condition_number_lst = {self.num_clients}\n"
             f"device_channels = {self.device_channels}\n"
             "\n\nMODEL HYPERPARAMETERS\n"
             f"lambdaF = {self.lambdaF}\n"
@@ -427,29 +477,22 @@ class Server(object):
             f"local_learning_rate = {self.local_learning_rate}\n"
             f"learning_rate_decay = {self.learning_rate_decay}\n"
             f"learning_rate_decay_gamma = {self.learning_rate_decay_gamma}\n"
+            f"optimizer = {self.optimizer_str}\n"
             f"pca_channels = {self.pca_channels}\n"
             f"normalize_data = {self.normalize_data}\n"
-            "\n\nDEEP NETWORK HYPERPARAMETERS\n"
-            f"input_size = {self.input_size}\n"
-            f"hidden_size = {self.hidden_size}\n"
-            f"sequence_length = {self.sequence_length}\n"
-            f"output_size = {self.output_size}\n"
-            "\n\nFEDERATED LEARNING PARAMS\n"
-            f"starting_update = {self.args.starting_update}\n"
-            f"local_round_threshold = {self.local_round_threshold}\n"
+            f"(model) input_size = {self.input_size}\n"
+            f"(model) output_size = {self.output_size}\n"
             "\n\nTESTING\n"
             f"test_split_fraction = {self.test_split_fraction}\n"
             f"test_split_each_update = {self.test_split_each_update}\n"
-            f"test_split_users = {self.test_split_users}\n"
-            f"run_train_metrics = {self.run_train_metrics}\n"
-            "\n\nSEQUENTIAL\n"
-            f"sequential = {self.sequential}\n"
-            f"live_client_IDs_queue = {self.live_client_IDs_queue}\n"
-            f"static_client_IDs = {self.static_client_IDs}\n"
-            f"num_liveseq_rounds_per_seqclient = {self.num_liveseq_rounds_per_seqclient}\n"
-            f"prev_model_directory = {self.prev_model_directory}")
+            f"test_split_users = {self.test_split_users}\n")
         with open(self.trial_result_path+r'\param_log.txt', 'w') as file:
             file.write(param_log_str)
+            file.write(sequential_base_str)
+            file.write(continual_base_str)
+            file.write(deep_base_str)
+            file.write(federated_base_str)
+            file.write(cphs_base_str)
 
         if (personalized==True and ((len(self.rs_test_loss_per))!=0)) or (personalized==False and ((len(self.rs_test_loss))!=0)):
             # Why would this run if run_train_metrics is False...

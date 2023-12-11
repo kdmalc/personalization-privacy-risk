@@ -50,7 +50,7 @@ def run(args):
 
         # Generate args.model
         if model_str == "LinearRegression":
-            args.model = torch.nn.Linear(args.pca_channels, 2, args.linear_model_bias)  #input_size, output_size, bias boolean
+            args.model = torch.nn.Linear(args.input_size, args.output_size, args.linear_model_bias)  #input_size, output_size, bias boolean
         else:
             raise NotImplementedError
 
@@ -119,6 +119,11 @@ def parse_args():
     # Now turning PCA off since the model is supposed to learn this dim reduc...
     parser.add_argument('-pca_ch', "--pca_channels", type=int, default=64, #was 10...
                         help="Number of principal components. 64 means do not use any PCA")
+    
+    # CONTINUAL LEARNING
+    parser.add_argument('-ewc_bool', "--ewc_bool", type=bool, default=False)
+    parser.add_argument('-fisher_mult', "--fisher_mult", type=int, default=1e3)
+    parser.add_argument('-optimizer_str', "--optimizer_str", type=str, default="ADAM")
     
 
 
@@ -233,9 +238,8 @@ def parse_args():
                         help="Delta time, amount of time (sec?) between measurements")
     parser.add_argument('-normalize_data', "--normalize_data", type=bool, default=True, # Only works when True!
                         help="Normalize the input EMG signals and its labels. This is good practice.")
-    # I depreciated debug_mode, double check it's removed so I can delete it here
     parser.add_argument('-debug_mode', "--debug_mode", type=bool, default=False,
-                        help="I THINK I KILLED THIS MODE: In debug mode, the code is run to minimize overhead time in order to debug as fast as possible.  Namely, the data is held at the server to decrease init time, and communication delays are ignored.")
+                        help="Will do additional checks on loss magnitudes and such (check_loss_for_nan_inf, etc).")
     parser.add_argument('-con_num', "--condition_number_lst", type=str, default='[1]',
                         help="Which condition number (trial) to train on. Must be a list. By default, will iterate through all train_subjs for each cond (eg each cond_num gets its own client even for the same subject)")
     parser.add_argument('-v', "--verbose", type=bool, default=False,

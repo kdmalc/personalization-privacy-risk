@@ -1,21 +1,8 @@
 import torch.nn as nn
 
-
-# FROM PFLNONIID
-# split an original model into a base and a head
-class BaseHeadSplit(nn.Module):
-    def __init__(self, base, head):
-        super(BaseHeadSplit, self).__init__()
-
-        self.base = base
-        self.head = head
-        
-    def forward(self, x):
-        out = self.base(x)
-        out = self.head(out)
-
-        return out
-
+    
+################################################################################################
+# RNN
 
 # Define a simple RNN model
 class RNNModel(nn.Module):
@@ -75,6 +62,8 @@ class DynamicRNNModel(nn.Module):
         output = self.fc(rnn_out)
         return output
     
+################################################################################################
+# LSTM
 
 # Define a simple LSTM model
 class LSTMModel(nn.Module):
@@ -99,6 +88,21 @@ class LSTMModel(nn.Module):
     #    output = self.fc(h_n[-1])
     #    return output
 
+# Canonical LSTM model example
+class CannonLSTMModel(nn.Module):
+    def __init__(self, input_size, hidden_size, output_size):
+        super(LSTMModel, self).__init__()
+        self.lstm = nn.LSTM(input_size, hidden_size, batch_first=True)
+        self.fc = nn.Linear(hidden_size, output_size)
+
+    def forward(self, x):
+        out, _ = self.lstm(x)
+        out = self.fc(out[:, -1, :])  # Use the output of the last time step
+        # I think I actually want all of them right...
+        return out
+
+################################################################################################
+# GRU
 
 # Edited GRU to pass sequence length so that you get the full output...
 class GRUModelEDITED(nn.Module):
@@ -126,6 +130,8 @@ class GRUModel(nn.Module):
         output = self.fc(h_n[-1])
         return output
     
+################################################################################################
+# TRANSFORMER
 
 class TransformerModel(nn.Module):
     def __init__(self, input_size, output_size, num_layers=1, num_heads=8):
@@ -148,3 +154,20 @@ class TransformerModel(nn.Module):
         # Fully connected layer
         output = self.fc(last_output)
         return output
+    
+################################################################################################
+# FROM PFL-NONIID
+# split an original model into a base and a head
+# This isn't used/integrated yet...
+class BaseHeadSplit(nn.Module):
+    def __init__(self, base, head):
+        super(BaseHeadSplit, self).__init__()
+
+        self.base = base
+        self.head = head
+        
+    def forward(self, x):
+        out = self.base(x)
+        out = self.head(out)
+
+        return out
