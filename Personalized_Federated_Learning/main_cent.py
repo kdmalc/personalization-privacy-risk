@@ -57,13 +57,8 @@ def run(args):
         if args.model_str == "LinearRegression":
             args.model = torch.nn.Linear(args.input_size, args.output_size, args.linear_model_bias)  #input_size, output_size, bias boolean
         elif args.model_str == "RNN":
-            # Initialize the RNN model
-            #rnn_model = RNNModel(D, hidden_size, 2)
             args.model = RNNModel(args.input_size, args.hidden_size, args.output_size)
         elif args.model_str == "LSTM":
-            # Initialize the LSTM model
-            #hidden_size = 64
-            #lstm_model = LSTMModel(D, hidden_size, output_size)
             args.model = LSTMModel(args.input_size, args.hidden_size, args.output_size)
         elif args.model_str == "GRU":
             #args.model = GRUModel(args.input_size, args.hidden_size, args.output_size, args.sequence_length)
@@ -131,22 +126,22 @@ def parse_args():
     parser.add_argument('-num_layers', "--num_layers", type=int, default=1)
 
     parser.add_argument('-input_size', "--input_size", type=int, default=64)
-    parser.add_argument('-hidden_size', "--hidden_size", type=int, default=64)
-    parser.add_argument('-sequence_length', "--sequence_length", type=int, default=1)
+    parser.add_argument('-hidden_size', "--hidden_size", type=int, default=10)
+    parser.add_argument('-sequence_length', "--sequence_length", type=int, default=10)
     parser.add_argument('-output_size', "--output_size", type=int, default=2)
 
-    parser.add_argument('-gr', "--global_rounds", type=int, default=10)  # KAI: Originally was 2000
+    parser.add_argument('-gr', "--global_rounds", type=int, default=100)  # KAI: Originally was 2000
     parser.add_argument('-m', "--model_str", type=str, default="RNN")
     parser.add_argument('-lbs', "--batch_size", type=int, default=32)
-    parser.add_argument('-lr', "--local_learning_rate", type=float, default=0.5,
+    parser.add_argument('-lr', "--local_learning_rate", type=float, default=0.01,
                         help="Local learning rate")
     
     parser.add_argument('-eg', "--eval_gap", type=int, default=1, help="Rounds gap for evaluation")
 
     # CONTINUAL LEARNING
-    parser.add_argument('-ewc_bool', "--ewc_bool", type=bool, default=False)
-    parser.add_argument('-fisher_mult', "--fisher_mult", type=int, default=1e3)
-    parser.add_argument('-optimizer_str', "--optimizer_str", type=str, default="ADAM")
+    parser.add_argument('-ewc_bool', "--ewc_bool", type=bool, default=True)
+    parser.add_argument('-fisher_mult', "--fisher_mult", type=int, default=0.00013) #1e3
+    parser.add_argument('-optimizer_str', "--optimizer_str", type=str, default="SGD")
 
 
 
@@ -275,7 +270,7 @@ def parse_args():
                         help="Delta time, amount of time (sec?) between measurements")
     parser.add_argument('-normalize_data', "--normalize_data", type=bool, default=True, # Only works when True! ... what? Maybe things won't run if False is what I meant?
                         help="Normalize (actually scales...) the input EMG signals and its labels. This is good practice.")
-    parser.add_argument('-debug_mode', "--debug_mode", type=bool, default=False,
+    parser.add_argument('-debug_mode', "--debug_mode", type=bool, default=True,
                         help="Will do additional checks on loss magnitudes and such (check_loss_for_nan_inf, etc).")
     parser.add_argument('-v', "--verbose", type=bool, default=False,
                         help="Print out a bunch of extra stuff")

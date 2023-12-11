@@ -88,6 +88,27 @@ class LSTMModel(nn.Module):
     #    output = self.fc(h_n[-1])
     #    return output
 
+
+# LSTM with dropout
+class DropoutLSTM(nn.Module):
+    def __init__(self, input_size, hidden_size, output_size, num_layers, dropout_rate):
+        super(DropoutLSTM, self).__init__()
+        
+        self.lstm = nn.LSTM(input_size, hidden_size, num_layers, dropout=dropout_rate, batch_first=True)
+        self.dropout = nn.Dropout(dropout_rate)
+        self.fc = nn.Linear(hidden_size, output_size)
+
+    def forward(self, x, eval=False):
+        # Eg use this via model(input, eval=...)
+        # x must be of shape (batch_size, sequence_length, input_size)
+        lstm_out, _ = self.lstm(x)
+        if eval==False:
+            lstm_out = self.dropout(lstm_out)
+        # This only uses the output of the last time step for now...
+        output = self.fc(lstm_out)
+        return output
+
+
 # Canonical LSTM model example
 class CannonLSTMModel(nn.Module):
     def __init__(self, input_size, hidden_size, output_size):

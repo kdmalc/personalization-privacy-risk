@@ -142,6 +142,7 @@ class Client(object):
         self.regularizers = None  # This gets set later, so this is fine for now...
 
         # Note this double dipping
+        self.debug_mode = args.debug_mode
         self.check_loss_for_nan_inf = args.debug_mode
 
 
@@ -171,9 +172,9 @@ class Client(object):
         if type(t3)==torch.Tensor:
             t3 = t3.sum()
 
-        if self.verbose:
-            print(f"CPHSSub loss t1: {t1}")
-            print(f"CPHSSub l2_loss: {l2_loss}")
+        if self.verbose or self.debug_mode:
+            print(f"CB shared_loss_calc loss t1: {t1}")
+            print(f"CB shared_loss_calc l2_loss: {l2_loss}")
         if self.check_loss_for_nan_inf:
             # It's working right now so I'll turn this off for the slight speed boost
             if np.isnan(t1.item()) or np.isinf(t1.item()):
@@ -191,7 +192,9 @@ class Client(object):
                     # This isn't quite correct, would need to be reg_term.penalty or something...
                     reg_sum += reg_term.penalty()
             else:
-                reg_sum = reg_term.penalty()
+                reg_sum = self.regularizers.penalty()
+        if self.verbose or self.debug_mode:
+            print(f"CB shared_loss_calc reg_sum: {reg_sum}")
 
         if special_modes.upper()=="CPHS":
             self.cost_func_comps_log = [(t1.item(), t2.item(), t3.item())]

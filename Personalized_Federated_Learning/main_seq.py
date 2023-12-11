@@ -118,8 +118,8 @@ def run(args):
 def parse_args():
     parser = argparse.ArgumentParser()
 
-    short_run = True
-    one_hundred_run = False
+    short_run = False
+    one_hundred_run = True
     long_run = False
     if short_run:
         my_gr = 10
@@ -128,8 +128,8 @@ def parse_args():
         my_gr = 100
         my_nlsrpsq = 25
     elif long_run:
-        my_gr = 500 #1500
-        my_nlsrpsq = 100
+        my_gr = 1500
+        my_nlsrpsq = 50
     else:
         raise ValueError("Set run length type bool")
     
@@ -138,16 +138,20 @@ def parse_args():
     parser.add_argument('-num_layers', "--num_layers", type=int, default=1)
 
     parser.add_argument('-input_size', "--input_size", type=int, default=64)
-    parser.add_argument('-hidden_size', "--hidden_size", type=int, default=32)
-    parser.add_argument('-sequence_length', "--sequence_length", type=int, default=1)
+    parser.add_argument('-hidden_size', "--hidden_size", type=int, default=10)
+    parser.add_argument('-sequence_length', "--sequence_length", type=int, default=10)
     parser.add_argument('-output_size', "--output_size", type=int, default=2)
 
     parser.add_argument('-m', "--model_str", type=str, default="RNN")  
     # Uhh how does batch size get used? Does it need to be 1202...
-    parser.add_argument('-lbs', "--batch_size", type=int, default=1200)
+    parser.add_argument('-lbs', "--batch_size", type=int, default=32)
     # For non-deep keep 1202: --> Idk if this is necessary actually, I think it will work regardless
     parser.add_argument('-lr', "--local_learning_rate", type=float, default=0.1,
                         help="Local learning rate")
+    parser.add_argument('-ld', "--learning_rate_decay", type=bool, default=True)
+    parser.add_argument('-ldg', "--learning_rate_decay_gamma", type=float, default=0.99)
+    parser.add_argument('-ls', "--local_epochs", type=int, default=1,  # Was 3 earlier
+                        help="How many times a client should iterate through their current update dataset.")
 
     # THINGS I AM CURRENTLY CHANGING A LOT
     parser.add_argument('-gr', "--global_rounds", type=int, default=my_gr)  # KAI: Originally was 2000
@@ -178,8 +182,8 @@ def parse_args():
     # CONTINUAL LEARNING
     parser.add_argument('-ewc_bool', "--ewc_bool", type=bool, default=False)
     parser.add_argument('-fisher_mult', "--fisher_mult", type=int, default=1e3)
-    parser.add_argument('-optimizer_str', "--optimizer_str", type=str, default="SGD")
-
+    parser.add_argument('-optimizer_str', "--optimizer_str", type=str, default="RMSprop")
+    # ^^ ADAM, SGD, ADAGRAD, RMSprop, ADAMW
 
 
 
@@ -193,10 +197,6 @@ def parse_args():
                         choices=["cpu", "cuda"])
     parser.add_argument('-did', "--device_id", type=str, default="0")
     parser.add_argument('-data', "--dataset", type=str, default="cphs")  # KAI: Changed the default to cphs (from mnist)
-    parser.add_argument('-ld', "--learning_rate_decay", type=bool, default=False)
-    parser.add_argument('-ldg', "--learning_rate_decay_gamma", type=float, default=0.99)
-    parser.add_argument('-ls', "--local_epochs", type=int, default=3, 
-                        help="How many times a client should iterate through their current update dataset.")
     parser.add_argument('-ngradsteps', "--num_gradient_steps", type=int, default=1, 
                         help="How many gradient steps in one local epoch.")  # In 1 epoch or per overall iteration...? 
     #Local #FedAvg #APFL #FedMTL #pFedMe ## #Ditto #PerAvg
