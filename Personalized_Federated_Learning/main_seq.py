@@ -136,29 +136,40 @@ def parse_args():
     # DEEP LEARNING STUFF
     # num_layers isn't used right now... need to add a way to make this hidden sizes a list or something...
     parser.add_argument('-num_layers', "--num_layers", type=int, default=1)
-
-    parser.add_argument('-input_size', "--input_size", type=int, default=64)
+    # No effect if model isn't deep:
     parser.add_argument('-hidden_size', "--hidden_size", type=int, default=10)
     parser.add_argument('-sequence_length', "--sequence_length", type=int, default=10)
+
+    parser.add_argument('-input_size', "--input_size", type=int, default=64)
     parser.add_argument('-output_size', "--output_size", type=int, default=2)
 
-    parser.add_argument('-m', "--model_str", type=str, default="RNN")  
+    parser.add_argument('-m', "--model_str", type=str, default="LinearRegression")  
     # Uhh how does batch size get used? Does it need to be 1202...
-    parser.add_argument('-lbs', "--batch_size", type=int, default=32)
+    parser.add_argument('-lbs', "--batch_size", type=int, default=128)
     # For non-deep keep 1202: --> Idk if this is necessary actually, I think it will work regardless
-    parser.add_argument('-lr', "--local_learning_rate", type=float, default=0.1,
+    parser.add_argument('-lr', "--local_learning_rate", type=float, default=1,
                         help="Local learning rate")
-    parser.add_argument('-ld', "--learning_rate_decay", type=bool, default=True)
+    parser.add_argument('-ld', "--learning_rate_decay", type=bool, default=False)
     parser.add_argument('-ldg', "--learning_rate_decay_gamma", type=float, default=0.99)
     parser.add_argument('-ls', "--local_epochs", type=int, default=1,  # Was 3 earlier
                         help="How many times a client should iterate through their current update dataset.")
 
     # THINGS I AM CURRENTLY CHANGING A LOT
+
+    #Local #FedAvg #APFL #FedMTL #pFedMe ## #Ditto #PerAvg
+    ## pFedMe not working
+    parser.add_argument('-algo', "--algorithm", type=str, default="PerAvg")
+    parser.add_argument('-bt', "--beta", type=float, default=0.0, #0.1?
+                        help="Average moving parameter for pFedMe, Second learning rate of Per-FedAvg, \
+                        or L1 regularization weight of FedTransfer")
     parser.add_argument('-gr', "--global_rounds", type=int, default=my_gr)  # KAI: Originally was 2000
     parser.add_argument('-stup', "--starting_update", type=int, default=10,
                         help="Which update to start on (for CPHS Simulation). Use 0 or 10.")
     parser.add_argument('-seq', "--sequential", type=bool, default=True,
                         help="Boolean toggle for whether sequential mode is on (for now, mixing current client with previously trained models)")
+    # This needs a toggle so I can just use live clients...
+    parser.add_argument('-jr', "--join_ratio", type=float, default=0.05,  # Was 0.3, but I want to try with no hold backs (eg only live clients)
+                        help="% of clients to be active in training per round. FOR SEQ: if the res is > num live clients, it will INCLUDE PAST CLIENTS IN SIM during training!!!")
     parser.add_argument('-uppm', "--use_prev_pers_model", type=bool, default=False,
                         help="Boolean toggle for whether to use previously trained personalized models for the client inits")
     parser.add_argument('-lcidsq', "--live_client_IDs_queue", type=str, default=str(['METACPHS_S106','METACPHS_S107','METACPHS_S118','METACPHS_S119']),
@@ -182,7 +193,7 @@ def parse_args():
     # CONTINUAL LEARNING
     parser.add_argument('-ewc_bool', "--ewc_bool", type=bool, default=False)
     parser.add_argument('-fisher_mult', "--fisher_mult", type=int, default=1e3)
-    parser.add_argument('-optimizer_str', "--optimizer_str", type=str, default="RMSprop")
+    parser.add_argument('-optimizer_str', "--optimizer_str", type=str, default="SGD")
     # ^^ ADAM, SGD, ADAGRAD, RMSprop, ADAMW
 
 
@@ -199,11 +210,6 @@ def parse_args():
     parser.add_argument('-data', "--dataset", type=str, default="cphs")  # KAI: Changed the default to cphs (from mnist)
     parser.add_argument('-ngradsteps', "--num_gradient_steps", type=int, default=1, 
                         help="How many gradient steps in one local epoch.")  # In 1 epoch or per overall iteration...? 
-    #Local #FedAvg #APFL #FedMTL #pFedMe ## #Ditto #PerAvg
-    ## pFedMe not working
-    parser.add_argument('-algo', "--algorithm", type=str, default="FedAvg")
-    parser.add_argument('-jr', "--join_ratio", type=float, default=0.05,  # Was 0.3, but I want to try with no hold backs (eg only live clients)
-                        help="Fraction of clients to be active in training per round")
     parser.add_argument('-rjr', "--random_join_ratio", type=bool, default=False,
                         help="Random ratio of clients per round")
     parser.add_argument('-dp', "--privacy", type=bool, default=False,
@@ -242,9 +248,6 @@ def parse_args():
                         help="The max loss threshold for aborting a training run")
     
     # SECTION: pFedMe / PerAvg / FedProx / FedAMP / FedPHP
-    parser.add_argument('-bt', "--beta", type=float, default=0.0,
-                        help="Average moving parameter for pFedMe, Second learning rate of Per-FedAvg, \
-                        or L1 regularization weight of FedTransfer")
     parser.add_argument('-lam', "--lamda", type=float, default=1.0,
                         help="Regularization weight")
     parser.add_argument('-mu', "--mu", type=float, default=0,

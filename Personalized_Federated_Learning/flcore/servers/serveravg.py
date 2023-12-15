@@ -65,6 +65,15 @@ class FedAvg(Server):
 
         # This ought to be replaced when/if eval_new_clients is integrated
         self.evaluate(train=False, test=True)
+        ####################################################
+        # Uhhhh I don't think my dataset can do this...
+        ## Maybe I should implement the user test split in addition here?
+        #self.eval_new_clients = True
+        #self.set_new_clients(clientAVG)
+        #print(f"\n-------------Fine tuning round-------------")
+        #print("\nEvaluate new clients")
+        #self.evaluate()
+        ####################################################
         
         print("\nBest loss.")
         print(min(self.rs_test_loss))
@@ -76,13 +85,3 @@ class FedAvg(Server):
             self.gradient_norm_log.append(client.gradient_norm_log)
 
         self.save_results(save_cost_func_comps=True, save_gradient=True)
-
-        ####################################################
-        # Uhhhh I don't think my dataset can do this...
-        ## Maybe I should implement the user test split in addition here?
-        #self.eval_new_clients = True
-        #self.set_new_clients(clientAVG)
-        #print(f"\n-------------Fine tuning round-------------")
-        #print("\nEvaluate new clients")
-        #self.evaluate()
-        ####################################################

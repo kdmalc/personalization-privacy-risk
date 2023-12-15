@@ -84,7 +84,10 @@ class Server(object):
         self.verbose = args.verbose
         self.slow_clients_bool = args.slow_clients_bool
         self.run_train_metrics = args.run_train_metrics
-        self.result_path = r"C:\Users\kdmen\Desktop\Research\personalization-privacy-risk\Personalized_Federated_Learning\results\mdHM_" 
+        # Absolute path
+        #self.result_path = "C:\\Users\\kdmen\\Desktop\\Research\\personalization-privacy-risk\\Personalized_Federated_Learning\\results\\"
+        # Relative path
+        self.result_path = "\\results\\" 
         # serverlocal ONLY!
         self.test_against_all_other_clients = args.test_against_all_other_clients
         self.cross_client_modulus = args.cross_client_modulus
@@ -373,6 +376,7 @@ class Server(object):
 
 
     def load_model(self, directory_name, type):
+        # This is not used, just fundamentally not how my saves work...
         '''
             Loads the specified model to become the current global model!
 

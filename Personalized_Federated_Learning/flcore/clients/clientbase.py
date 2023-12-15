@@ -147,7 +147,8 @@ class Client(object):
 
 
     # GOAL IS TO CONSOLIDATE EVERYTHING SHARED BETWEEN TRAIN_METRICS, TEST_METRICS, AND CPHS_TRAINING_SUBROUTINE
-    def shared_loss_calc(self, x, y, model, special_modes=None):
+    def shared_loss_calc(self, x, y, model, record_cost_func_comps=False):
+        '''This simulates the data stream and then calculates the loss. DOES NOT BACKPROP'''
         if type(x) == type([]):
             x[0] = x[0].to(self.device)
         else:
@@ -196,7 +197,7 @@ class Client(object):
         if self.verbose or self.debug_mode:
             print(f"CB shared_loss_calc reg_sum: {reg_sum}")
 
-        if special_modes.upper()=="CPHS":
+        if record_cost_func_comps == True:
             self.cost_func_comps_log = [(t1.item(), t2.item(), t3.item())]
 
         loss = t1 + t2 + t3 + reg_sum
@@ -205,8 +206,6 @@ class Client(object):
     
 
     def cphs_training_subroutine(self, x, y):
-        # uhhh how do I set self.regularizers... unless I pass it in...
-
         # Assert that the dataloader data corresponds to the correct update data
         # I think trainloader is fine so I can turn it off once tl has been verified
         #self.assert_tl_samples_match_npy(x, y)
@@ -217,7 +216,8 @@ class Client(object):
             # reset gradient so it doesn't accumulate
             self.optimizer.zero_grad()
         
-        loss_obj, num_samples = self.shared_loss_calc(x, y, self.model, special_modes="CPHS")
+        # record_cost_func_comps should be True since this is the actual training loop
+        loss_obj, num_samples = self.shared_loss_calc(x, y, self.model, record_cost_func_comps=True)
 
         if self.algorithm=='APFL':
             self.optimizer.zero_grad()
@@ -464,7 +464,6 @@ class Client(object):
             print(f'cb Client {self.ID} test_metrics()')
         with torch.no_grad():
             for i, (x, y) in enumerate(testloaderfull):
-                #loss_obj, num_samples = self.shared_loss_calc(x, y, self.model, special_modes="CPHS")
                 #if self.verbose:
                 #    print(f"batch {i}, loss {test_loss:0,.5f}")
 
@@ -474,23 +473,7 @@ class Client(object):
                     x = x.to(self.device)
                 y = y.to(self.device)
 
-                self.simulate_data_streaming_xy(x, y)
-                # D@s = predicted velocity
-                vel_pred = eval_model(self.F)
-
-                # L2 regularization term
-                l2_loss = 0
-                for name, param in self.model.named_parameters():
-                    if 'weight' in name:
-                        l2_loss += torch.norm(param, p=2)
-                t1 = self.loss_func(vel_pred, self.y_ref)
-                if type(t1)==torch.Tensor:
-                    t1 = t1.sum()
-                t2 = self.lambdaD*(l2_loss**2)
-                t3 = self.lambdaF*(torch.linalg.matrix_norm((self.F))**2)
-                if type(t3)==torch.Tensor:
-                    t3 = t3.sum()
-                loss = t1 + t2 + t3
+                loss, num_samples = self.shared_loss_calc(x, y, eval_model)
 
                 ############################################################################
                 test_loss = loss.item()  # Just get the actual loss function term
@@ -512,8 +495,8 @@ class Client(object):
             eval_model = self.load_model(saved_model_path)
         else:
             eval_model = self.model
-        #self.model.to(self.device)
         #eval_model.to(self.device) # Idk if this needs to be run or not...
+        eval_model.eval()
 
         # ITS GOTTA BE SUPER INEFFIECIENT TO RECREATE A NEW TL FOR EACH CLIENT EACH ROUND FOR TRAIN EVAL...
         ## How do I just reuse the existing training loader from the streamed training data?
@@ -521,8 +504,7 @@ class Client(object):
         assert(len(trainloader)!=0)
 
         #self.simulate_data_streaming(trainloader) 
-        # ^^ idk if i need to be doing this ... this should already be run in the actual training process
-        eval_model.eval()
+        # ^^ this is currently called in shared_loss_calc 12/14/23
 
         train_num = 0
         losses = 0
@@ -530,7 +512,6 @@ class Client(object):
             print(f'cb Client {self.ID} train_metrics()')
         with torch.no_grad():
             for i, (x, y) in enumerate(trainloader):
-                #loss_obj, num_samples = self.shared_loss_calc(x, y, self.model, special_modes="CPHS")
                 #if self.verbose:
                 #    print(f"batch {i}, loss {test_loss:0,.5f}")
 
@@ -541,22 +522,7 @@ class Client(object):
                     x = x.to(self.device)
                 y = y.to(self.device)
 
-                self.simulate_data_streaming_xy(x, y)
-                vel_pred = eval_model(self.F)
-
-                # L2 regularization term
-                l2_loss = 0
-                for name, param in eval_model.named_parameters():
-                    if 'weight' in name:
-                        l2_loss += torch.norm(param, p=2)
-                t1 = self.loss_func(vel_pred, self.y_ref)
-                if type(t1)==torch.Tensor:
-                    t1 = t1.sum()
-                t2 = self.lambdaD*(l2_loss**2)
-                t3 = self.lambdaF*(torch.linalg.matrix_norm((self.F))**2)
-                if type(t3)==torch.Tensor:
-                    t3 = t3.sum()
-                loss = t1 + t2 + t3
+                loss, num_samples = self.shared_loss_calc(x, y, eval_model)
 
                 ############################################################################
                 #if self.verbose:
@@ -595,23 +561,6 @@ class Client(object):
             print(f"cond_labels_npy first 10 entries of channel 0: {nondl_y[:10, 0]}") 
             raise ValueError("Trainloader may not be working as anticipated")
         #assert(sum(sum(x[:5]-self.cond_labels_npy[self.update_ix[self.current_update]:self.update_ix[self.current_update+1]][:5]))==0) 
-
-
-    def pred_vel_and_gen_loss(self, log_cost_func_comps=True):
-        '''This function is the forward pass and loss, computing our custom loss function and returning the loss object'''
-        # D@s = predicted velocity
-        vel_pred = self.model(self.F) 
-        l2_loss = 0
-        for name, param in self.model.named_parameters():
-            if 'weight' in name:
-                l2_loss += torch.norm(param, p=2)
-        t1 = self.loss_func(vel_pred, self.y_ref)
-        t2 = self.lambdaD*(l2_loss**2)
-        t3 = self.lambdaF*(torch.linalg.matrix_norm((self.F))**2)
-        loss = t1 + t2 + t3
-        if log_cost_func_comps:
-            self.cost_func_comps_log = [(t1.item(), t2.item(), t3.item())]
-        return loss
 
 
     # def get_next_train_batch(self):

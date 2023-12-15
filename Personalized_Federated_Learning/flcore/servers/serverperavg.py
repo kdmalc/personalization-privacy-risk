@@ -4,6 +4,7 @@ import copy
 from flcore.clients.clientperavg import clientPerAvg
 from flcore.servers.serverbase import Server
 #from threading import Thread
+import time
 
 
 class PerAvg(Server):
@@ -16,9 +17,11 @@ class PerAvg(Server):
 
         print(f"\nJoin ratio / total clients: {self.join_ratio} / {self.num_clients}")
         print("Finished creating server and clients.")
+        self.Budget = [] #Idk what this is, its from PFLib
 
     def train(self):
         for i in range(self.global_rounds+1):
+            s_t = time.time()
             self.selected_clients = self.select_clients()
             # send all parameter for clients
             self.send_models()
@@ -28,7 +31,7 @@ class PerAvg(Server):
                 print("\nEvaluate global model with one step update")
                 self.evaluate_one_step()
 
-            # choose several clients to send back upated model to server
+            # choose several clients to send back updated model to server
             for client in self.selected_clients:
                 # If seq is off then train as normal
                 ## If seq is on then only train if client is a live client
@@ -40,19 +43,17 @@ class PerAvg(Server):
                     client.train()
 
             self.receive_models()
-            if self.dlg_eval and i%self.dlg_gap == 0:
-                self.call_dlg(i)
+            #if self.dlg_eval and i%self.dlg_gap == 0:
+            #    self.call_dlg(i)
             self.aggregate_parameters()
+
+            self.Budget.append(time.time() - s_t)
+            print('-'*25, 'time cost', '-'*25, self.Budget[-1])
 
             if self.auto_break and self.check_done(acc_lss=[self.rs_test_loss], top_cnt=self.top_cnt):
                 break
 
-        print("\nBest loss.")
-        print(min(self.rs_test_loss))
-
-        self.save_results()
-
-        self.evaluate(train=False)
+        self.evaluate(train=False, test=True)
         #if self.num_new_clients > 0:
         #    self.eval_new_clients = True
         #    self.set_new_clients(clientPerAvg)
@@ -60,32 +61,59 @@ class PerAvg(Server):
         #    print("\nEvaluate new clients")
         #    self.evaluate()
 
+        print("\nBest loss.")
+        print(min(self.rs_test_loss))
+        print("\nAverage time cost per round.")
+        print(sum(self.Budget[1:])/len(self.Budget[1:]))
+
+        # This is run in severavg, I'm assuming it must need to be run here
+        ## Am further assuming that it won't break due to seq...
+        for client in self.clients:
+            self.cost_func_comps_log.append(client.cost_func_comps_log)
+            self.gradient_norm_log.append(client.gradient_norm_log)
+
+        self.save_results(save_cost_func_comps=True, save_gradient=True)
+
 
     def evaluate_one_step(self, acc=None, loss=None):
+        # Have to repalce self.clients with self.selected_clients 
+        ## Bc in lab (eg seq), it won't have access to past clients
         models_temp = []
-        for c in self.clients:
+        #for c in self.clients:
+        for c in self.selected_clients:
             models_temp.append(copy.deepcopy(c.model))
             c.train_one_step()
         stats = self.test_metrics()
         # set the local model back on clients for training process
-        for i, c in enumerate(self.clients):
+        #for i, c in enumerate(self.clients):
+        for i, c in enumerate(self.selected_clients):
             c.clone_model(models_temp[i], c.model)
             
         stats_train = self.train_metrics()
         # set the local model back on clients for training process
-        for i, c in enumerate(self.clients):
+        #for i, c in enumerate(self.clients):
+        for i, c in enumerate(self.selected_clients):
             c.clone_model(models_temp[i], c.model)
 
         #accs = [a / n for a, n in zip(stats[2], stats[1])]
-
         test_loss = sum(stats[2])*1.0 / sum(stats[1])
         train_loss = sum(stats_train[2])*1.0 / sum(stats_train[1])
         
         if acc == None:
             self.rs_test_loss.append(test_loss)
+            if self.sequential:
+                # seq_stats <-- [curr_live_loss, curr_live_num_samples, curr_live_IDs, prev_live_loss, prev_live_num_samples, prev_live_IDs]
+                # Hmm do I need to save/use the actual IDs at all? Do I care? Don't think so...
+                seq_stats = stats[3]
+                if len(seq_stats[0])!=0:
+                    self.curr_live_rs_test_loss.append(sum(seq_stats[0])/len(seq_stats[0]))
+                if len(seq_stats[3])!=0:
+                    self.prev_live_rs_test_loss.append(sum(seq_stats[3])/len(seq_stats[3]))
+                if len(seq_stats[6])!=0:
+                    self.unseen_live_rs_test_loss.append(sum(seq_stats[6])/len(seq_stats[6]))
         else:
             acc.append(test_loss)
-        
+
         if loss == None:
             self.rs_train_loss.append(train_loss)
         else:
@@ -94,4 +122,4 @@ class PerAvg(Server):
         # self.print_(test_acc, train_acc, train_loss)
         print("Averaged Train Loss: {:.4f}".format(train_loss))
         print("Averaged Test Loss: {:.4f}".format(test_loss))
-        #print("Std Test Accurancy: {:.4f}".format(np.std(accs)))
+        #print("Std Test Accuracy: {:.4f}".format(np.std(accs)))

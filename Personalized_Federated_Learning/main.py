@@ -260,22 +260,32 @@ def parse_args():
     parser.add_argument('-sequence_length', "--sequence_length", type=int, default=1)
     parser.add_argument('-output_size', "--output_size", type=int, default=2)
 
-    parser.add_argument('-m', "--model_str", type=str, default="RNN")  
+    #Local #FedAvg #APFL #FedMTL #pFedMe (not working) ## #Ditto #PerAvg #Centralized
+    parser.add_argument('-algo', "--algorithm", type=str, default="PerAvg")
+    parser.add_argument('-jr', "--join_ratio", type=float, default=0.3,
+                        help="Fraction of clients to be active in training per round")
+    parser.add_argument('-lrt', "--local_round_threshold", type=int, default=25,
+                        help="Number of communication rounds per client until a client will advance to the next batch of streamed data")
+    parser.add_argument('-bt', "--beta", type=float, default=0.001,
+                        help="Average moving parameter for pFedMe, Second learning rate of Per-FedAvg, \
+                        or L1 regularization weight of FedTransfer")
+
+    parser.add_argument('-m', "--model_str", type=str, default="LinearRegression")  
     # Uhh how does batch size get used? Does it need to be 1202...
-    parser.add_argument('-lbs', "--batch_size", type=int, default=1200)
+    parser.add_argument('-lbs', "--batch_size", type=int, default=600)
     # For non-deep keep 1202: --> Idk if this is necessary actually, I think it will work regardless
     parser.add_argument('-lr', "--local_learning_rate", type=float, default=0.1,
                         help="Local learning rate")
 
     # THINGS I AM CURRENTLY CHANGING A LOT
-    parser.add_argument('-gr', "--global_rounds", type=int, default=10)  # KAI: Originally was 2000
+    parser.add_argument('-gr', "--global_rounds", type=int, default=100)  # KAI: Originally was 2000
     parser.add_argument('-stup', "--starting_update", type=int, default=10,
                         help="Which update to start on (for CPHS Simulation). Use 0 or 10.")
     
     # CONTINUAL LEARNING
     parser.add_argument('-ewc_bool', "--ewc_bool", type=bool, default=False)
     parser.add_argument('-fisher_mult', "--fisher_mult", type=int, default=1e3)
-    parser.add_argument('-optimizer_str', "--optimizer_str", type=str, default="ADAM")
+    parser.add_argument('-optimizer_str', "--optimizer_str", type=str, default="SGD")
 
 
 
@@ -290,12 +300,6 @@ def parse_args():
     # Use block2...
     parser.add_argument('-con_num', "--condition_number_lst", type=str, default='[3]', # Use 3 and/or 7
                         help="Which condition number (trial) to train on. Must be a list. By default, will iterate through all train_subjs for each cond (eg each cond_num gets its own client even for the same subject)")
-    #Local #FedAvg #APFL #FedMTL #pFedMe (not working) ## #Ditto #PerAvg
-    parser.add_argument('-algo', "--algorithm", type=str, default="FedAvg") # "Centralized"
-    parser.add_argument('-jr', "--join_ratio", type=float, default=0.3,
-                        help="Fraction of clients to be active in training per round")
-    parser.add_argument('-lrt', "--local_round_threshold", type=int, default=25,
-                        help="Number of communication rounds per client until a client will advance to the next batch of streamed data")
     parser.add_argument('-ld', "--learning_rate_decay", type=bool, default=False)
     parser.add_argument('-ls', "--local_epochs", type=int, default=3, 
                         help="How many times a client should iterate through their current update dataset.")  
@@ -357,9 +361,6 @@ def parse_args():
                         help="The max loss threshold for aborting a training run")
     
     # SECTION: pFedMe / PerAvg / FedProx / FedAMP / FedPHP
-    parser.add_argument('-bt', "--beta", type=float, default=0.0,
-                        help="Average moving parameter for pFedMe, Second learning rate of Per-FedAvg, \
-                        or L1 regularization weight of FedTransfer")
     parser.add_argument('-lam', "--lamda", type=float, default=1.0,
                         help="Regularization weight")
     parser.add_argument('-mu', "--mu", type=float, default=0,
