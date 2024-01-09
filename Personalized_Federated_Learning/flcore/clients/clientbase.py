@@ -399,6 +399,7 @@ class Client(object):
             shuffle=False) 
         return dl
 
+
     def load_test_data(self, batch_size=None): 
         # Make sure this runs AFTER load_train_data so the data is already loaded in
         if self.verbose:
@@ -419,19 +420,23 @@ class Client(object):
             drop_last=True,  # Yah idk if this should be true or false or if it matters...
             shuffle=False) 
         return dl
-        
+
+
     def set_parameters(self, model):
         for new_param, old_param in zip(model.parameters(), self.model.parameters()):
             old_param.data = new_param.data.clone()
+
 
     def clone_model(self, model, target):
         for param, target_param in zip(model.parameters(), target.parameters()):
             target_param.data = param.data.clone()
             # target_param.grad = param.grad.clone()
 
+
     def update_parameters(self, model, new_params):
         for param, new_param in zip(model.parameters(), new_params):
             param.data = new_param.data.clone()
+
 
     def test_metrics(self, saved_model_path=None, model_obj=None):
         '''Kai's docs: This function is for evaluating the model (on the testing data) during training
@@ -600,4 +605,9 @@ class Client(object):
             #return torch.load(os.path.join(item_path, self.ID + "_" + item_name + ".pt"))
         elif item_path == None:
             raise ValueError("No path (item_path or full_path_to_item) provided")
+        
+
+    def log_personalized_model_loss(self):
+        '''Test the client's personalized, local model (self.model) after each training round and log it to a pers_loss_log'''
+        pass
     

@@ -20,6 +20,7 @@ class pFedMe(Server):
         print(f"\nJoin ratio / total clients: {self.join_ratio} / {self.num_clients}")
         print("Finished creating server and clients.")
 
+
     def train(self):
         for i in range(self.global_rounds+1):
             self.selected_clients = self.select_clients()
@@ -68,6 +69,7 @@ class pFedMe(Server):
         for pre_param, param in zip(self.previous_global_model, self.global_model.parameters()):
             param.data = (1 - self.beta)*pre_param.data + self.beta*param.data
 
+
     def test_metrics_personalized(self):
         if self.eval_new_clients and self.num_new_clients > 0:
             self.fine_tuning_new_clients()
@@ -83,6 +85,7 @@ class pFedMe(Server):
 
         return IDs, num_samples, tot_loss
 
+
     def train_metrics_personalized(self):
         if self.eval_new_clients and self.num_new_clients > 0:
             return [0], [1], [0]
@@ -97,6 +100,7 @@ class pFedMe(Server):
         IDs = [c.ID for c in self.clients]
 
         return IDs, num_samples, tot_loss
+
 
     def evaluate_personalized(self):
         stats = self.test_metrics_personalized()

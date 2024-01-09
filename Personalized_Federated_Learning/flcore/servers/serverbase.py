@@ -670,7 +670,7 @@ class Server(object):
                 IDs.append(c.ID)
             elif self.sequential and c.ID in [lc.ID for lc in self.live_clients]:
                 # If it is the currently live client:
-                ## I want to see its loss improving at the very least
+                ## This loss should be improving
                 curr_live_loss.append(tl*1.0)
                 curr_live_num_samples.append(ns)
                 curr_live_IDs.append(c.ID)
