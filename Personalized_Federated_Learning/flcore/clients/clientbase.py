@@ -447,6 +447,7 @@ class Client(object):
             OR
             model_obj:
             NOTE: setting both input params is unnecessary, only specify one. Otherwise an assertion will be raised
+            ^ This is probably not ideal behaviour...
             '''
 
         if model_obj != None:
@@ -454,6 +455,7 @@ class Client(object):
         elif saved_model_path != None:
             eval_model = self.load_model(saved_model_path)
         else:
+            # USING THE CLIENT'S LOCAL(/PERS) MODEL
             eval_model = self.model
         eval_model.to(self.device)
 

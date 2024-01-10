@@ -1,86 +1,85 @@
+# PFLlib: Personalized Federated Learning Algorithm Library
+# Copyright (C) 2021  Jianqing Zhang
+
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 2 of the License, or
+# (at your option) any later version.
+
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+
+# You should have received a copy of the GNU General Public License along
+# with this program; if not, write to the Free Software Foundation, Inc.,
+# 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+
 import numpy as np
 import torch
 import time
 import copy
-#import torch.nn as nn
 from flcore.optimizers.fedoptimizer import PerAvgOptimizer
 from flcore.clients.clientbase import Client
-#from utils.data_utils import read_client_data
-#from torch.utils.data import DataLoader
 
 
 class clientPerAvg(Client):
-    def __init__(self, args, ID, samples_path, labels_path, condition_number, **kwargs):
-        super().__init__(args, ID, samples_path, labels_path, condition_number, **kwargs)
+    def __init__(self, args, id, train_samples, test_samples, **kwargs):
+        super().__init__(args, id, train_samples, test_samples, **kwargs)
 
-        self.beta = args.beta
-        # self.learning_rate = args.local_learning_rate --> This is set in clientbase already (inherited)
+        # self.beta = args.beta
+        self.beta = self.learning_rate
 
         self.optimizer = PerAvgOptimizer(self.model.parameters(), lr=self.learning_rate)
-        # Does this imply that it is on no matter what? I believe so...
         self.learning_rate_scheduler = torch.optim.lr_scheduler.ExponentialLR(
             optimizer=self.optimizer, 
             gamma=args.learning_rate_decay_gamma
         )
 
     def train(self):
-        # trainloader obj will have a bs twice that of the input one, effectively sampling twice as many points
-        ## So that way you can run step 1 and step 2 from PerFedAvg
-        ### This is FO MAML...
         trainloader = self.load_train_data(self.batch_size*2)
         start_time = time.time()
 
         # self.model.to(self.device)
         self.model.train()
 
+        max_local_epochs = self.local_epochs
         if self.train_slow:
             max_local_epochs = np.random.randint(1, max_local_epochs // 2)
 
-        for epoch in range(self.local_epochs):  # local update
+        for epoch in range(max_local_epochs):  # local update
             for X, Y in trainloader:
-                # Use list because self.model.parameters() is an iterator 
                 temp_model = copy.deepcopy(list(self.model.parameters()))
 
-                # How to integrate X,Y, x,y, and self.F?
                 # step 1
                 if type(X) == type([]):
-                    print("X is a list for some reason idk")
                     x = [None, None]
                     x[0] = X[0][:self.batch_size].to(self.device)
                     x[1] = X[1][:self.batch_size]
                 else:
                     x = X[:self.batch_size].to(self.device)
                 y = Y[:self.batch_size].to(self.device)
-                #self.simulate_data_streaming_xy(x, y) #--> Already called in shared_loss_calc() below
-                #if self.train_slow:
-                #    time.sleep(0.1 * np.abs(np.random.rand()))
-
-                #output = self.model(x)
-                #loss = self.loss(output, y)
-                loss, num_samples = self.shared_loss_calc(x, y, self.model, record_cost_func_comps=True)
+                if self.train_slow:
+                    time.sleep(0.1 * np.abs(np.random.rand()))
+                output = self.model(x)
+                loss = self.loss(output, y)
                 self.optimizer.zero_grad()
                 loss.backward()
                 self.optimizer.step()
 
                 # step 2
-                # How is this any different from step 1?
-                ## I'm assuming this is the local fine-tuning or smth or other?
                 if type(X) == type([]):
-                    print("X is a list still/again?")
                     x = [None, None]
                     x[0] = X[0][self.batch_size:].to(self.device)
                     x[1] = X[1][self.batch_size:]
                 else:
                     x = X[self.batch_size:].to(self.device)
                 y = Y[self.batch_size:].to(self.device)
-
-                #self.simulate_data_streaming_xy(x, y) #--> Called in shared_loss_calc() below, still
-                #if self.train_slow:
-                #    time.sleep(0.1 * np.abs(np.random.rand()))
+                if self.train_slow:
+                    time.sleep(0.1 * np.abs(np.random.rand()))
                 self.optimizer.zero_grad()
-                #output = self.model(x)
-                #loss = self.loss(output, y)
-                loss, num_samples = self.shared_loss_calc(x, y, self.model, record_cost_func_comps=False) # Idk if it should be recording or not...
+                output = self.model(x)
+                loss = self.loss(output, y)
                 loss.backward()
 
                 # restore the model parameters to the one before first update
@@ -110,11 +109,8 @@ class clientPerAvg(Client):
         else:
             x = x.to(self.device)
         y = y.to(self.device)
-
-        #self.simulate_data_streaming_xy(x, y)
-        #output = self.model(x)
-        #loss = self.loss(output, y)
-        loss, num_samples = self.shared_loss_calc(x, y, self.model, record_cost_func_comps=False) # Idk if it should be recording or not here...
+        output = self.model(x)
+        loss = self.loss(output, y)
         self.optimizer.zero_grad()
         loss.backward()
         self.optimizer.step()
@@ -122,15 +118,11 @@ class clientPerAvg(Client):
         # self.model.cpu()
 
 
-    def train_metrics(self, saved_model_path=None, model_obj=None):
-        trainloader = self.load_train_data(batch_size=self.batch_size*2, eval=True)
-        if model_obj != None:
-            eval_model = model_obj
-        elif saved_model_path != None:
-            eval_model = self.load_model(saved_model_path)
-        else:
-            eval_model = self.model
-        eval_model.eval()
+    def train_metrics(self, model=None):
+        trainloader = self.load_train_data(self.batch_size*2)
+        if model == None:
+            model = self.model
+        model.eval()
 
         train_num = 0
         losses = 0
@@ -143,11 +135,11 @@ class clientPerAvg(Client):
             else:
                 x = X[:self.batch_size].to(self.device)
             y = Y[:self.batch_size].to(self.device)
-
+            if self.train_slow:
+                time.sleep(0.1 * np.abs(np.random.rand()))
             self.optimizer.zero_grad()
-            #output = self.model(x)
-            #loss = self.loss(output, y)
-            loss, num_samples = self.shared_loss_calc(x, y, eval_model, record_cost_func_comps=False) # Idk if it should be recording or not here...
+            output = self.model(x)
+            loss = self.loss(output, y)
             loss.backward()
             self.optimizer.step()
 
@@ -159,11 +151,11 @@ class clientPerAvg(Client):
             else:
                 x = X[self.batch_size:].to(self.device)
             y = Y[self.batch_size:].to(self.device)
-            
+            if self.train_slow:
+                time.sleep(0.1 * np.abs(np.random.rand()))
             self.optimizer.zero_grad()
-            #output = self.model(x)
-            #loss1 = self.loss(output, y)
-            loss1, num_samples = self.shared_loss_calc(x, y, eval_model, record_cost_func_comps=False) # Idk if it should be recording or not here...
+            output = self.model(x)
+            loss1 = self.loss(output, y)
 
             train_num += y.shape[0]
             losses += loss1.item() * y.shape[0]
@@ -178,12 +170,10 @@ class clientPerAvg(Client):
             else:
                 x = x.to(self.device)
             y = y.to(self.device)
-
-            #output = self.model(x)
-            #loss = self.loss(output, y)
-            loss, num_samples = self.shared_loss_calc(x, y, self.model, record_cost_func_comps=False) # Idk if it should be recording or not here...
+            if self.train_slow:
+                time.sleep(0.1 * np.abs(np.random.rand()))
+            output = self.model(x)
+            loss = self.loss(output, y)
             self.optimizer.zero_grad()
             loss.backward()
             self.optimizer.step()
-
-            # self.model.cpu()
