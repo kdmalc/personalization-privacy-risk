@@ -30,6 +30,7 @@ class PerAvg(Server):
                 print(f"\n-------------Round number: {i}-------------")
                 print("\nEvaluate global model with one step update")
                 self.evaluate_one_step()
+                #self.evaluate() <-- THis is what it is in serveravg...
 
             # choose several clients to send back updated model to server
             for client in self.selected_clients:
@@ -53,7 +54,8 @@ class PerAvg(Server):
             if self.auto_break and self.check_done(acc_lss=[self.rs_test_loss], top_cnt=self.top_cnt):
                 break
 
-        self.evaluate(train=False, test=True)
+        #self.evaluate(train=False, test=True)  # Is this wrong? Causing the test spike jump?
+            
         #if self.num_new_clients > 0:
         #    self.eval_new_clients = True
         #    self.set_new_clients(clientPerAvg)
@@ -76,25 +78,21 @@ class PerAvg(Server):
 
 
     def evaluate_one_step(self, acc=None, loss=None):
-        # Have to repalce self.clients with self.selected_clients 
-        ## Bc in lab (eg seq), it won't have access to past clients
         models_temp = []
-        #for c in self.clients:
-        for c in self.selected_clients:
+        # Only use selected clients since real trials won't have past clients?...
+        ## I won't run this py file for the lab tho... leave it as self.clients
+        for c in self.clients:
             models_temp.append(copy.deepcopy(c.model))
             c.train_one_step()
         stats = self.test_metrics()
         # set the local model back on clients for training process
-        #for i, c in enumerate(self.clients):
-        for i, c in enumerate(self.selected_clients):
+        for i, c in enumerate(self.clients):
             c.clone_model(models_temp[i], c.model)
-            
         stats_train = self.train_metrics()
         # set the local model back on clients for training process
         #for i, c in enumerate(self.clients):
-        for i, c in enumerate(self.selected_clients):
+        for i, c in enumerate(self.clients):
             c.clone_model(models_temp[i], c.model)
-
         #accs = [a / n for a, n in zip(stats[2], stats[1])]
         test_loss = sum(stats[2])*1.0 / sum(stats[1])
         train_loss = sum(stats_train[2])*1.0 / sum(stats_train[1])
@@ -121,5 +119,6 @@ class PerAvg(Server):
 
         # self.print_(test_acc, train_acc, train_loss)
         print("Averaged Train Loss: {:.4f}".format(train_loss))
-        print("Averaged Test Loss: {:.4f}".format(test_loss))
+        #print("Averaged Test Loss: {:.4f}".format(test_loss))
+        print(f"Averaged Test Loss: {test_loss}")
         #print("Std Test Accuracy: {:.4f}".format(np.std(accs)))

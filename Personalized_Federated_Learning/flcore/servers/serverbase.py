@@ -582,7 +582,8 @@ class Server(object):
             unseen_live_num_samples = []
             unseen_live_IDs = []
 
-        for c in self.clients:
+        #for c in self.clients:
+        for i, c in enumerate(self.clients):
             #if (self.sequential and c.ID in self.static_client_IDs):
             if self.sequential:
                 # Test the global model not the clients' unchanging static model
@@ -592,6 +593,7 @@ class Server(object):
                 tl, ns = c.test_metrics(model_obj=self.global_model)
             else:
                 tl, ns = c.test_metrics()
+                print(f"Client{i} test loss: {tl}, ns: {ns}")
 
             if (not self.sequential) or (self.sequential and c.ID in self.static_client_IDs):
                 # This is the ordinary nonseq sim case

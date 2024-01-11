@@ -144,14 +144,13 @@ def parse_args():
     parser.add_argument('-output_size', "--output_size", type=int, default=2)
 
     parser.add_argument('-m', "--model_str", type=str, default="LinearRegression")  
-    # Uhh how does batch size get used? Does it need to be 1202...
-    parser.add_argument('-lbs', "--batch_size", type=int, default=128)
+    parser.add_argument('-lbs', "--batch_size", type=int, default=100)
     # For non-deep keep 1202: --> Idk if this is necessary actually, I think it will work regardless
     parser.add_argument('-lr', "--local_learning_rate", type=float, default=1,
                         help="Local learning rate")
     parser.add_argument('-ld', "--learning_rate_decay", type=bool, default=False)
     parser.add_argument('-ldg', "--learning_rate_decay_gamma", type=float, default=0.99)
-    parser.add_argument('-ls', "--local_epochs", type=int, default=1,  # Was 3 earlier
+    parser.add_argument('-ls', "--local_epochs", type=int, default=3,
                         help="How many times a client should iterate through their current update dataset.")
 
     # THINGS I AM CURRENTLY CHANGING A LOT
@@ -159,7 +158,7 @@ def parse_args():
     #Local #FedAvg #APFL #FedMTL #pFedMe ## #Ditto #PerAvg
     ## pFedMe not working
     parser.add_argument('-algo', "--algorithm", type=str, default="PerAvg")
-    parser.add_argument('-bt', "--beta", type=float, default=0.0, #0.1?
+    parser.add_argument('-bt', "--beta", type=float, default=0.1,
                         help="Average moving parameter for pFedMe, Second learning rate of Per-FedAvg, \
                         or L1 regularization weight of FedTransfer")
     parser.add_argument('-gr', "--global_rounds", type=int, default=my_gr)  # KAI: Originally was 2000

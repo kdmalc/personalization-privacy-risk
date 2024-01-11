@@ -81,6 +81,8 @@ class Client(object):
         self.test_split_fraction = args.test_split_fraction
         self.test_split_each_update = args.test_split_each_update
         self.test_split_users = args.test_split_users
+        self.update_ix=[0,  1200,  2402,  3604,  4806,  6008,  7210,  8412,  9614, 10816, 12018, 13220, 14422, 15624, 16826, 18028, 19230, 20432, 20769]
+        self.final_idx = self.update_ix[-1] # eg drop last update from consideration, stop before it
         self.learning_rate_decay = args.learning_rate_decay
         self.learning_rate_decay_gamma = args.learning_rate_decay_gamma
         # Add these to get logged...
@@ -92,7 +94,6 @@ class Client(object):
         self.dt = args.dt
         self.local_round = 0
         self.last_global_round = 0
-        self.update_ix=[0,  1200,  2402,  3604,  4806,  6008,  7210,  8412,  9614, 10816, 12018, 13220, 14422, 15624, 16826, 18028, 19230, 20432, 20769]
         assert (not (self.test_split_users and self.test_split_each_update)), "test_split_users and test_split_each_update cannot both be true (contradictory test conditions)"
         self.condition_number_lst = args.condition_number_lst
         if condition_number!=None:
@@ -317,8 +318,8 @@ class Client(object):
         # Select for given condition #THIS IS THE ACTUAL TRAINING DATA AND LABELS FOR THE GIVEN TRIAL
         # THIS SHOULD ONLY APPLY TO SIMULATIONS NOT REAL TIME RUNS!
         starting_update_idx = self.update_ix[self.starting_update]
-        self.cond_samples_npy = samples_npy[self.condition_number,starting_update_idx:,:]
-        self.cond_labels_npy = labels_npy[self.condition_number,starting_update_idx:,:]
+        self.cond_samples_npy = samples_npy[self.condition_number,starting_update_idx:self.final_idx,:]
+        self.cond_labels_npy = labels_npy[self.condition_number,starting_update_idx:self.final_idx,:]
         # Split data into train and test sets
         if self.test_split_users:
             # NOT FINISHED YET
