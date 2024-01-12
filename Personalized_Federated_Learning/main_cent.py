@@ -137,6 +137,7 @@ def parse_args():
                         help="Local learning rate")
     
     parser.add_argument('-eg', "--eval_gap", type=int, default=1, help="Rounds gap for evaluation")
+    parser.add_argument('-save_mdls', "--save_models", type=bool, default=False)
 
     # CONTINUAL LEARNING
     parser.add_argument('-ewc_bool', "--ewc_bool", type=bool, default=True)

@@ -176,6 +176,7 @@ def parse_args():
                         help="Directory name containing all the prev clients models") 
     parser.add_argument('-lrt', "--local_round_threshold", type=int, default=50,
                         help="Number of communication rounds per client until a client will advance to the next batch of streamed data")
+    parser.add_argument('-save_mdls', "--save_models", type=bool, default=False)
     
     # PCA should probably be broken into 2 since 64 channels is device specific
     # Now turning PCA off since the model is supposed to learn this dim reduc...

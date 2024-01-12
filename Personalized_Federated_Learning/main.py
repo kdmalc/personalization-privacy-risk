@@ -269,6 +269,7 @@ def parse_args():
     parser.add_argument('-gr', "--global_rounds", type=int, default=50)  # KAI: Originally was 2000
     parser.add_argument('-stup', "--starting_update", type=int, default=10,
                         help="Which update to start on (for CPHS Simulation). Use 0 or 10.")
+    parser.add_argument('-save_mdls', "--save_models", type=bool, default=False)
     
     # CONTINUAL LEARNING
     parser.add_argument('-ewc_bool', "--ewc_bool", type=bool, default=False)

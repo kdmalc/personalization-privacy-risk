@@ -46,6 +46,7 @@ class Server(object):
         self.uploaded_models = []
 
         self.save_client_loss_logs = args.save_client_loss_logs
+        self.save_models = args.save_models
         self.rs_test_loss = []
         self.rs_train_loss = []
         # Can't save dicts to HD5F files so use nested lists for now I guess
@@ -160,7 +161,7 @@ class Server(object):
             model_str = "LinRegr"
         else:
             model_str = self.model_str
-        relative_path = self.result_path + self.str_current_datetime + seq_str + self.algorithm + "_" + model_str + self.global_rounds
+        relative_path = self.result_path + self.str_current_datetime + seq_str + self.algorithm + "_" + model_str + str(self.global_rounds)
         # Combine the script's directory and the relative path to get the full path
         #self.trial_result_path = os.path.join(script_directory, relative_path)  # No idea why this doesn't work
         self.trial_result_path = script_directory+relative_path
@@ -419,29 +420,30 @@ class Server(object):
     
         
     def save_results(self, personalized=False, save_cost_func_comps=False, save_gradient=False):
-        # Save Server Global Model
-        self.model_dir_path = os.path.join(self.models_base_dir, self.dataset, self.algorithm, self.str_current_datetime)
-        if not os.path.exists(self.model_dir_path):
-            os.makedirs(self.model_dir_path)
-        model_file_path = os.path.join(self.model_dir_path, self.algorithm + "_server_global.pt")
-        torch.save(self.global_model, model_file_path)
+        if self.save_models==True:
+            # Save Server Global Model
+            self.model_dir_path = os.path.join(self.models_base_dir, self.dataset, self.algorithm, self.str_current_datetime)
+            if not os.path.exists(self.model_dir_path):
+                os.makedirs(self.model_dir_path)
+            model_file_path = os.path.join(self.model_dir_path, self.algorithm + "_server_global.pt")
+            torch.save(self.global_model, model_file_path)
 
-        # Save client's local/personalized models
-        if self.personalized_algo_bool:
-            client_algo_type = "Pers"
-        else:
-            client_algo_type = "Local"
-        client_model_path = os.path.join(self.models_base_dir, self.dataset, client_algo_type, self.str_current_datetime)
-        for client in self.clients:
-            client.save_item(client.model, 'local_client_model', item_path=client_model_path)
+            # Save client's local/personalized models
+            if self.personalized_algo_bool:
+                client_algo_type = "Pers"
+            else:
+                client_algo_type = "Local"
+            client_model_path = os.path.join(self.models_base_dir, self.dataset, client_algo_type, self.str_current_datetime)
+            for client in self.clients:
+                client.save_item(client.model, 'local_client_model', item_path=client_model_path)
 
-        if personalized==True:
-            pers_model_file_path = os.path.join(self.model_dir_path, self.algorithm + "_client_pers_model")
-            for c in self.clients:
-                if not os.path.exists(pers_model_file_path):
-                    print(f"SB pers model save made directory! {pers_model_file_path}")
-                    os.makedirs(pers_model_file_path)
-                torch.save(c.model, os.path.join(self.model_dir_path, self.algorithm + "_client_pers_model", c.ID + "_pers_model.pt"))
+            if personalized==True:
+                pers_model_file_path = os.path.join(self.model_dir_path, self.algorithm + "_client_pers_model")
+                for c in self.clients:
+                    if not os.path.exists(pers_model_file_path):
+                        print(f"SB pers model save made directory! {pers_model_file_path}")
+                        os.makedirs(pers_model_file_path)
+                    torch.save(c.model, os.path.join(self.model_dir_path, self.algorithm + "_client_pers_model", c.ID + "_pers_model.pt"))
 
         sequential_base_list = [
             "\n\nSEQUENTIAL\n",
