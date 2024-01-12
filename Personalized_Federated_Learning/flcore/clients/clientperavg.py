@@ -27,7 +27,7 @@ class clientPerAvg(Client):
         # trainloader obj will have a bs twice that of the input one, effectively sampling twice as many points
         ## So that way you can run step 1 and step 2 from PerFedAvg
         ### This is FO MAML...
-        trainloader = self.load_train_data(self.batch_size*2)
+        trainloader = self.load_train_data(self.batch_size)#*2)
         start_time = time.time()
 
         # self.model.to(self.device)
@@ -123,7 +123,7 @@ class clientPerAvg(Client):
 
 
     def train_metrics(self, saved_model_path=None, model_obj=None):
-        trainloader = self.load_train_data(batch_size=self.batch_size*2, eval=True)
+        trainloader = self.load_train_data(batch_size=self.batch_size, eval=True)#*2, eval=True)
         if model_obj != None:
             eval_model = model_obj
         elif saved_model_path != None:

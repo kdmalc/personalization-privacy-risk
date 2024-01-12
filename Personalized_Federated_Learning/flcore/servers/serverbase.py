@@ -148,7 +148,19 @@ class Server(object):
         current_datetime = datetime.now().strftime("%m-%d_%H-%M")
         # convert datetime obj to string
         self.str_current_datetime = str(current_datetime)
-        self.trial_result_path = self.result_path + self.str_current_datetime + "_" + self.algorithm
+        # Get the directory of the current script
+        script_directory = os.path.dirname(os.path.abspath(__file__))[:-15]  # This returns the path to serverbase... so don't index the end of the path
+        # Specify the relative path from the script's directory
+        #relative_path = os.path.join(self.result_path, self.str_current_datetime+"_"+self.algorithm)
+        relative_path = self.result_path + self.str_current_datetime+"_"+self.algorithm
+        # Combine the script's directory and the relative path to get the full path
+        #self.trial_result_path = os.path.join(script_directory, relative_path)  # No idea why this doesn't work
+        self.trial_result_path = script_directory+relative_path
+        # Now set the file names too
+        algo = self.algorithm + "_" + self.goal# + "_" + str(self.times) 
+        self.h5_file_path = os.path.join(self.trial_result_path, "{}.h5".format(algo))
+        self.paramtxt_file_path = os.path.join(self.trial_result_path, "param_log.txt")
+
         if not os.path.exists(self.trial_result_path):
             os.makedirs(self.trial_result_path)
 
@@ -423,13 +435,6 @@ class Server(object):
                     os.makedirs(pers_model_file_path)
                 torch.save(c.model, os.path.join(self.model_dir_path, self.algorithm + "_client_pers_model", c.ID + "_pers_model.pt"))
 
-        #sequential_base_str = ("\n\nSEQUENTIAL\n"
-        #    f"sequential = {self.sequential}\n")
-        #if self.sequential:
-        #    sequential_base_str += (f"live_client_IDs_queue = {self.live_client_IDs_queue}\n"
-        #    f"static_client_IDs = {self.static_client_IDs}\n"
-        #    f"num_liveseq_rounds_per_seqclient = {self.num_liveseq_rounds_per_seqclient}\n"
-        #    f"prev_model_directory = {self.prev_model_directory}")
         sequential_base_list = [
             "\n\nSEQUENTIAL\n",
             f"sequential = {self.sequential}\n"]
@@ -440,23 +445,7 @@ class Server(object):
                 f"num_liveseq_rounds_per_seqclient = {self.num_liveseq_rounds_per_seqclient}\n",
                 f"prev_model_directory = {self.prev_model_directory}"])
         sequential_base_str = ''.join(sequential_base_list)
-
-        continual_base_str = ("\n\nCONTINUAL LEARNING PARAMS\n"
-            f"ewc_bool = {self.ewc_bool}\n"
-            f"fisher_multiplier = {self.fisher_mult}\n")
         
-        #deep_base_str = ("\n\nDEEP NETWORK HYPERPARAMETERS\n")
-        #if self.deep_bool:
-        #    deep_base_str += (f"hidden_size = {self.hidden_size}\n"
-        #    f"sequence_length = {self.sequence_length}\n")
-        deep_base_list = ["\n\nDEEP NETWORK HYPERPARAMETERS\n"]
-        if self.deep_bool:
-            deep_base_list.extend([
-                f"hidden_size = {self.hidden_size}\n"
-                f"sequence_length = {self.sequence_length}\n"])
-        deep_base_str = ''.join(deep_base_list)
-        
-        # Theoretically could toggle this...
         federated_base_str = ("\n\nFEDERATED LEARNING PARAMS\n"
             f"local_round_threshold = {self.local_round_threshold}\n")
 
@@ -490,24 +479,34 @@ class Server(object):
             f"test_split_fraction = {self.test_split_fraction}\n"
             f"test_split_each_update = {self.test_split_each_update}\n"
             f"test_split_users = {self.test_split_users}\n")
-        with open(self.trial_result_path+r'\param_log.txt', 'w') as file:
+        
+        with open(self.paramtxt_file_path, 'w') as file:
             file.write(param_log_str)
-            file.write(sequential_base_str)
-            file.write(continual_base_str)
-            file.write(deep_base_str)
             file.write(federated_base_str)
             file.write(cphs_base_str)
+            file.write(sequential_base_str)
+            if self.ewc_bool:
+                continual_base_str = ("\n\nCONTINUAL LEARNING PARAMS\n"
+                f"ewc_bool = {self.ewc_bool}\n"
+                f"fisher_multiplier = {self.fisher_mult}\n")
+                file.write(continual_base_str)
+            if self.deep_bool:
+                deep_base_str = ("\n\nDEEP NETWORK HYPERPARAMETERS\n"
+                    f"hidden_size = {self.hidden_size}\n"
+                    f"sequence_length = {self.sequence_length}\n")
+                file.write(deep_base_str)
+            if self.algorithm.upper()=="PERAVG" or self.algorithm=="PERFEDAVG" or self.algorithm=="PFEDME":
+                perfedavg_param_str = ("\n\nPERFEDAVG\PFEDME PARAMS\n"
+                    f"beta = {self.beta}\n")
+                file.write(perfedavg_param_str)
 
         if (personalized==True and ((len(self.rs_test_loss_per))!=0)) or (personalized==False and ((len(self.rs_test_loss))!=0)):
-            # Why would this run if run_train_metrics is False...
-            algo = self.algorithm + "_" + self.goal# + "_" + str(self.times)  # IDk what self.times represents...
-            file_path = self.trial_result_path + r"\{}.h5".format(algo)
-            print("File path: " + file_path)
+            print("File path: " + self.h5_file_path)
             #for client in self.clients:
             #    client.results_file_path = self.trial_result_path
-            #    client.h5_file_path = file_path
+            #    client.h5_file_path = self.h5_file_path
 
-            with h5py.File(file_path, 'w') as hf:
+            with h5py.File(self.h5_file_path, 'w') as hf:
                 if personalized:
                     hf.create_dataset('rs_test_loss_per', data=self.rs_test_loss_per)
                     hf.create_dataset('rs_train_loss_per', data=self.rs_train_loss_per)
@@ -518,7 +517,7 @@ class Server(object):
                     hf.create_dataset('curr_live_rs_test_loss', data=self.curr_live_rs_test_loss)
                     hf.create_dataset('prev_live_rs_test_loss', data=self.prev_live_rs_test_loss)
                     hf.create_dataset('unseen_live_rs_test_loss', data=self.unseen_live_rs_test_loss)
-                # Save cross-cli test log if necessary (SERVERLOCAL ONLY AS OF 11/26):
+                # Save cross-cli test log if necessary (SERVERLOCAL ONLY AS OF 11/26/23):
                 if self.test_against_all_other_clients:
                     hf.create_dataset('cross_client_loss_array', data=self.clii_on_clij_loss)
                     hf.create_dataset('cross_client_numsamples_array', data=self.clii_on_clij_numsamples)
@@ -529,7 +528,6 @@ class Server(object):
                         dataset_name = c.ID
                         data = c.client_testing_log  # Replace this with your actual data
                         group.create_dataset(dataset_name, data=data)
-                    pass
                 if save_cost_func_comps:
                     #print(f'cost_func_comps_log: \n {self.cost_func_comps_log}\n')                   
                     G1 = hf.create_group('cost_func_tuples_by_client')
@@ -548,6 +546,10 @@ class Server(object):
                             name_index = len(self.train_subj_IDs) - 1  # Ensure it doesn't exceed the last index
                         name_str = self.train_subj_IDs[name_index] + "_C" + str(self.condition_number_lst[idx%len(self.condition_number_lst)])
                         G2.create_dataset(name_str, data=grad_norm_list)
+        else:
+            print("NOT SAVED!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+            print(f"personalized: {personalized}")
+            print(f"len(self.rs_test_loss): {len(self.rs_test_loss)}")
 
 
     def save_item(self, item, item_name):
@@ -593,6 +595,7 @@ class Server(object):
                 tl, ns = c.test_metrics(model_obj=self.global_model)
             else:
                 tl, ns = c.test_metrics()
+                # Why is ns double........ it's even double for FedAvg............................
                 print(f"Client{i} test loss: {tl}, ns: {ns}")
 
             if (not self.sequential) or (self.sequential and c.ID in self.static_client_IDs):
@@ -660,11 +663,12 @@ class Server(object):
             prev_live_loss = []
             prev_live_num_samples = []
             prev_live_IDs = []
-        for c in self.clients:
+        for i, c in enumerate(self.clients):
             if (self.sequential and c.ID in self.static_client_IDs):
                 tl, ns = c.train_metrics(model_obj=self.global_model)
             else:
                 tl, ns = c.train_metrics()
+            print(f"Client{i} TRAIN loss: {tl}, ns: {ns}")
             if (not self.sequential) or (self.sequential and c.ID in self.static_client_IDs):
                 # This is the ordinary nonseq sim case, and also for static seq clients
                 tot_loss.append(tl*1.0)

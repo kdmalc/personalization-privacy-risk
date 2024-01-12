@@ -251,22 +251,13 @@ def run(args):
 def parse_args():
     parser = argparse.ArgumentParser()
 
-    # DEEP LEARNING STUFF
-    # num_layers isn't used right now... need to add a way to make this hidden sizes a list or something...
-    parser.add_argument('-num_layers', "--num_layers", type=int, default=1)
-
-    parser.add_argument('-input_size', "--input_size", type=int, default=64)
-    parser.add_argument('-hidden_size', "--hidden_size", type=int, default=32)
-    parser.add_argument('-sequence_length', "--sequence_length", type=int, default=1)
-    parser.add_argument('-output_size', "--output_size", type=int, default=2)
-
     #Local #FedAvg #APFL #FedMTL #pFedMe (not working) ## #Ditto #PerAvg #Centralized
-    parser.add_argument('-algo', "--algorithm", type=str, default="PerAvg")
+    parser.add_argument('-algo', "--algorithm", type=str, default="FedAvg")
     parser.add_argument('-jr', "--join_ratio", type=float, default=0.5,
                         help="Fraction of clients to be active in training per round")
     parser.add_argument('-lrt', "--local_round_threshold", type=int, default=25,
                         help="Number of communication rounds per client until a client will advance to the next batch of streamed data")
-    parser.add_argument('-bt', "--beta", type=float, default=0,#0.1,
+    parser.add_argument('-bt', "--beta", type=float, default=0.1,
                         help="Average moving parameter for pFedMe, Second learning rate of Per-FedAvg, \
                         or L1 regularization weight of FedTransfer")
 
@@ -277,7 +268,7 @@ def parse_args():
                         help="Local learning rate")
 
     # THINGS I AM CURRENTLY CHANGING A LOT
-    parser.add_argument('-gr', "--global_rounds", type=int, default=100)  # KAI: Originally was 2000
+    parser.add_argument('-gr', "--global_rounds", type=int, default=5)  # KAI: Originally was 2000
     parser.add_argument('-stup', "--starting_update", type=int, default=10,
                         help="Which update to start on (for CPHS Simulation). Use 0 or 10.")
     
@@ -286,17 +277,18 @@ def parse_args():
     parser.add_argument('-fisher_mult', "--fisher_mult", type=int, default=1e3)
     parser.add_argument('-optimizer_str', "--optimizer_str", type=str, default="SGD")
 
+    # THESE ARE NOT CHANGING FREQUENTLY:
+    ##################################################################################################################################
 
+    # DEEP LEARNING STUFF
+    # num_layers isn't used right now... need to add a way to make this hidden sizes a list or something...
+    parser.add_argument('-num_layers', "--num_layers", type=int, default=1)
+    parser.add_argument('-input_size', "--input_size", type=int, default=64)
+    parser.add_argument('-hidden_size', "--hidden_size", type=int, default=32)
+    parser.add_argument('-sequence_length', "--sequence_length", type=int, default=1)
+    parser.add_argument('-output_size', "--output_size", type=int, default=2)
 
-
-
-
-
-
-
-
-
-    # Use block2...
+    # Switch this to block 2!
     parser.add_argument('-con_num', "--condition_number_lst", type=str, default='[3]', # Use 3 and/or 7
                         help="Which condition number (trial) to train on. Must be a list. By default, will iterate through all train_subjs for each cond (eg each cond_num gets its own client even for the same subject)")
     parser.add_argument('-ld', "--learning_rate_decay", type=bool, default=False)
@@ -576,7 +568,6 @@ if __name__ == "__main__":
 
     if args.run:
         server_obj = run(args)
-        #server_obj.save_results(save_cost_func_comps=True, save_gradient=True)
     
     # print(prof.key_averages().table(sort_by="cpu_time_total", row_limit=20))
     # print(f"\nTotal time cost: {round(time.time()-total_start, 2)}s.")

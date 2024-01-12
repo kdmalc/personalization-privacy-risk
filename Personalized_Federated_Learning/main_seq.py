@@ -118,8 +118,8 @@ def run(args):
 def parse_args():
     parser = argparse.ArgumentParser()
 
-    short_run = False
-    one_hundred_run = True
+    short_run = True
+    one_hundred_run = False
     long_run = False
     if short_run:
         my_gr = 10
@@ -401,7 +401,6 @@ if __name__ == "__main__":
 
     if args.run:
         server_obj = run(args)
-        server_obj.save_results(save_cost_func_comps=True, save_gradient=True)
     
     # print(prof.key_averages().table(sort_by="cpu_time_total", row_limit=20))
     # print(f"\nTotal time cost: {round(time.time()-total_start, 2)}s.")

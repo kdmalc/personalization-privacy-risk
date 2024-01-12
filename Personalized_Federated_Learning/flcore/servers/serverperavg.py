@@ -11,6 +11,8 @@ class PerAvg(Server):
     def __init__(self, args, times):
         super().__init__(args, times)
 
+        self.beta = args.beta
+
         # select slow clients
         self.set_slow_clients()
         self.set_clients(clientPerAvg)
@@ -29,8 +31,8 @@ class PerAvg(Server):
             if i%self.eval_gap == 0:
                 print(f"\n-------------Round number: {i}-------------")
                 print("\nEvaluate global model with one step update")
-                self.evaluate_one_step()
-                #self.evaluate() <-- THis is what it is in serveravg...
+                #self.evaluate_one_step()
+                self.evaluate()  # <-- This is what it is in serveravg...
 
             # choose several clients to send back updated model to server
             for client in self.selected_clients:
