@@ -12,6 +12,8 @@ class PerAvg(Server):
         super().__init__(args, times)
 
         self.beta = args.beta
+        if self.batch_size>(args.update_batch_length/2):
+            raise ValueError(f"For PerFedAvg, batch_size {self.batch_size} must be less than half of the update length {args.update_batch_length} (due to two step optimization).")
 
         # select slow clients
         self.set_slow_clients()
@@ -102,15 +104,15 @@ class PerAvg(Server):
         if acc == None:
             self.rs_test_loss.append(test_loss)
             if self.sequential:
-                # seq_stats <-- [curr_live_loss, curr_live_num_samples, curr_live_IDs, prev_live_loss, prev_live_num_samples, prev_live_IDs]
+                # seq_stats <-- [curr_live_loss, curr_live_num_samples, curr_live_IDs, prev_live_loss, prev_live_num_samples, prev_live_IDs, unseen_live_loss, unseen_live_num_samples, unseen_live_IDs]
                 # Hmm do I need to save/use the actual IDs at all? Do I care? Don't think so...
                 seq_stats = stats[3]
                 if len(seq_stats[0])!=0:
-                    self.curr_live_rs_test_loss.append(sum(seq_stats[0])/len(seq_stats[0]))
+                    self.curr_live_rs_test_loss.append(sum(seq_stats[0])/sum(seq_stats[1]))
                 if len(seq_stats[3])!=0:
-                    self.prev_live_rs_test_loss.append(sum(seq_stats[3])/len(seq_stats[3]))
+                    self.prev_live_rs_test_loss.append(sum(seq_stats[3])/sum(seq_stats[4]))
                 if len(seq_stats[6])!=0:
-                    self.unseen_live_rs_test_loss.append(sum(seq_stats[6])/len(seq_stats[6]))
+                    self.unseen_live_rs_test_loss.append(sum(seq_stats[6])/sum(seq_stats[7]))
         else:
             acc.append(test_loss)
 

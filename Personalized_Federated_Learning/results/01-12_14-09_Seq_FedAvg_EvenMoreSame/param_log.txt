@@ -1,5 +1,5 @@
 BASE
-algorithm = PerAvg
+algorithm = FedAvg
 model = Linear(in_features=64, out_features=2, bias=True)
 device_channels = 64
 
@@ -8,11 +8,11 @@ MODEL HYPERPARAMETERS
 lambdaF = 0.0
 lambdaD = 0.001
 lambdaE = 0.0001
-global_rounds = 10
+global_rounds = 1000
 local_epochs = 3
-batch_size = 100
+batch_size = 600
 local_learning_rate = 1
-learning_rate_decay = False
+learning_rate_decay = True
 learning_rate_decay_gamma = 0.99
 optimizer = SGD
 pca_channels = 64
@@ -42,8 +42,5 @@ SEQUENTIAL
 sequential = True
 live_client_IDs_queue = ['METACPHS_S106', 'METACPHS_S107', 'METACPHS_S118', 'METACPHS_S119']
 static_client_IDs = ['METACPHS_S108', 'METACPHS_S109', 'METACPHS_S110', 'METACPHS_S111', 'METACPHS_S112', 'METACPHS_S113', 'METACPHS_S114', 'METACPHS_S115', 'METACPHS_S116', 'METACPHS_S117']
-num_liveseq_rounds_per_seqclient = 5
+num_liveseq_rounds_per_seqclient = 200
 prev_model_directory = C:\Users\kdmen\Desktop\Research\personalization-privacy-risk\Personalized_Federated_Learning\models\cphs\FedAvg\FedAvg_LiveExclusion\FedAvg_server_global.pt
-
-PERFEDAVG\PFEDME PARAMS
-beta = 0.1

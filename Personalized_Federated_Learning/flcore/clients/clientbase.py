@@ -225,7 +225,7 @@ class Client(object):
         
         # backward pass
         loss_obj.backward()
-        self.loss_log.append(loss_obj.item())
+        self.loss_log.append(loss_obj.item()*1.0/num_samples) #VS: loss_obj.item()
         # This would need to be changed if you switch to a sequential (not single layer) model
         # Gradient norm
         # Uhh is this checking to see if it exists I guess?...
@@ -379,7 +379,7 @@ class Client(object):
 
         if self.deep_bool:
             if self.sequence_length*self.batch_size > training_samples.shape[0]:
-                raise ValueError("sl*bs > num training samples: thus trainloader will be empty")
+                raise ValueError("seq_len*batch_size > num training samples: thus trainloader will be empty")
             training_dataset_obj = DeepSeqLenDataset(training_samples, training_labels, self.sequence_length)
             #print("Size of CustomEMGDataset: ", len(training_dataset_obj))
         else:
@@ -485,9 +485,17 @@ class Client(object):
 
                 ############################################################################
                 test_loss = loss.item()  # Just get the actual loss function term
-                running_test_loss += test_loss
-                num_samples += x.size()[0]
+                num_samples += y.shape[0]  # Why is this y.shape and not x.shape?... I guess they are the same row dims?
+                
+                #losses += loss.item() * y.shape[0] # FROM TRAIN
+                running_test_loss += test_loss * x.size()[0]
+
+                #print(f"CB test_metrics {i}::: y.shape: {y.shape}, x.shape: {x.shape}")
+            #print()
+        # Idk if this what I want to be returning... why do I multiply by x.shape[0] and then later divide by the total number of samples?
+        ## Can I just drop that multiplication and division entirely??...
         self.client_testing_log.append(running_test_loss / num_samples)   
+        ############################################################################
         return running_test_loss, num_samples
     
 
@@ -506,7 +514,7 @@ class Client(object):
         #eval_model.to(self.device) # Idk if this needs to be run or not...
         eval_model.eval()
 
-        # ITS GOTTA BE SUPER INEFFIECIENT TO RECREATE A NEW TL FOR EACH CLIENT EACH ROUND FOR TRAIN EVAL...
+        # ITS GOTTA BE SUPER INEFFICIENT TO RECREATE A NEW TL FOR EACH CLIENT EACH ROUND FOR TRAIN EVAL...
         ## How do I just reuse the existing training loader from the streamed training data?
         trainloader = self.load_train_data(eval=True)
         assert(len(trainloader)!=0)
@@ -523,7 +531,6 @@ class Client(object):
                 #if self.verbose:
                 #    print(f"batch {i}, loss {test_loss:0,.5f}")
 
-                #print(f"i: {i}; x.shape: {x.shape}, y.shape: {y.shape}")
                 if type(x) == type([]):
                     x[0] = x[0].to(self.device)
                 else:
@@ -535,10 +542,10 @@ class Client(object):
                 ############################################################################
                 #if self.verbose:
                 #    print(f"batch {i}, loss {loss:0,.5f}")
-                train_num += self.y_ref.shape[0]  # Why is this y.shape and not x.shape?... I guess they are the same row dims?
-                # Why are they multiplying by y.shape[0] here...
-                # ^ This is probably wrong now since I removed the transpose... (12/2/23)
-                losses += loss.item() #* y.shape[0]
+                train_num += y.shape[0]  # Why is this y.shape and not x.shape?... I guess they are the same row dims?
+                #print(f"CB train_metrics {i}::: y.shape: {y.shape}, x.shape: {x.shape}")
+                losses += loss.item() * y.shape[0]
+            #print()
 
         # self.model.cpu()
         # self.save_model(self.model, 'model')

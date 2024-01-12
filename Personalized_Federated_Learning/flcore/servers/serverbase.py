@@ -26,7 +26,7 @@ class Server(object):
         self.local_learning_rate = args.local_learning_rate
         self.global_model = copy.deepcopy(args.model)
         self.algorithm = args.algorithm
-        self.personalized_algorithms = ["APFL", "FedMTL", "PerAvg", "pFedMe", "FedPer", "Ditto"]
+        self.personalized_algorithms = ["APFL", "FedMTL", "PerAvg", "PerFedAvg", "pFedMe", "FedPer", "Ditto"]
         self.personalized_algo_bool = True if self.algorithm.upper() in [algo.upper() for algo in self.personalized_algorithms] else False
         self.time_select = args.time_select
         self.goal = args.goal
@@ -152,7 +152,15 @@ class Server(object):
         script_directory = os.path.dirname(os.path.abspath(__file__))[:-15]  # This returns the path to serverbase... so don't index the end of the path
         # Specify the relative path from the script's directory
         #relative_path = os.path.join(self.result_path, self.str_current_datetime+"_"+self.algorithm)
-        relative_path = self.result_path + self.str_current_datetime+"_"+self.algorithm
+        if self.sequential:
+            seq_str = "_Seq_"
+        else:
+            seq_str = "_"
+        if self.model_str=="LinearRegression":
+            model_str = "LinRegr"
+        else:
+            model_str = self.model_str
+        relative_path = self.result_path + self.str_current_datetime + seq_str + self.algorithm + "_" + model_str + self.global_rounds
         # Combine the script's directory and the relative path to get the full path
         #self.trial_result_path = os.path.join(script_directory, relative_path)  # No idea why this doesn't work
         self.trial_result_path = script_directory+relative_path
@@ -482,9 +490,9 @@ class Server(object):
         
         with open(self.paramtxt_file_path, 'w') as file:
             file.write(param_log_str)
+            file.write(sequential_base_str)
             file.write(federated_base_str)
             file.write(cphs_base_str)
-            file.write(sequential_base_str)
             if self.ewc_bool:
                 continual_base_str = ("\n\nCONTINUAL LEARNING PARAMS\n"
                 f"ewc_bool = {self.ewc_bool}\n"
@@ -547,9 +555,7 @@ class Server(object):
                         name_str = self.train_subj_IDs[name_index] + "_C" + str(self.condition_number_lst[idx%len(self.condition_number_lst)])
                         G2.create_dataset(name_str, data=grad_norm_list)
         else:
-            print("NOT SAVED!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
-            print(f"personalized: {personalized}")
-            print(f"len(self.rs_test_loss): {len(self.rs_test_loss)}")
+            print("Saving failed.")
 
 
     def save_item(self, item, item_name):
@@ -632,6 +638,7 @@ class Server(object):
             seq_metrics = [curr_live_loss, curr_live_num_samples, curr_live_IDs, prev_live_loss, prev_live_num_samples, prev_live_IDs, unseen_live_loss, unseen_live_num_samples, unseen_live_IDs]
         else:
             seq_metrics = None
+        # This also ought to be flipped around...
         return IDs, num_samples, tot_loss, seq_metrics
 
 
@@ -663,12 +670,13 @@ class Server(object):
             prev_live_loss = []
             prev_live_num_samples = []
             prev_live_IDs = []
+        # ITERATES OVER ALL CLIENTS, THEN SUMS ALL CLIENT LOSSES!
         for i, c in enumerate(self.clients):
             if (self.sequential and c.ID in self.static_client_IDs):
                 tl, ns = c.train_metrics(model_obj=self.global_model)
             else:
                 tl, ns = c.train_metrics()
-            print(f"Client{i} TRAIN loss: {tl}, ns: {ns}")
+            #print(f"Client{i} TRAIN loss: {tl}, ns: {ns}")
             if (not self.sequential) or (self.sequential and c.ID in self.static_client_IDs):
                 # This is the ordinary nonseq sim case, and also for static seq clients
                 tot_loss.append(tl*1.0)
@@ -696,9 +704,11 @@ class Server(object):
                 raise ValueError("This isn't supposed to run...")
         #IDs = [c.ID for c in self.clients]
         if self.sequential:
+            # Why doesn't this one do unseen testing? I guess unseen implies testing not training
             seq_metrics = [curr_live_loss, curr_live_num_samples, curr_live_IDs, prev_live_loss, prev_live_num_samples, prev_live_IDs]
         else:
             seq_metrics = None
+        # This really ought to be flipped to loss, ns, IDs ...
         return IDs, num_samples, tot_loss, seq_metrics
 
     # evaluate selected clients
@@ -707,7 +717,13 @@ class Server(object):
         KAI Docstring
         This func runs test_metrics and train_metrics, and then sums all of ...
         Previously, test_metrics and train_metrics were collecting the losses on ALL clients (even the untrained ones...)
-        I switched that (5/31 12:06pm) to be just the selected clients, the idea being that ALL clients explode the loss func
+        I switched that (5/31/23) to be just the selected clients, the idea being that ALL clients explode the loss func
+        ^ 1/12/24 uhh what? No idea where this change is. Idk if I really want that... prob shold stay with what they had
+        ^^ Unless that was related to classification accuracy and thus I couldn't use it
+        ^^^ I don't even see self.clients...
+
+        This is kind of annoying, it's basically a logging function that wraps the test_metrics and train_metrics functions...
+        IMO this functionality would be better used inside of those functions... I'm not gonna change it now tho (1/12/24)
         '''
         if self.verbose:
             print("Serverbase evaluate()")
@@ -715,25 +731,30 @@ class Server(object):
             stats = self.test_metrics()
             if self.verbose:
                 print(f"Len of test_metrics() output: {len(stats[0])}")
+                print(f"Sum (ns) of test_metrics() output: {sum(stats[1])}")
             #test_loss = sum(stats[2])*1.0 / len(stats[2])  # Idk what this was doing either. Not relevant to us...
             #test_loss = sum(stats[2])*1.0  # Used to return test_acc, test_num, auc; idk what it is summing tho (or why auc wouldn't be a scalar...)
             test_loss = stats[2]#*1.0  #It's already a float...
+            test_samples_per_round = stats[1]
 
             if acc == None:  # acc will always be None for regression
-                # Why does this use len instead of num_samples lol why am I even saving it
-                avg_test_loss = sum(test_loss)/len(test_loss)
+                #avg_test_loss = sum(test_loss)/len(test_loss)
+                avg_test_loss = sum(test_loss)/sum(test_samples_per_round)
                 self.rs_test_loss.append(avg_test_loss)
 
                 if self.sequential:
-                    # seq_stats <-- [curr_live_loss, curr_live_num_samples, curr_live_IDs, prev_live_loss, prev_live_num_samples, prev_live_IDs]
+                    # seq_stats <-- [curr_live_loss, curr_live_num_samples, curr_live_IDs, prev_live_loss, prev_live_num_samples, prev_live_IDs, unseen_live_loss, unseen_live_num_samples, unseen_live_IDs]
                     # Hmm do I need to save/use the actual IDs at all? Do I care? Don't think so...
                     seq_stats = stats[3]
                     if len(seq_stats[0])!=0:
-                        self.curr_live_rs_test_loss.append(sum(seq_stats[0])/len(seq_stats[0]))
+                        #self.curr_live_rs_test_loss.append(sum(seq_stats[0])/len(seq_stats[0]))
+                        self.curr_live_rs_test_loss.append(sum(seq_stats[0])/sum(seq_stats[1]))
                     if len(seq_stats[3])!=0:
-                        self.prev_live_rs_test_loss.append(sum(seq_stats[3])/len(seq_stats[3]))
+                        #self.prev_live_rs_test_loss.append(sum(seq_stats[3])/len(seq_stats[3]))
+                        self.prev_live_rs_test_loss.append(sum(seq_stats[3])/sum(seq_stats[4]))
                     if len(seq_stats[6])!=0:
-                        self.unseen_live_rs_test_loss.append(sum(seq_stats[6])/len(seq_stats[6]))
+                        #self.unseen_live_rs_test_loss.append(sum(seq_stats[6])/len(seq_stats[6]))
+                        self.unseen_live_rs_test_loss.append(sum(seq_stats[6])/sum(seq_stats[7]))
             else:
                 acc.append(test_loss)
 
@@ -744,17 +765,19 @@ class Server(object):
             stats_train = self.train_metrics()
             if self.verbose:
                 print(f"Len of train_metrics() output: {len(stats_train[0])}")
+                print(f"Sum (ns) of train_metrics() output: {len(stats_train[1])}")
             #train_loss = sum(stats_train[2])*1.0
             #train_loss = sum(stats_train[2])*1.0 / len(stats_train[2])
-            train_loss = stats_train[2]#*1.0
+            # IS THIS THE AVERAGE PER EXAMPLE OR PER EPOCH OR PER ITERATION??
+            avg_train_loss = sum(stats_train[2])*1.0 / sum(stats_train[1])
         
             if loss == None:
-                avg_train_loss = sum(train_loss)/len(train_loss)
                 self.rs_train_loss.append(avg_train_loss)
                 # I'm not even recording the training seq metrics right now... don't really care
+                # Do I even have those lol
             else:
-                print("Server evaluate loss!=None!")
-                loss.append(train_loss)
+                print("Server evaluate loss!=None")
+                loss.append(avg_train_loss)
 
             print("Averaged Train Loss: {:.5f}".format(avg_train_loss))
             # If the average loss is unreasonably high just abort the run

@@ -1,5 +1,5 @@
 BASE
-algorithm = FedAvg
+algorithm = PerAvg
 model = Linear(in_features=64, out_features=2, bias=True)
 device_channels = 64
 
@@ -8,10 +8,10 @@ MODEL HYPERPARAMETERS
 lambdaF = 0.0
 lambdaD = 0.001
 lambdaE = 0.0001
-global_rounds = 5
+global_rounds = 50
 local_epochs = 3
-batch_size = 100
-local_learning_rate = 0.5
+batch_size = 300
+local_learning_rate = 1
 learning_rate_decay = False
 learning_rate_decay_gamma = 0.99
 optimizer = SGD
@@ -40,3 +40,7 @@ total effective clients = train_subj_IDs*condition_number_lst = 14
 
 SEQUENTIAL
 sequential = False
+
+
+PERFEDAVG\PFEDME PARAMS
+beta = 0.1

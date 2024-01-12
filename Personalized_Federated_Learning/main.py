@@ -143,9 +143,7 @@ def run(args):
             server = FedFomo(args, i)
         elif args.algorithm == "FedAMP":
             server = FedAMP(args, i)
-        elif args.algorithm == "APFL":
-            server = APFL(args, i)
-            elif args.algorithm == "FedRep":
+        elif args.algorithm == "FedRep":
             args.head = copy.deepcopy(args.model.fc)
             args.model.fc = nn.Identity()
             args.model = BaseHeadSplit(args.model, args.head)
@@ -252,7 +250,7 @@ def parse_args():
     parser = argparse.ArgumentParser()
 
     #Local #FedAvg #APFL #FedMTL #pFedMe (not working) ## #Ditto #PerAvg #Centralized
-    parser.add_argument('-algo', "--algorithm", type=str, default="FedAvg")
+    parser.add_argument('-algo', "--algorithm", type=str, default="PerAvg")
     parser.add_argument('-jr', "--join_ratio", type=float, default=0.5,
                         help="Fraction of clients to be active in training per round")
     parser.add_argument('-lrt', "--local_round_threshold", type=int, default=25,
@@ -262,13 +260,13 @@ def parse_args():
                         or L1 regularization weight of FedTransfer")
 
     parser.add_argument('-m', "--model_str", type=str, default="LinearRegression")  
-    parser.add_argument('-lbs', "--batch_size", type=int, default=100)
+    parser.add_argument('-lbs', "--batch_size", type=int, default=300)
     # For non-deep keep 1202: --> Idk if this is necessary actually, I think it will work regardless
-    parser.add_argument('-lr', "--local_learning_rate", type=float, default=0.5,
+    parser.add_argument('-lr', "--local_learning_rate", type=float, default=1,
                         help="Local learning rate")
 
     # THINGS I AM CURRENTLY CHANGING A LOT
-    parser.add_argument('-gr', "--global_rounds", type=int, default=5)  # KAI: Originally was 2000
+    parser.add_argument('-gr', "--global_rounds", type=int, default=50)  # KAI: Originally was 2000
     parser.add_argument('-stup', "--starting_update", type=int, default=10,
                         help="Which update to start on (for CPHS Simulation). Use 0 or 10.")
     
@@ -451,7 +449,9 @@ def parse_args():
     # This one is not integrated yet
     parser.add_argument('-rtm', "--run_train_metrics", type=bool, default=True,
                         help="Evaluate every client on the training data")  # I don't think this matters for local, since every client is being run anyways?
-    
+    parser.add_argument('-ubl', "--update_batch_length", type=int, default=1200,
+                        help="Minimum length of the simulated streamed updates (in CPHS, was 1200).") 
+
     # THIS IS ALL OLD COMPARED TO MAIN_SEQ.PY, USE THAT INSTEAD
     ## SEQUENTIAL TRAINING PARAMS
     parser.add_argument('-seq', "--sequential", type=bool, default=False,
