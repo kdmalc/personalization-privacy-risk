@@ -165,9 +165,9 @@ class clientPerAvg(Client):
             #loss1 = self.loss(output, y)
             loss1, num_samples = self.shared_loss_calc(x, y, eval_model, record_cost_func_comps=False) # Idk if it should be recording or not here...
 
-            train_num += y.shape[0]
+            train_num += num_samples
             #print(f"CPerAvg train_metrics y.shape: {y.shape[0]}, x.shape: {x.shape[0]}")
-            losses += loss1.item() * y.shape[0]
+            losses += loss1.item() * num_samples
         #print()
         # This would be where the loss_log.append(losses / train_num) would be... this happens in evaluate() tho...
 

@@ -70,6 +70,8 @@ class Server(object):
         self.fine_tuning_epoch = args.fine_tuning_epoch
         
         # Kai's additional params
+        self.smoothbatch_boolean = args.smoothbatch_boolean
+        self.smoothbatch_learningrate = args.smoothbatch_learningrate
         self.models_base_dir = "models"
         self.model_str = args.model_str
         if self.model_str != "LinearRegression":
@@ -463,7 +465,9 @@ class Server(object):
             f"starting_update = {self.starting_update}\n"
             f"train_subj_IDs = {self.train_subj_IDs}\n"
             f"condition_number_lst = {self.condition_number_lst}\n"
-            f"total effective clients = train_subj_IDs*condition_number_lst = {self.num_clients}\n")
+            f"total effective clients = train_subj_IDs*condition_number_lst = {self.num_clients}\n"
+            f"smoothbatch_boolean = {self.smoothbatch_boolean}\n"
+            f"smoothbatch_learningrate = {self.smoothbatch_learningrate}\n")
 
         param_log_str = (
             "BASE\n"
@@ -603,8 +607,8 @@ class Server(object):
                 tl, ns = c.test_metrics(model_obj=self.global_model)
             else:
                 tl, ns = c.test_metrics()
-                # Why is ns double........ it's even double for FedAvg............................
-                print(f"Client{i} test loss: {tl}, ns: {ns}")
+                #print(f"Client{i} test loss: {tl}, ns: {ns}, client bs: {c.batch_size}")
+                # ^ ns is the cumulative number of seen samples NOT the batch_size
 
             if (not self.sequential) or (self.sequential and c.ID in self.static_client_IDs):
                 # This is the ordinary nonseq sim case

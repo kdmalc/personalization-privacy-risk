@@ -250,8 +250,8 @@ def parse_args():
     parser = argparse.ArgumentParser()
 
     #Local #FedAvg #APFL #FedMTL #pFedMe (not working) ## #Ditto #PerAvg #Centralized
-    parser.add_argument('-algo', "--algorithm", type=str, default="PerAvg")
-    parser.add_argument('-jr', "--join_ratio", type=float, default=0.5,
+    parser.add_argument('-algo', "--algorithm", type=str, default="FedAvg")
+    parser.add_argument('-jr', "--join_ratio", type=float, default=0.3,
                         help="Fraction of clients to be active in training per round")
     parser.add_argument('-lrt', "--local_round_threshold", type=int, default=25,
                         help="Number of communication rounds per client until a client will advance to the next batch of streamed data")
@@ -260,9 +260,9 @@ def parse_args():
                         or L1 regularization weight of FedTransfer")
 
     parser.add_argument('-m', "--model_str", type=str, default="LinearRegression")  
-    parser.add_argument('-lbs', "--batch_size", type=int, default=300)
+    parser.add_argument('-lbs', "--batch_size", type=int, default=10)
     # For non-deep keep 1202: --> Idk if this is necessary actually, I think it will work regardless
-    parser.add_argument('-lr', "--local_learning_rate", type=float, default=1,
+    parser.add_argument('-lr', "--local_learning_rate", type=float, default=0.1,
                         help="Local learning rate")
 
     # THINGS I AM CURRENTLY CHANGING A LOT

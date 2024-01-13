@@ -481,14 +481,12 @@ class Client(object):
                     x = x.to(self.device)
                 y = y.to(self.device)
 
-                loss, num_samples = self.shared_loss_calc(x, y, eval_model)
+                loss, num_samples_shared_loss = self.shared_loss_calc(x, y, eval_model)
 
                 ############################################################################
                 test_loss = loss.item()  # Just get the actual loss function term
-                num_samples += y.shape[0]  # Why is this y.shape and not x.shape?... I guess they are the same row dims?
-                
-                #losses += loss.item() * y.shape[0] # FROM TRAIN
-                running_test_loss += test_loss * x.size()[0]
+                num_samples += num_samples_shared_loss
+                running_test_loss += test_loss * num_samples_shared_loss
 
                 #print(f"CB test_metrics {i}::: y.shape: {y.shape}, x.shape: {x.shape}")
             #print()
