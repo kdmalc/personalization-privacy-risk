@@ -388,6 +388,7 @@ class Server(object):
         for server_param, client_param in zip(self.global_model.parameters(), client_model.parameters()):
             server_param.data += client_param.data.clone() * w
 
+
     '''
     def save_global_model(self):
         model_path = os.path.join("models", self.dataset)
@@ -430,7 +431,7 @@ class Server(object):
             model_file_path = os.path.join(self.model_dir_path, self.algorithm + "_server_global.pt")
             torch.save(self.global_model, model_file_path)
 
-            # Save client's local/personalized models
+            # Save client's local/personalized models (local and pers are the same objects)
             if self.personalized_algo_bool:
                 client_algo_type = "Pers"
             else:
@@ -655,9 +656,6 @@ class Server(object):
         Really ought to switch to testing on entirely new clients...
         This is a problem that is unaddressed with test_metrics() as well...
         '''
-
-        # I don't really like that this is here...
-        self.global_round += 1
         
         if self.eval_new_clients and self.num_new_clients > 0:
             # if eval new client AND we actually have new clients, then return this

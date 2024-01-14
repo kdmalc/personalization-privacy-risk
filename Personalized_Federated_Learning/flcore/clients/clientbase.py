@@ -85,7 +85,6 @@ class Client(object):
         self.final_idx = self.update_ix[-1] # eg drop last update from consideration, stop before it
         self.learning_rate_decay = args.learning_rate_decay
         self.learning_rate_decay_gamma = args.learning_rate_decay_gamma
-        # Add these to get logged...
         self.smoothbatch_boolean = args.smoothbatch_boolean
         self.smoothbatch_learningrate = args.smoothbatch_learningrate
         ## Not logged params

@@ -27,6 +27,7 @@ class PerAvg(Server):
         for i in range(self.global_rounds+1):
             s_t = time.time()
             self.selected_clients = self.select_clients()
+            self.global_round += 1
             # send all parameter for clients
             self.send_models()
 

@@ -36,7 +36,7 @@ class clientAVG(Client):
                     starting_weights[name] = param.data.clone()
         for epoch in range(self.local_epochs):
             for step in range(self.num_gradient_steps):
-                # Currently, each tl only has 1 batch of 1200 [eg 1 update] (8/5/23)
+                # Currently, each tl has 1200 samples [eg 1 update] (1/13/24)
                 for i, (x, y) in enumerate(trainloader):
                     if self.verbose:
                         print(f"Epoch {epoch}, grad step {step}, batch {i}")

@@ -72,6 +72,7 @@ class Local(Server):
         
         #for i in range(self.global_rounds+1):  #Idk why they had +1... maybe their round0 did nothing but init?
         for i in range(self.global_rounds):
+            self.global_round += 1
             if i%self.eval_gap == 0:
                 print(f"\n-------------Round number: {i}-------------")
                 if i!=0:

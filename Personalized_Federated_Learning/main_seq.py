@@ -160,8 +160,8 @@ def parse_args():
     parser.add_argument('-seq', "--sequential", type=bool, default=True,
                         help="Boolean toggle for whether sequential mode is on (for now, mixing current client with previously trained models)")
     # This needs a toggle so I can just use live clients...
-    parser.add_argument('-jr', "--join_ratio", type=float, default=0.05,  # Was 0.3, but I want to try with no hold backs (eg only live clients)
-                        help="% of clients to be active in training per round. FOR SEQ: if the res is > num live clients, it will INCLUDE PAST CLIENTS IN SIM during training!!!")
+    parser.add_argument('-jr', "--join_ratio", type=float, default=0.05,  # Was 0.3, but I want to try with no hold backs (eg only live clients). 0.05 ensures only 1 client will be used per round, which must be a live client
+                        help="% of clients to be active in training per round. FOR SEQ: if the res is > num live clients, it will INCLUDE PAST CLIENTS IN SIM during training!!! This may or may not be ideal.")
     parser.add_argument('-uppm', "--use_prev_pers_model", type=bool, default=False,
                         help="Boolean toggle for whether to use previously trained personalized models for the client inits")
     parser.add_argument('-lcidsq', "--live_client_IDs_queue", type=str, default=str(['METACPHS_S106','METACPHS_S107','METACPHS_S118','METACPHS_S119']),
@@ -170,6 +170,7 @@ def parse_args():
                         help="Number of training rounds to do in a row on a single live (seq) client before advancing to the next seq client.")    
     parser.add_argument('-scids', "--static_client_IDs", type=str, default=str(['METACPHS_S108','METACPHS_S109','METACPHS_S110','METACPHS_S111','METACPHS_S112','METACPHS_S113','METACPHS_S114','METACPHS_S115','METACPHS_S116','METACPHS_S117']),
                         help="List of previously trained subject ID strings (models will be uploaded, used in training, but never updated)")
+    # ^ Are these models used at all in training? I believe no??
     parser.add_argument('-alltrsids', "--train_subj_IDs", type=str, default=str(['METACPHS_S106', 'METACPHS_S107', 'METACPHS_S108', 'METACPHS_S109', 'METACPHS_S110', 'METACPHS_S111', 'METACPHS_S112', 'METACPHS_S113', 'METACPHS_S114', 'METACPHS_S115', 'METACPHS_S116', 'METACPHS_S117', 'METACPHS_S118', 'METACPHS_S119']),
                         help="Subject ID Codes for ALL users to be in training (static and live). Also used in non-seq.")
     parser.add_argument('-pmd', "--prev_model_directory", type=str, default="C:\\Users\\kdmen\\Desktop\\Research\\personalization-privacy-risk\\Personalized_Federated_Learning\\models\\cphs\\FedAvg\\FedAvg_LiveExclusion\\FedAvg_server_global.pt",
@@ -319,6 +320,7 @@ def parse_args():
                         help="Evaluate every client on the training data")  # I don't think this matters for local, since every client is being run anyways?
     ## SEQUENTIAL TRAINING PARAMS
     # This isn't implemented yet but is functionally true (rn have 1 live and 4 total thus 3 static for backweighting) 11/12/23
+    # ^ This is incorrect and has been for some time (1/13/24). svl is not used at all currently (static clients are not used for training)
     parser.add_argument('-svlweight', "--static_vs_live_weighting", type=float, default=0.75,
                         help="Ratio between number of static clients and live clients present in each training round. Set completely arbitrarily for now.")
     args = parser.parse_args()

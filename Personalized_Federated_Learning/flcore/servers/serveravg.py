@@ -28,9 +28,9 @@ class FedAvg(Server):
             s_t = time.time()
             #print("Select clients")
             self.selected_clients = self.select_clients()
+            self.global_round += 1
             #print(f"Selected client IDs: {[client.ID for client in self.selected_clients]}")
 
-            # This should only happen for the live clients...
             #print("Send models")
             self.send_models()
 

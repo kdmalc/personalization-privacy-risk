@@ -28,6 +28,7 @@ class FedMTL(Server):
     def train(self):
         for i in range(self.global_rounds+1):
             self.selected_clients = self.select_clients()
+            self.global_round += 1
             self.aggregate_parameters()
 
             if i%self.eval_gap == 0:
