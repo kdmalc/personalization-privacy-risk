@@ -249,23 +249,21 @@ def run(args):
 def parse_args():
     parser = argparse.ArgumentParser()
 
+    # THINGS I AM CURRENTLY CHANGING A LOT
     #Local #FedAvg #APFL #FedMTL #pFedMe (not working) ## #Ditto #PerAvg #Centralized
     parser.add_argument('-algo', "--algorithm", type=str, default="FedAvg")
-    parser.add_argument('-jr', "--join_ratio", type=float, default=0.3,
-                        help="Fraction of clients to be active in training per round")
-    parser.add_argument('-lrt', "--local_round_threshold", type=int, default=25,
-                        help="Number of communication rounds per client until a client will advance to the next batch of streamed data")
-    parser.add_argument('-bt', "--beta", type=float, default=0.1,
+    parser.add_argument('-bt', "--beta", type=float, default=0,
                         help="Average moving parameter for pFedMe, Second learning rate of Per-FedAvg, \
                         or L1 regularization weight of FedTransfer")
-
+    parser.add_argument('-jr', "--join_ratio", type=float, default=0.3,
+                        help="Fraction of clients to be active in training per round")
+    parser.add_argument('-lrt', "--local_round_threshold", type=int, default=50,
+                        help="Number of communication rounds per client until a client will advance to the next batch of streamed data")
     parser.add_argument('-m', "--model_str", type=str, default="LinearRegression")  
-    parser.add_argument('-lbs', "--batch_size", type=int, default=10)
+    parser.add_argument('-lbs', "--batch_size", type=int, default=600)
     # For non-deep keep 1202: --> Idk if this is necessary actually, I think it will work regardless
     parser.add_argument('-lr', "--local_learning_rate", type=float, default=0.1,
                         help="Local learning rate")
-
-    # THINGS I AM CURRENTLY CHANGING A LOT
     parser.add_argument('-gr', "--global_rounds", type=int, default=50)  # KAI: Originally was 2000
     parser.add_argument('-stup', "--starting_update", type=int, default=10,
                         help="Which update to start on (for CPHS Simulation). Use 0 or 10.")
@@ -296,8 +294,9 @@ def parse_args():
     parser.add_argument('-ngradsteps', "--num_gradient_steps", type=int, default=1, 
                         help="How many gradient steps in one local epoch.")  
     ## Test Split Related
-    parser.add_argument('-test_split_fraction', "--test_split_fraction", type=float, default=0.2,
+    parser.add_argument('-test_split_fraction', "--test_split_fraction", type=float, default=0.2, 
                         help="Fraction of data to use for testing")
+    # ^ Is this x% of the TOTAL data or of the [starting_update:final_idx] data? ...
     parser.add_argument('-test_split_each_update', "--test_split_each_update", type=bool, default=False,
                         help="Implement train/test split within each update or on the entire dataset")
     parser.add_argument('-test_split_users', "--test_split_users", type=bool, default=False,

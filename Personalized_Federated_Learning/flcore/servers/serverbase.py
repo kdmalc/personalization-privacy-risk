@@ -255,8 +255,7 @@ class Server(object):
         
         if self.sequential:
             # Select first client in live_client_IDs_queue if this is the first round
-            if self.global_round==0: # I don't remember if it is already incremented to 1 at this point
-                # Could probably fold this into the modulus check below...
+            if self.global_round==0: 
                 print(f"SB sel_cli: Global round {self.global_round}: setting first live client")
                 # List of client objects which match the current live_indices (presumably live_idx=0)
                 self.live_clients = [client_obj for client_obj in self.clients if client_obj.ID==self.live_client_IDs_queue[self.live_idx]]
@@ -290,10 +289,11 @@ class Server(object):
                 print()
                 print("UPDATING TO NEW CLIENT!!!")
                 print(f"unseen_live_client_IDs: {self.unseen_live_client_IDs}")
-                print(f"live_clients: {self.live_clients[0].ID}")
+                print(f"live_clients: {self.live_clients}")  # [0].ID <-- Idk why that was there...
                 print(f"prev_live_client_IDs: {self.prev_live_client_IDs}")
                 print()
-                        
+
+            # This is only true for the single user "seq" case...  
             assert(len(self.live_clients)==1)
             
             if num_join_clients > len(self.live_clients):
@@ -677,10 +677,15 @@ class Server(object):
         # ITERATES OVER ALL CLIENTS, THEN SUMS ALL CLIENT LOSSES!
         for i, c in enumerate(self.clients):
             if (self.sequential and c.ID in self.static_client_IDs):
+                # Test the current global model on the training data of the static clients!
+                ## The global model should be performing better as time goes on, even tho it hasn't seen these clients?
+                ## If fresh model, then it has never seen these clients, else it could be pretrained on them and we are looking for retention...
                 tl, ns = c.train_metrics(model_obj=self.global_model)
             else:
+                # If you're anyone else, you test your current local model on your training data
                 tl, ns = c.train_metrics()
-            #print(f"Client{i} TRAIN loss: {tl}, ns: {ns}")
+            
+            # DETERMINE WHERE TO SAVE THE PERFORMANCE (WHICH IS THE APPROPRIATE LOG)
             if (not self.sequential) or (self.sequential and c.ID in self.static_client_IDs):
                 # This is the ordinary nonseq sim case, and also for static seq clients
                 tot_loss.append(tl*1.0)

@@ -332,13 +332,15 @@ class Client(object):
             # Idk this might actually be supported just in a different function. I'm not sure. Don't plan on using it rn so who cares
             raise ValueError("test_split_each_update not supported yet.  Idk if this is necessary to add")
         else: 
+            # BY DEFAULT we are currently splitting the total dataset (eg witholding the last self.test_split_fraction% as the test set)
+            ## This obvi introduces some of its own biases...
             testsplit_upper_bound = round((1-self.test_split_fraction)*(self.cond_samples_npy.shape[0]))
         # Set the number of examples (used to be done on init) --> ... THIS IS ABOUT TRAIN/TEST SPLIT
         self.train_samples = testsplit_upper_bound
         self.test_samples = self.cond_samples_npy.shape[0] - testsplit_upper_bound
-        train_test_update_number_split = min(self.update_ix, key=lambda x:abs(x-testsplit_upper_bound))
-        self.max_training_update_upbound = self.update_ix.index(train_test_update_number_split)
-        self.test_split_idx = self.update_ix[self.max_training_update_upbound]
+        # Find the closest update idx (from predefined streamed batches in update_ix) to split the data at
+        self.test_split_idx = min(self.update_ix, key=lambda x:abs(x-testsplit_upper_bound))
+        self.max_training_update_upbound = self.update_ix.index(self.test_split_idx)
         
 
     def load_train_data(self, batch_size=None, eval=False, client_init=False):
