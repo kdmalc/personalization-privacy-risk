@@ -184,7 +184,7 @@ class Server(object):
         if self.verbose:
             print("ServerBase Set_Clients (SBSC) -- probably called in init() of server children classes")
         
-        base_data_path = 'C:\\Users\\kdmen\\Desktop\\Research\\Data\\Subject_Specific_Files\\'
+        base_data_path = 'C:\\Users\\kdmen\\Desktop\\Research\\Data\\CPHS_EMG\\Subject_Specific_Files\\'
         for i, train_slow, send_slow in zip(range(len(self.train_subj_IDs)), self.train_slow_clients, self.send_slow_clients):
             for j in self.condition_number_lst:
                 print(f"SB Set Client: iter {i}, cond number: {str(j)}: LOADING DATA: {self.train_subj_IDs[i]}")
@@ -868,7 +868,7 @@ class Server(object):
         if self.num_new_clients==0:
             pass
         else:
-            base_data_path = 'C:\\Users\\kdmen\\Desktop\\Research\\Data\\Subject_Specific_Files\\'
+            base_data_path = 'C:\\Users\\kdmen\\Desktop\\Research\\Data\\CPHS_EMG\\Subject_Specific_Files\\'
             for i in range(self.num_clients, self.num_clients + self.num_new_clients):
                 # Idk I guess I can keep the condition iter? Idk why I would want to turn it off other than not expecting it
                 for j in self.condition_number_lst:

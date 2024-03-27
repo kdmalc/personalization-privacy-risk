@@ -155,7 +155,10 @@ class Client(object):
             x = x.to(self.device)
         y = y.to(self.device)
 
-        self.simulate_data_streaming_xy(x, y)
+        print(f"x: {torch.sum(x)}\n y: {torch.sum(y)}")
+
+        # Maybe this is causing problems for some reason in testing? Idk
+        self.simulate_data_streaming_xy(x, y, input_model=model)
 
         # D@s = predicted velocity
         vel_pred = model(self.F)
@@ -197,11 +200,14 @@ class Client(object):
         if self.verbose or self.debug_mode:
             print(f"CB shared_loss_calc reg_sum: {reg_sum}")
 
+        # Only do this during training NOT TESTING EVAL!
         if record_cost_func_comps == True:
             self.cost_func_comps_log = [(t1.item(), t2.item(), t3.item())]
 
         loss = t1 + t2 + t3 + reg_sum
         num_samples = x.size()[0]
+
+        print(f"t1: {t1.item():.6f}, t2: {t2.item():.6f}, t3: {t3.item()}, loss: {loss:.6f}, num_samples: {num_samples}\n")
         return loss, num_samples
     
 
@@ -217,6 +223,7 @@ class Client(object):
             self.optimizer.zero_grad()
         
         # record_cost_func_comps should be True since this is the actual training loop
+        print(f"CPHS_TRAINING_SUBROUTINE, USER {self.ID}")
         loss_obj, num_samples = self.shared_loss_calc(x, y, self.model, record_cost_func_comps=True)
 
         if self.algorithm=='APFL':
@@ -259,7 +266,7 @@ class Client(object):
         #running_num_samples += x.size(0)
 
     
-    def simulate_data_streaming_xy(self, x, y, test_data=False):
+    def simulate_data_streaming_xy(self, x, y, input_model): #, test_data=False):
         '''
         Input:
             x, y --> A single training example from the trainloader
@@ -270,7 +277,7 @@ class Client(object):
         This function sets F (transformed input data) and V (Vplus used in cost func)
         Specifically: the loss function is its own class/object so it doesn't have 
             access to these (F and V)
-        Must set F and V for model.output
+        Must set F and V for model.output --> where? why? --> F is in the cost func, but where is V used? grad eval or something?
         '''
 
         s_temp = x
@@ -291,12 +298,13 @@ class Client(object):
             s = s_normed
 
         self.F = s[:-1,:]
-        v_actual =  self.model(s)
+        v_actual =  input_model(s)
         # Numerical integration of v_actual to get p_actual
         p_actual = torch.cumsum(v_actual, dim=1)*self.dt
         # I don't think I actually use V later on
         self.V = (p_reference - p_actual)*self.dt
         self.y_ref = p_reference[:-1, :]  # To match the input
+        #^ This is used in t1 = self.loss_func(vel_pred, self.y_ref) in shared_loss_calc
 
 
     def _load_train_data(self):
@@ -334,6 +342,7 @@ class Client(object):
         else: 
             # BY DEFAULT we are currently splitting the total dataset (eg witholding the last self.test_split_fraction% as the test set)
             ## This obvi introduces some of its own biases...
+            # I think this really ought to be named traintestsplit_upperbound...
             testsplit_upper_bound = round((1-self.test_split_fraction)*(self.cond_samples_npy.shape[0]))
         # Set the number of examples (used to be done on init) --> ... THIS IS ABOUT TRAIN/TEST SPLIT
         self.train_samples = testsplit_upper_bound
@@ -482,6 +491,7 @@ class Client(object):
                     x = x.to(self.device)
                 y = y.to(self.device)
 
+                print(f"TEST_METRICS, USER {self.ID}")
                 loss, num_samples_shared_loss = self.shared_loss_calc(x, y, eval_model)
 
                 ############################################################################
@@ -536,12 +546,15 @@ class Client(object):
                     x = x.to(self.device)
                 y = y.to(self.device)
 
+                print(f"TEST_METRICS, USER {self.ID}")
                 loss, num_samples = self.shared_loss_calc(x, y, eval_model)
+                # Why is num_samples not used...
 
                 ############################################################################
                 #if self.verbose:
                 #    print(f"batch {i}, loss {loss:0,.5f}")
                 train_num += y.shape[0]  # Why is this y.shape and not x.shape?... I guess they are the same row dims?
+                print(f"num_samples==y.shape[0]?: {num_samples==y.shape[0]}")
                 #print(f"CB train_metrics {i}::: y.shape: {y.shape}, x.shape: {x.shape}")
                 losses += loss.item() * y.shape[0]
             #print()

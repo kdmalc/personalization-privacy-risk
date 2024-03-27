@@ -289,7 +289,7 @@ def parse_args():
     parser.add_argument('-con_num', "--condition_number_lst", type=str, default='[3]', # Use 3 and/or 7
                         help="Which condition number (trial) to train on. Must be a list. By default, will iterate through all train_subjs for each cond (eg each cond_num gets its own client even for the same subject)")
     parser.add_argument('-ld', "--learning_rate_decay", type=bool, default=False)
-    parser.add_argument('-ls', "--local_epochs", type=int, default=3, 
+    parser.add_argument('-ls', "--local_epochs", type=int, default=1, 
                         help="How many times a client should iterate through their current update dataset.")  
     parser.add_argument('-ngradsteps', "--num_gradient_steps", type=int, default=1, 
                         help="How many gradient steps in one local epoch.")  
