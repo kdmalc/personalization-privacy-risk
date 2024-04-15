@@ -147,7 +147,7 @@ class Client(object):
 
 
     # GOAL IS TO CONSOLIDATE EVERYTHING SHARED BETWEEN TRAIN_METRICS, TEST_METRICS, AND CPHS_TRAINING_SUBROUTINE
-    def shared_loss_calc(self, x, y, model, record_cost_func_comps=False):
+    def shared_loss_calc(self, x, y, model, record_cost_func_comps=False, stream_data=True):
         '''This simulates the data stream and then calculates the loss. DOES NOT BACKPROP'''
         if type(x) == type([]):
             x[0] = x[0].to(self.device)
@@ -155,10 +155,11 @@ class Client(object):
             x = x.to(self.device)
         y = y.to(self.device)
 
-        print(f"x: {torch.sum(x)}\n y: {torch.sum(y)}")
+        #print(f"x: {torch.sum(x)}\n y: {torch.sum(y)}")
 
         # Maybe this is causing problems for some reason in testing? Idk
-        self.simulate_data_streaming_xy(x, y, input_model=model)
+        if stream_data:
+            self.simulate_data_streaming_xy(x, y, input_model=model)
 
         # D@s = predicted velocity
         vel_pred = model(self.F)
@@ -207,7 +208,7 @@ class Client(object):
         loss = t1 + t2 + t3 + reg_sum
         num_samples = x.size()[0]
 
-        print(f"t1: {t1.item():.6f}, t2: {t2.item():.6f}, t3: {t3.item()}, loss: {loss:.6f}, num_samples: {num_samples}\n")
+        #print(f"t1: {t1.item():.6f}, t2: {t2.item():.6f}, t3: {t3.item()}, loss: {loss:.6f}, num_samples: {num_samples}\n")
         return loss, num_samples
     
 
@@ -223,7 +224,7 @@ class Client(object):
             self.optimizer.zero_grad()
         
         # record_cost_func_comps should be True since this is the actual training loop
-        print(f"CPHS_TRAINING_SUBROUTINE, USER {self.ID}")
+        #print(f"CPHS_TRAINING_SUBROUTINE, USER {self.ID}")
         loss_obj, num_samples = self.shared_loss_calc(x, y, self.model, record_cost_func_comps=True)
 
         if self.algorithm=='APFL':
@@ -408,6 +409,7 @@ class Client(object):
             batch_size=batch_size, 
             drop_last=True,  # Yah idk if this should be true or false or if it matters...
             shuffle=False) 
+
         return dl
 
 
@@ -473,11 +475,11 @@ class Client(object):
         testloaderfull = self.load_test_data()
         assert(len(testloaderfull)!=0)
         # Should I be simulate streaming with the testing data... 
-        #self.simulate_data_streaming(testloaderfull)
+        ## Simulating streaming happens in shared_loss_calc below (for now)
         eval_model.eval()
 
         running_test_loss = 0
-        num_samples = 0
+        running_num_samples = 0
         if self.verbose:
             print(f'cb Client {self.ID} test_metrics()')
         with torch.no_grad():
@@ -491,21 +493,18 @@ class Client(object):
                     x = x.to(self.device)
                 y = y.to(self.device)
 
-                print(f"TEST_METRICS, USER {self.ID}")
-                loss, num_samples_shared_loss = self.shared_loss_calc(x, y, eval_model)
+                loss, num_samples = self.shared_loss_calc(x, y, eval_model)#, stream_data=False)
+                # Breaks if stream_data is False (F does not get set...)
+                # I think an issue could be if after streaming the values are getting "double-dipped"
+                ## Eg the training values of F, V, y_ref are geting used for testing as well...?
+                ### seems like that shouldn't be happening tho
+                # The testing data ought to be getting streamed tho, if only to normalize, to say nothing of setting F and V and such
 
-                ############################################################################
                 test_loss = loss.item()  # Just get the actual loss function term
-                num_samples += num_samples_shared_loss
-                running_test_loss += test_loss * num_samples_shared_loss
-
-                #print(f"CB test_metrics {i}::: y.shape: {y.shape}, x.shape: {x.shape}")
-            #print()
-        # Idk if this what I want to be returning... why do I multiply by x.shape[0] and then later divide by the total number of samples?
-        ## Can I just drop that multiplication and division entirely??...
-        self.client_testing_log.append(running_test_loss / num_samples)   
-        ############################################################################
-        return running_test_loss, num_samples
+                running_num_samples += num_samples
+                running_test_loss += test_loss * num_samples #num_samples_shared_loss
+        self.client_testing_log.append(running_test_loss / running_num_samples)   
+        return running_test_loss, running_num_samples
     
 
     def train_metrics(self, saved_model_path=None, model_obj=None):
@@ -546,22 +545,20 @@ class Client(object):
                     x = x.to(self.device)
                 y = y.to(self.device)
 
-                print(f"TEST_METRICS, USER {self.ID}")
+                print(f"TRAIN_METRICS, USER {self.ID}")
                 loss, num_samples = self.shared_loss_calc(x, y, eval_model)
-                # Why is num_samples not used...
 
                 ############################################################################
                 #if self.verbose:
                 #    print(f"batch {i}, loss {loss:0,.5f}")
-                train_num += y.shape[0]  # Why is this y.shape and not x.shape?... I guess they are the same row dims?
-                print(f"num_samples==y.shape[0]?: {num_samples==y.shape[0]}")
+                train_num += num_samples
                 #print(f"CB train_metrics {i}::: y.shape: {y.shape}, x.shape: {x.shape}")
-                losses += loss.item() * y.shape[0]
+                losses += loss.item() * num_samples
             #print()
 
         # self.model.cpu()
         # self.save_model(self.model, 'model')
-
+        print(f"losses: {losses}, train_num: {train_num}")
         return losses, train_num
 
     

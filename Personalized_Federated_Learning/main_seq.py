@@ -51,7 +51,6 @@ def run(args):
         print("Creating server and clients ...")
         start = time.time()
 
-        ####################################################################################################
         # Generate args.model
         if args.model_str == "LinearRegression":
             args.model = torch.nn.Linear(args.input_size, args.output_size, args.linear_model_bias)  #input_size, output_size, bias boolean
@@ -71,7 +70,6 @@ def run(args):
             args.model = TransformerModel(args.input_size, args.output_size)
         else:
             raise NotImplementedError
-        ####################################################################################################
 
         print(args.model)
 

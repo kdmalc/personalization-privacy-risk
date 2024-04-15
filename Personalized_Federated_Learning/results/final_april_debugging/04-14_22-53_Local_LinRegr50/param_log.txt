@@ -1,0 +1,44 @@
+BASE
+algorithm = Local
+model = Linear(in_features=64, out_features=2, bias=True)
+device_channels = 64
+
+
+MODEL HYPERPARAMETERS
+lambdaF = 0.0
+lambdaD = 0.001
+lambdaE = 0.0001
+global_rounds = 50
+local_epochs = 3
+batch_size = 1200
+local_learning_rate = 1
+learning_rate_decay = True
+learning_rate_decay_gamma = 0.99
+optimizer = SGD
+pca_channels = 64
+normalize_data = True
+(model) input_size = 64
+(model) output_size = 2
+
+
+TESTING
+test_split_fraction = 0.2
+test_split_each_update = False
+test_split_users = False
+
+
+SEQUENTIAL
+sequential = False
+
+
+FEDERATED LEARNING PARAMS
+local_round_threshold = 25
+
+
+SIMULATION PARAMS
+starting_update = 10
+train_subj_IDs = ['METACPHS_S106', 'METACPHS_S107', 'METACPHS_S108', 'METACPHS_S109', 'METACPHS_S110', 'METACPHS_S111', 'METACPHS_S112', 'METACPHS_S113', 'METACPHS_S114', 'METACPHS_S115', 'METACPHS_S116', 'METACPHS_S117', 'METACPHS_S118', 'METACPHS_S119']
+condition_number_lst = [3]
+total effective clients = train_subj_IDs*condition_number_lst = 14
+smoothbatch_boolean = True
+smoothbatch_learningrate = 0.75

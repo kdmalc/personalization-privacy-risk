@@ -31,6 +31,8 @@ from flcore.servers.serverditto import Ditto
 from flcore.pflniid_utils.result_utils import average_data
 from flcore.pflniid_utils.mem_utils import MemReporter
 
+from models.DNN_classes import *
+
 logger = logging.getLogger()
 logger.setLevel(logging.ERROR)
 
@@ -41,7 +43,6 @@ torch.manual_seed(0)
 def run(args):
     time_list = []
     reporter = MemReporter()
-    model_str = args.model
 
     for i in range(args.prev, args.times):
         print(f"\n============= Running time: {i}th =============")
@@ -49,8 +50,22 @@ def run(args):
         start = time.time()
 
         # Generate args.model
-        if model_str == "LinearRegression":
+        if args.model_str == "LinearRegression":
             args.model = torch.nn.Linear(args.input_size, args.output_size, args.linear_model_bias)  #input_size, output_size, bias boolean
+        elif args.model_str == "RNN":
+            # Initialize the RNN model
+            #rnn_model = RNNModel(D, hidden_size, 2)
+            args.model = RNNModel(args.input_size, args.hidden_size, args.output_size)
+        elif args.model_str == "LSTM":
+            # Initialize the LSTM model
+            #hidden_size = 64
+            #lstm_model = LSTMModel(D, hidden_size, output_size)
+            args.model = LSTMModel(args.input_size, args.hidden_size, args.output_size)
+        elif args.model_str == "GRU":
+            #args.model = GRUModel(args.input_size, args.hidden_size, args.output_size, args.sequence_length)
+            args.model = GRUModel(args.input_size, args.hidden_size, args.output_size)
+        elif args.model_str == "Transformer":
+            args.model = TransformerModel(args.input_size, args.output_size)
         else:
             raise NotImplementedError
 
@@ -124,8 +139,30 @@ def parse_args():
     # CONTINUAL LEARNING
     parser.add_argument('-ewc_bool', "--ewc_bool", type=bool, default=False)
     parser.add_argument('-fisher_mult', "--fisher_mult", type=int, default=1e3)
-    parser.add_argument('-optimizer_str', "--optimizer_str", type=str, default="ADAM")
+    parser.add_argument('-optimizer_str', "--optimizer_str", type=str, default="SGD")
+    # ^^ ADAM, SGD, ADAGRAD, RMSprop, ADAMW
+
+    # From main_seq... main_local wasn't up to date for some reason...
+    parser.add_argument('-input_size', "--input_size", type=int, default=64)
+    parser.add_argument('-output_size', "--output_size", type=int, default=2)
+
+    parser.add_argument('-m', "--model_str", type=str, default="LinearRegression")  
+    parser.add_argument('-lbs', "--batch_size", type=int, default=1200)
+    # For non-deep keep 1202: --> Idk if this is necessary actually, I think it will work regardless
+    parser.add_argument('-lr', "--local_learning_rate", type=float, default=1,
+                        help="Local learning rate")
+    parser.add_argument('-ld', "--learning_rate_decay", type=bool, default=True)
+    parser.add_argument('-ldg', "--learning_rate_decay_gamma", type=float, default=0.99)
+    parser.add_argument('-ls', "--local_epochs", type=int, default=3,
+                        help="How many times a client should iterate through their current update dataset.")
     
+
+
+
+
+
+
+
 
 
 
@@ -137,18 +174,6 @@ def parse_args():
                         choices=["cpu", "cuda"])
     parser.add_argument('-did', "--device_id", type=str, default="0")
     parser.add_argument('-data', "--dataset", type=str, default="cphs")  # KAI: Changed the default to cphs (from mnist)
-    #parser.add_argument('-nb', "--num_classes", type=int, default=10)  # Not doing classification...
-    parser.add_argument('-m', "--model", type=str, default="LinearRegression")  # KAI: Changed the default to Linear Regression
-    # I have little confidence in this batch size being correct...
-    parser.add_argument('-lbs', "--batch_size", type=int, default=1202)  # Setting it to a full update would be 1202... will this automatically run twice?
-    # The 1300 and the batch size are 2 separate things...
-    # I want to restrict the given dataset to just the 1300, but then iterate in batches... or do I since we don't have that much data and can probably just use all the data at once? Make batch size match the update size? ...
-    parser.add_argument('-lr', "--local_learning_rate", type=float, default=1,  #0.005
-                        help="Local learning rate")
-    parser.add_argument('-ld', "--learning_rate_decay", type=bool, default=False)
-    parser.add_argument('-ldg', "--learning_rate_decay_gamma", type=float, default=0.99)
-    parser.add_argument('-ls', "--local_epochs", type=int, default=3, 
-                        help="How many times a client should iterate through their current update dataset.")  
     parser.add_argument('-ngradsteps', "--num_gradient_steps", type=int, default=1, 
                         help="How many gradient steps in one local epoch.")    
     #Local #FedAvg #APFL #FedMTL #pFedMe ## #Ditto #PerAvg
@@ -159,6 +184,13 @@ def parse_args():
                         help="differential privacy")
     parser.add_argument('-dps', "--dp_sigma", type=float, default=0.0)
     parser.add_argument('-sfn', "--save_folder_name", type=str, default='items')
+
+    # DEEP LEARNING STUFF
+    # num_layers isn't used right now... need to add a way to make this hidden sizes a list or something...
+    parser.add_argument('-num_layers', "--num_layers", type=int, default=1)
+    # No effect if model isn't deep:
+    parser.add_argument('-hidden_size', "--hidden_size", type=int, default=10)
+    parser.add_argument('-sequence_length', "--sequence_length", type=int, default=10)
 
     # SECTION: Idk what these are lol
     parser.add_argument('-eg', "--eval_gap", type=int, default=1,
@@ -217,9 +249,9 @@ def parse_args():
                         help="Penalty term for user EMG input (user effort)")
     parser.add_argument('-lD', "--lambdaD", type=float, default=1e-3, #1e-3
                         help="Penalty term for the decoder norm (interface effort)")
-    parser.add_argument('-lE', "--lambdaE", type=float, default=1e-4, #1e-4
+    parser.add_argument('-lE', "--lambdaE", type=float, default=1e-6, #1e-4
                         help="Penalty term on performance error norm")
-    parser.add_argument('-sbb', "--smoothbatch_boolean", type=bool, default=False,
+    parser.add_argument('-sbb', "--smoothbatch_boolean", type=bool, default=True,
                         help="Boolean switch for whether or not to use SmoothBatch. See Madduri CPHS Paper.")
     parser.add_argument('-sblr', "--smoothbatch_learningrate", type=float, default=0.75, #0.75 slow, 0.25 fast
                         help="Value of alpha (mixing param) for SB. Alpha=1 uses only the optimal dec, Alpha=0 uses only the previous dec")
@@ -241,7 +273,7 @@ def parse_args():
                         help="Normalize the input EMG signals and its labels. This is good practice.")
     parser.add_argument('-debug_mode', "--debug_mode", type=bool, default=False,
                         help="Will do additional checks on loss magnitudes and such (check_loss_for_nan_inf, etc).")
-    parser.add_argument('-con_num', "--condition_number_lst", type=str, default='[1]',
+    parser.add_argument('-con_num', "--condition_number_lst", type=str, default='[3]',
                         help="Which condition number (trial) to train on. Must be a list. By default, will iterate through all train_subjs for each cond (eg each cond_num gets its own client even for the same subject)")
     parser.add_argument('-v', "--verbose", type=bool, default=False,
                         help="Print out a bunch of extra stuff")
@@ -337,7 +369,7 @@ if __name__ == "__main__":
     #    print("Time threshold: {}".format(args.time_threshold))
     #print("Running times: {}".format(args.times))
     print("Dataset: {}".format(args.dataset))
-    print("Backbone (model): {}".format(args.model))
+    print("Backbone (model): {}".format(args.model_str))
     #print("Using device: {}".format(args.device))
     #print("Using DP: {}".format(args.privacy))
     #if args.privacy:
