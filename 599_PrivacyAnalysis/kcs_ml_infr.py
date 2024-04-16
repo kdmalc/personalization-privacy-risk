@@ -16,7 +16,8 @@ random.seed(a=1)
 # Default number of k-folds
 cv = 5 # Changed to 5 from 10 because the smallest class in cross val only has (had?) 7 instances
 my_metrics_cols=['Algorithm', 'One Off Acc', 'CV Acc', 'K Folds']
-update_ix = np.load('C:\\Users\\kdmen\\Desktop\\Research\\Data\\update_ix.npy')
+#update_ix = np.load('C:\\Users\\kdmen\\Desktop\\Research\\Data\\update_ix.npy')
+update_ix = [0,  1200,  2402,  3604,  4806,  6008,  7210,  8412,  9614, 10816, 12018, 13220, 14422, 15624, 16826, 18028, 19230, 20432, 20769]
 
 def fit_ml_algo(algo, X_train, y_train, cv, verbose=False, num_decimals=3, testing=False):
     '''Runs given algorithm and returns the accuracy metrics'''

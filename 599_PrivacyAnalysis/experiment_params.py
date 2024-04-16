@@ -11,4 +11,5 @@ num_conds = 8
 
 num_channels = 64
 
-update_ix = np.load('C:\\Users\\kdmen\\Desktop\\Research\\Data\\update_ix.npy')
+#update_ix = np.load('C:\\Users\\kdmen\\Desktop\\Research\\Data\\update_ix.npy')
+update_ix = [0,  1200,  2402,  3604,  4806,  6008,  7210,  8412,  9614, 10816, 12018, 13220, 14422, 15624, 16826, 18028, 19230, 20432, 20769]
