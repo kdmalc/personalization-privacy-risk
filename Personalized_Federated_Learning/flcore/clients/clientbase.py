@@ -545,7 +545,7 @@ class Client(object):
                     x = x.to(self.device)
                 y = y.to(self.device)
 
-                print(f"TRAIN_METRICS, USER {self.ID}")
+                #print(f"TRAIN_METRICS, USER {self.ID}")
                 loss, num_samples = self.shared_loss_calc(x, y, eval_model)
 
                 ############################################################################
@@ -558,7 +558,7 @@ class Client(object):
 
         # self.model.cpu()
         # self.save_model(self.model, 'model')
-        print(f"losses: {losses}, train_num: {train_num}")
+        #print(f"losses: {losses}, train_num: {train_num}")
         return losses, train_num
 
     
