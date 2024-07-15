@@ -23,12 +23,8 @@ from utils.helper_funcs import convert_cmd_line_str_lst_to_type_lst
 from flcore.servers.serveravg import FedAvg
 from flcore.servers.serverpFedMe import pFedMe
 from flcore.servers.serverperavg import PerAvg
-from flcore.servers.servermtl import FedMTL
 from flcore.servers.serverlocal import Local
-#from flcore.servers.serverper import FedPer
-#from flcore.servers.serverscaffold import SCAFFOLD
 from flcore.servers.serverapfl import APFL
-from flcore.servers.serverditto import Ditto
 
 from flcore.pflniid_utils.result_utils import average_data
 from flcore.pflniid_utils.mem_utils import MemReporter
@@ -84,16 +80,10 @@ def run(args):
             server = Local(args, i)
         elif args.algorithm == "APFL":
             server = APFL(args, i)
-        elif args.algorithm == "FedMTL":
-            server = FedMTL(args, i)
         elif args.algorithm == "PerAvg":
             server = PerAvg(args, i)
         elif args.algorithm == "pFedMe":
             server = pFedMe(args, i)
-        elif args.algorithm == "Ditto":
-            server = Ditto(args, i)
-        #elif args.algorithm == "SCAFFOLD":
-        #    server = SCAFFOLD(args, i)
         else:
             raise NotImplementedError
         
@@ -146,7 +136,7 @@ def parse_args():
 
     # THINGS I AM CURRENTLY CHANGING A LOT
 
-    #Local #FedAvg #APFL #FedMTL #pFedMe ## #Ditto #PerAvg
+    #Local #FedAvg #APFL #pFedMe ## #PerAvg
     ## pFedMe not working
     parser.add_argument('-algo', "--algorithm", type=str, default="PerAvg")
     parser.add_argument('-bt', "--beta", type=float, default=0.1,
@@ -245,7 +235,7 @@ def parse_args():
     parser.add_argument('-lth', "--loss_threshold", type=int, default=10000,
                         help="The max loss threshold for aborting a training run")
     
-    # SECTION: pFedMe / PerAvg / FedProx / FedAMP / FedPHP
+    # SECTION: pFedMe / PerAvg
     parser.add_argument('-lam', "--lamda", type=float, default=1.0,
                         help="Regularization weight")
     parser.add_argument('-mu', "--mu", type=float, default=0,
@@ -258,9 +248,6 @@ def parse_args():
     parser.add_argument('-al', "--alpha", type=float, default=1.0)
     # Ditto / FedRep
     parser.add_argument('-pls', "--plocal_steps", type=int, default=1)
-    # FedMTL
-    parser.add_argument('-itk', "--itk", type=int, default=4000,
-                        help="The iterations for solving quadratic subproblems")
 
     # SECTION: Kai's additional args
     parser.add_argument('-ubl', "--update_batch_length", type=int, default=1200,

@@ -23,36 +23,8 @@ from utils.helper_funcs import convert_cmd_line_str_lst_to_type_lst
 from flcore.servers.serveravg import FedAvg
 from flcore.servers.serverpFedMe import pFedMe
 from flcore.servers.serverperavg import PerAvg
-from flcore.servers.servermtl import FedMTL
 from flcore.servers.serverlocal import Local
-#from flcore.servers.serverper import FedPer
-#from flcore.servers.serverscaffold import SCAFFOLD
 from flcore.servers.serverapfl import APFL
-from flcore.servers.serverditto import Ditto
-
-'''
-from flcore.servers.serverprox import FedProx
-from flcore.servers.serverfomo import FedFomo
-from flcore.servers.serveramp import FedAMP
-from flcore.servers.serverrep import FedRep
-from flcore.servers.serverphp import FedPHP
-from flcore.servers.serverbn import FedBN
-from flcore.servers.serverrod import FedROD
-from flcore.servers.serverproto import FedProto
-from flcore.servers.serverdyn import FedDyn
-from flcore.servers.servermoon import MOON
-from flcore.servers.serverbabu import FedBABU
-from flcore.servers.serverapple import APPLE
-from flcore.servers.servergen import FedGen
-from flcore.servers.serverdistill import FedDistill
-from flcore.servers.serverala import FedALA
-from flcore.servers.serverpac import FedPAC
-from flcore.servers.serverlg import LG_FedAvg
-from flcore.servers.servergc import FedGC
-from flcore.servers.serverfml import FML
-from flcore.servers.serverkd import FedKD
-from flcore.servers.serverpcl import FedPCL
-'''
 
 from flcore.pflniid_utils.result_utils import average_data
 from flcore.pflniid_utils.mem_utils import MemReporter
@@ -110,110 +82,13 @@ def run(args):
             server = Local(args, i)
         elif args.algorithm == "APFL":
             server = APFL(args, i)
-        elif args.algorithm == "FedMTL":
-            server = FedMTL(args, i)
         elif args.algorithm == "PerAvg":
             server = PerAvg(args, i)
         elif args.algorithm == "pFedMe":
             server = pFedMe(args, i)
-        #elif args.algorithm == "FedPer":
-        #    #args.head = copy.deepcopy(args.model.fc)
-        #    #args.model.fc = nn.Identity()
-        #    #args.model = BaseHeadSplit(args.model, args.head)
-        #    server = FedPer(args, i)
-        elif args.algorithm == "Ditto":
-            server = Ditto(args, i)
-        #elif args.algorithm == "SCAFFOLD":
-        #    server = SCAFFOLD(args, i)
         else:
             raise NotImplementedError
-        
-        '''
-        elif args.algorithm == "FedPer":
-            # FIX ARGS.HEAD --> LINEAR REGRESSION HAS NO FC
-            #args.head = copy.deepcopy(args.model.fc)
-            #args.model.fc = nn.Identity()
-            #args.model = BaseHeadSplit(args.model, args.head)
-            server = FedPer(args, i)
-        elif args.algorithm == "SCAFFOLD":
-            server = SCAFFOLD(args, i)
-        elif args.algorithm == "FedProx":
-            server = FedProx(args, i)
-        elif args.algorithm == "FedFomo":
-            server = FedFomo(args, i)
-        elif args.algorithm == "FedAMP":
-            server = FedAMP(args, i)
-        elif args.algorithm == "FedRep":
-            args.head = copy.deepcopy(args.model.fc)
-            args.model.fc = nn.Identity()
-            args.model = BaseHeadSplit(args.model, args.head)
-            server = FedRep(args, i)
-        elif args.algorithm == "FedPHP":
-            args.head = copy.deepcopy(args.model.fc)
-            args.model.fc = nn.Identity()
-            args.model = BaseHeadSplit(args.model, args.head)
-            server = FedPHP(args, i)
-        elif args.algorithm == "FedBN":
-            server = FedBN(args, i)
-        elif args.algorithm == "FedROD":
-            args.head = copy.deepcopy(args.model.fc)
-            args.model.fc = nn.Identity()
-            args.model = BaseHeadSplit(args.model, args.head)
-            server = FedROD(args, i)
-        elif args.algorithm == "FedProto":
-            args.head = copy.deepcopy(args.model.fc)
-            args.model.fc = nn.Identity()
-            args.model = BaseHeadSplit(args.model, args.head)
-            server = FedProto(args, i)
-        elif args.algorithm == "FedDyn":
-            server = FedDyn(args, i)
-        elif args.algorithm == "MOON":
-            args.head = copy.deepcopy(args.model.fc)
-            args.model.fc = nn.Identity()
-            args.model = BaseHeadSplit(args.model, args.head)
-            server = MOON(args, i)
-        elif args.algorithm == "FedBABU":
-            args.head = copy.deepcopy(args.model.fc)
-            args.model.fc = nn.Identity()
-            args.model = BaseHeadSplit(args.model, args.head)
-            server = FedBABU(args, i)
-        elif args.algorithm == "APPLE":
-            server = APPLE(args, i)
-        elif args.algorithm == "FedGen":
-            args.head = copy.deepcopy(args.model.fc)
-            args.model.fc = nn.Identity()
-            args.model = BaseHeadSplit(args.model, args.head)
-            server = FedGen(args, i)
-            elif args.algorithm == "FedDistill":
-            server = FedDistill(args, i)
-        elif args.algorithm == "FedALA":
-            server = FedALA(args, i)
-        elif args.algorithm == "FedPAC":
-            args.head = copy.deepcopy(args.model.fc)
-            args.model.fc = nn.Identity()
-            args.model = BaseHeadSplit(args.model, args.head)
-            server = FedPAC(args, i)
-        elif args.algorithm == "LG-FedAvg":
-            args.head = copy.deepcopy(args.model.fc)
-            args.model.fc = nn.Identity()
-            args.model = BaseHeadSplit(args.model, args.head)
-            server = LG_FedAvg(args, i)
-        elif args.algorithm == "FedGC":
-            args.head = copy.deepcopy(args.model.fc)
-            args.model.fc = nn.Identity()
-            args.model = BaseHeadSplit(args.model, args.head)
-            server = FedGC(args, i)
-        elif args.algorithm == "FML":
-            server = FML(args, i)
-        elif args.algorithm == "FedKD":
-            args.head = copy.deepcopy(args.model.fc)
-            args.model.fc = nn.Identity()
-            args.model = BaseHeadSplit(args.model, args.head)
-            server = FedKD(args, i)
-        elif args.algorithm == "FedPCL":
-            args.model.fc = nn.Identity()
-            server = FedPCL(args, i)
-        '''
+
 
         server.train()
         time_list.append(time.time()-start)
@@ -250,9 +125,9 @@ def parse_args():
     parser = argparse.ArgumentParser()
 
     # THINGS I AM CURRENTLY CHANGING A LOT
-    #Local #FedAvg #APFL #FedMTL #pFedMe (not working) ## #Ditto #PerAvg #Centralized
+    #Local #FedAvg #APFL #pFedMe (not working) ## #PerAvg #Centralized
     parser.add_argument('-algo', "--algorithm", type=str, default="FedAvg")
-    parser.add_argument('-bt', "--beta", type=float, default=0,
+    parser.add_argument('-bt', "--beta", type=float, default=0.001,
                         help="Average moving parameter for pFedMe, Second learning rate of Per-FedAvg, \
                         or L1 regularization weight of FedTransfer")
     parser.add_argument('-jr', "--join_ratio", type=float, default=0.3,
@@ -349,59 +224,15 @@ def parse_args():
     parser.add_argument('-lth', "--loss_threshold", type=int, default=10000,
                         help="The max loss threshold for aborting a training run")
     
-    # SECTION: pFedMe / PerAvg / FedProx / FedAMP / FedPHP
-    parser.add_argument('-lam', "--lamda", type=float, default=1.0,
+    # SECTION: pFedMe / PerAvg
+    parser.add_argument('-lam', "--lambda", type=float, default=1.0,
                         help="Regularization weight")
-    parser.add_argument('-mu', "--mu", type=float, default=0,
-                        help="Proximal rate for FedProx")
     parser.add_argument('-K', "--K", type=int, default=5,
                         help="Number of personalized training steps for pFedMe")
     parser.add_argument('-lrp', "--p_learning_rate", type=float, default=0.01,
                         help="personalized learning rate to caculate theta aproximately using K steps")
     # APFL
     parser.add_argument('-al', "--alpha", type=float, default=1.0)
-    # Ditto / FedRep
-    parser.add_argument('-pls', "--plocal_steps", type=int, default=1)
-    # FedMTL
-    parser.add_argument('-itk', "--itk", type=int, default=4000,
-                        help="The iterations for solving quadratic subproblems")
-    
-    '''
-    # SCAFFOLD
-    parser.add_argument('-slr', "--server_learning_rate", type=float, default=1.0)
-    # FedFomo
-    parser.add_argument('-M', "--M", type=int, default=5,
-                        help="Server only sends M client models to one client at each round")
-    # FedAMP
-    parser.add_argument('-alk', "--alphaK", type=float, default=1.0, 
-                        help="lambda/sqrt(GLOABL-ITRATION) according to the paper")
-    parser.add_argument('-sg', "--sigma", type=float, default=1.0)
-    
-    # MOON
-    parser.add_argument('-tau', "--tau", type=float, default=1.0)
-    # FedBABU
-    parser.add_argument('-fts', "--fine_tuning_steps", type=int, default=10)
-    # APPLE
-    parser.add_argument('-dlr', "--dr_learning_rate", type=float, default=0.0)
-    parser.add_argument('-L', "--L", type=float, default=1.0)
-    # FedGen
-    parser.add_argument('-nd', "--noise_dim", type=int, default=512)
-    parser.add_argument('-glr', "--generator_learning_rate", type=float, default=0.005)
-    parser.add_argument('-hd', "--hidden_dim", type=int, default=512)
-    parser.add_argument('-se', "--server_epochs", type=int, default=1000)
-    parser.add_argument('-lf', "--localize_feature_extractor", type=bool, default=False)
-    # SCAFFOLD
-    parser.add_argument('-slr', "--server_learning_rate", type=float, default=1.0)
-    # FedALA
-    parser.add_argument('-et', "--eta", type=float, default=1.0)
-    parser.add_argument('-s', "--rand_percent", type=int, default=80)
-    parser.add_argument('-p', "--layer_idx", type=int, default=2,
-                        help="More fine-graind than its original paper.")
-    # FedKD
-    parser.add_argument('-mlr', "--mentee_learning_rate", type=float, default=0.005)
-    parser.add_argument('-Ts', "--T_start", type=float, default=0.95)
-    parser.add_argument('-Te', "--T_end", type=float, default=0.98)
-    '''
     
     # SECTION: Kai's additional args
     # Idk if this one is even used/useful anymore (think it was for interfacing with ipynb?)
@@ -418,9 +249,9 @@ def parse_args():
                         help="Number of principal components. 64 means do not use any PCA")
     parser.add_argument('-lF', "--lambdaF", type=float, default=0.0,
                         help="Penalty term for user EMG input (user effort)")
-    parser.add_argument('-lD', "--lambdaD", type=float, default=1e-3, #1e-3
+    parser.add_argument('-lD', "--lambdaD", type=float, default=1e-4,
                         help="Penalty term for the decoder norm (interface effort)")
-    parser.add_argument('-lE', "--lambdaE", type=float, default=1e-4, #1e-4
+    parser.add_argument('-lE', "--lambdaE", type=float, default=1e-6,
                         help="Penalty term on performance error norm")
     parser.add_argument('-sbb', "--smoothbatch_boolean", type=bool, default=False,
                         help="Boolean switch for whether or not to use SmoothBatch. See Madduri CPHS Paper.")
