@@ -8,8 +8,6 @@ import copy
 import time
 import random
 from datetime import datetime
-#from flcore.pflniid_utils.dlg import DLG
-#from utils import node_creator
 import matplotlib.pyplot as plt
 from math import ceil
 

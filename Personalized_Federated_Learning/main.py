@@ -89,7 +89,6 @@ def run(args):
         else:
             raise NotImplementedError
 
-
         server.train()
         time_list.append(time.time()-start)
 
@@ -169,15 +168,32 @@ def parse_args():
     parser.add_argument('-ngradsteps', "--num_gradient_steps", type=int, default=1, 
                         help="How many gradient steps in one local epoch.")  
     ## Test Split Related
-    parser.add_argument('-test_split_fraction', "--test_split_fraction", type=float, default=0.2, 
-                        help="Fraction of data to use for testing")
-    # ^ Is this x% of the TOTAL data or of the [starting_update:final_idx] data? ...
-    parser.add_argument('-test_split_each_update', "--test_split_each_update", type=bool, default=False,
-                        help="Implement train/test split within each update or on the entire dataset")
-    parser.add_argument('-test_split_users', "--test_split_users", type=bool, default=False,
-                        help="Split testing data by holding out some users (fraction held out determined by test_split_fraction)")
-    parser.add_argument('-ts_ids', "--test_subj_IDs", type=str, default='[]',
-                        help="List of subject ID strings of all subjects to be set to test only")
+    # ^ GETTING REPLACED BY K-FOLD CROSS VAL!
+    #parser.add_argument('-test_split_fraction', "--test_split_fraction", type=float, default=0.2, 
+    #                    help="Fraction of data to use for testing")
+    ## ^ Is this x% of the TOTAL data or of the [starting_update:final_idx] data? ...
+    #parser.add_argument('-test_split_each_update', "--test_split_each_update", type=bool, default=False,
+    #                    help="Implement train/test split within each update or on the entire dataset")
+    #parser.add_argument('-test_split_users', "--test_split_users", type=bool, default=False,
+    #                    help="Split testing data by holding out some users (fraction held out determined by test_split_fraction)")
+    #parser.add_argument('-ts_ids', "--test_subj_IDs", type=str, default='[]',
+    #                    help="List of subject ID strings of all subjects to be set to test only")
+    parser.add_argument('-nkfs', "--num_kfold_splits", type=int, default=5,
+                        help="Number of K Fold for Cross Validation")
+    
+    # SECTION: All client list related
+    # Mostly used for train/test split / Cross val...
+    # default=str(['METACPHS_S106', 'METACPHS_S107', 'METACPHS_S108', 'METACPHS_S109', 'METACPHS_S110', 'METACPHS_S111', 'METACPHS_S112', 'METACPHS_S113', 'METACPHS_S114', 'METACPHS_S115', 'METACPHS_S116', 'METACPHS_S117', 'METACPHS_S118', 'METACPHS_S119']),
+    parser.add_argument('-lcidsq', "--live_client_IDs_queue", type=str, default='[]',
+                        help="List of current subject ID strings (models will be trained and saved) --> THEY ARE QUEUED SO ONLY ONE WILL TRAIN AT A TIME")
+    # This needs to be changed to a smaller set (that does not include the future live clients) when training a model for Sequential
+    ## Default (non-seq) --> Actually, I think this doesn't need to change. 
+    ### This is the list of all clients it will train, both live and static. If not present here they are not used in training at all
+    ### It just takes longer to load more data if you leave it as its default
+    parser.add_argument('-alltrsids', "--train_subj_IDs", type=str, default=str(['METACPHS_S106', 'METACPHS_S107', 'METACPHS_S108', 'METACPHS_S109', 'METACPHS_S110', 'METACPHS_S111', 'METACPHS_S112', 'METACPHS_S113', 'METACPHS_S114', 'METACPHS_S115', 'METACPHS_S116', 'METACPHS_S117', 'METACPHS_S118', 'METACPHS_S119']),
+                        help="Subject ID Codes for users to be trained")
+    # ^ How do I implement this for crossval? I'll just use it explicitly for now...
+    #epochs=10
 
     # general
     parser.add_argument('-go', "--goal", type=str, default="test", 
@@ -201,12 +217,13 @@ def parse_args():
                         help="Previous Running times")
     parser.add_argument('-t', "--times", type=int, default=1,
                         help="Running times")
-    parser.add_argument('-ab', "--auto_break", type=bool, default=False)
-    parser.add_argument('-dlg', "--dlg_eval", type=bool, default=False)  # DLG = Deep Leakage from Gradients
-    parser.add_argument('-dlgg', "--dlg_gap", type=int, default=100)
-    parser.add_argument('-bnpc', "--batch_num_per_client", type=int, default=None)  # Only used with DLG
+    #parser.add_argument('-ab', "--auto_break", type=bool, default=False)
+    #parser.add_argument('-dlg', "--dlg_eval", type=bool, default=False)  # DLG = Deep Leakage from Gradients
+    #parser.add_argument('-dlgg', "--dlg_gap", type=int, default=100)
+    #parser.add_argument('-bnpc', "--batch_num_per_client", type=int, default=None)  # Only used with DLG
     #############################################################################################################
-    parser.add_argument('-nnc', "--new_clients_ID_lst", type=str, default=str([]))
+    #parser.add_argument('-nnc', "--new_clients_ID_lst", type=str, default=str([]))
+    # KAI: ^ I think that was for PFL algos, testing them on new clients. Seq replaces this...
     #############################################################################################################
     parser.add_argument('-fte', "--fine_tuning_epoch", type=int, default=0)
     
@@ -282,28 +299,19 @@ def parse_args():
                         help="Evaluate every client on the training data")  # I don't think this matters for local, since every client is being run anyways?
     parser.add_argument('-ubl', "--update_batch_length", type=int, default=1200,
                         help="Minimum length of the simulated streamed updates (in CPHS, was 1200).") 
-
+    
     # THIS IS ALL OLD COMPARED TO MAIN_SEQ.PY, USE THAT INSTEAD
     ## SEQUENTIAL TRAINING PARAMS
     parser.add_argument('-seq', "--sequential", type=bool, default=False,
                         help="Boolean toggle for whether sequential mode is on (for now, mixing current client with previously trained models)")
     parser.add_argument('-uppm', "--use_prev_pers_model", type=bool, default=False,
                         help="Boolean toggle for whether to use previously trained personalized models for the client inits")
-    # default=str(['METACPHS_S106', 'METACPHS_S107', 'METACPHS_S108', 'METACPHS_S109', 'METACPHS_S110', 'METACPHS_S111', 'METACPHS_S112', 'METACPHS_S113', 'METACPHS_S114', 'METACPHS_S115', 'METACPHS_S116', 'METACPHS_S117', 'METACPHS_S118', 'METACPHS_S119']),
-    parser.add_argument('-lcidsq', "--live_client_IDs_queue", type=str, default='[]',
-                        help="List of current subject ID strings (models will be trained and saved) --> THEY ARE QUEUED SO ONLY ONE WILL TRAIN AT A TIME")
     parser.add_argument('-nlsrpsq', "--num_liveseq_rounds_per_seqclient", type=int, default=25,
                         help="Number of training rounds to do in a row on a single live (seq) client before advancing to the next seq client.")    
     parser.add_argument('-scids', "--static_client_IDs", type=str, default='[]',
                         help="List of previously trained subject ID strings (models will be uploaded, used in training, but never updated)")
     parser.add_argument('-svlweight', "--static_vs_live_weighting", type=float, default=0.75,
                         help="Ratio between number of static clients and live clients present in each training round. Set completely arbitrarily for now.")
-    # This needs to be changed to a smaller set (that does not include the future live clients) when training a model for Sequential
-    ## Default (non-seq) --> Actually, I think this doesn't need to change. 
-    ### This is the list of all clients it will train, both live and static. If not present here they are not used in training at all
-    ### It just takes longer to load more data if you leave it as its default
-    parser.add_argument('-alltrsids', "--train_subj_IDs", type=str, default=str(['METACPHS_S106', 'METACPHS_S107', 'METACPHS_S108', 'METACPHS_S109', 'METACPHS_S110', 'METACPHS_S111', 'METACPHS_S112', 'METACPHS_S113', 'METACPHS_S114', 'METACPHS_S115', 'METACPHS_S116', 'METACPHS_S117', 'METACPHS_S118', 'METACPHS_S119']),
-                        help="Subject ID Codes for users to be trained")
     ## For FedAvg all clients have the same model so code has to change to reflect this
     ### Current saving regime is broken and saves Local correctly I believe but not FedAvg (no FedAvg directory even...)
     #### My default entry is the path with Latest FedAvg filename, despite what the help description says...
