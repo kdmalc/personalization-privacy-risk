@@ -167,33 +167,33 @@ def parse_args():
                         help="How many times a client should iterate through their current update dataset.")  
     parser.add_argument('-ngradsteps', "--num_gradient_steps", type=int, default=1, 
                         help="How many gradient steps in one local epoch.")  
-    ## Test Split Related
+    
+    # SECTION: Test Split Related
     # ^ GETTING REPLACED BY K-FOLD CROSS VAL!
     #parser.add_argument('-test_split_fraction', "--test_split_fraction", type=float, default=0.2, 
     #                    help="Fraction of data to use for testing")
     ## ^ Is this x% of the TOTAL data or of the [starting_update:final_idx] data? ...
-    #parser.add_argument('-test_split_each_update', "--test_split_each_update", type=bool, default=False,
-    #                    help="Implement train/test split within each update or on the entire dataset")
+    parser.add_argument('-kfcv', "--use_kfold_crossval", type=bool, default=True,
+                        help="Split testing data by holding out some users (fraction held out determined by test_split_fraction)")
+    parser.add_argument('-test_split_each_update', "--test_split_each_update", type=bool, default=False,
+                        help="Implement train/test split within each update or on the entire dataset")
     #parser.add_argument('-test_split_users', "--test_split_users", type=bool, default=False,
     #                    help="Split testing data by holding out some users (fraction held out determined by test_split_fraction)")
     #parser.add_argument('-ts_ids', "--test_subj_IDs", type=str, default='[]',
     #                    help="List of subject ID strings of all subjects to be set to test only")
     parser.add_argument('-nkfs', "--num_kfold_splits", type=int, default=5,
                         help="Number of K Fold for Cross Validation")
-    
-    # SECTION: All client list related
-    # Mostly used for train/test split / Cross val...
+    #
     # default=str(['METACPHS_S106', 'METACPHS_S107', 'METACPHS_S108', 'METACPHS_S109', 'METACPHS_S110', 'METACPHS_S111', 'METACPHS_S112', 'METACPHS_S113', 'METACPHS_S114', 'METACPHS_S115', 'METACPHS_S116', 'METACPHS_S117', 'METACPHS_S118', 'METACPHS_S119']),
     parser.add_argument('-lcidsq', "--live_client_IDs_queue", type=str, default='[]',
                         help="List of current subject ID strings (models will be trained and saved) --> THEY ARE QUEUED SO ONLY ONE WILL TRAIN AT A TIME")
-    # This needs to be changed to a smaller set (that does not include the future live clients) when training a model for Sequential
+    ## This needs to be changed to a smaller set (that does not include the future live clients) when training a model for Sequential
     ## Default (non-seq) --> Actually, I think this doesn't need to change. 
-    ### This is the list of all clients it will train, both live and static. If not present here they are not used in training at all
-    ### It just takes longer to load more data if you leave it as its default
-    parser.add_argument('-alltrsids', "--train_subj_IDs", type=str, default=str(['METACPHS_S106', 'METACPHS_S107', 'METACPHS_S108', 'METACPHS_S109', 'METACPHS_S110', 'METACPHS_S111', 'METACPHS_S112', 'METACPHS_S113', 'METACPHS_S114', 'METACPHS_S115', 'METACPHS_S116', 'METACPHS_S117', 'METACPHS_S118', 'METACPHS_S119']),
-                        help="Subject ID Codes for users to be trained")
-    # ^ How do I implement this for crossval? I'll just use it explicitly for now...
-    #epochs=10
+    ## This is the list of all clients it will train, both live and static. If not present here they are not used in training at all
+    ## It just takes longer to load more data if you leave it as its default
+    #
+    parser.add_argument('-allsids', "--all_subj_IDs", type=str, default=str(['METACPHS_S106', 'METACPHS_S107', 'METACPHS_S108', 'METACPHS_S109', 'METACPHS_S110', 'METACPHS_S111', 'METACPHS_S112', 'METACPHS_S113', 'METACPHS_S114', 'METACPHS_S115', 'METACPHS_S116', 'METACPHS_S117', 'METACPHS_S118', 'METACPHS_S119']),
+                        help="Subject ID Codes for users")
 
     # general
     parser.add_argument('-go', "--goal", type=str, default="test", 

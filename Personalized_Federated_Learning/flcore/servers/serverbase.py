@@ -17,7 +17,7 @@ class Server(object):
         # Set up the main attributes
         self.args = args
         self.device = args.device
-        self.dataset = args.dataset
+        self.dataset = args.dataset #Really ought to be dataset_str...
         self.global_rounds = args.global_rounds
         self.local_epochs = args.local_epochs
         self.batch_size = args.batch_size
@@ -26,12 +26,12 @@ class Server(object):
         self.algorithm = args.algorithm
         self.personalized_algorithms = ["APFL", "FedMTL", "PerAvg", "PerFedAvg", "pFedMe", "FedPer", "Ditto"]
         self.personalized_algo_bool = True if self.algorithm.upper() in [algo.upper() for algo in self.personalized_algorithms] else False
-        self.time_select = args.time_select
-        self.goal = args.goal
+        self.time_select = args.time_select  # What is this...
+        self.goal = args.goal  # This can probably be removed entirely...
         self.time_threshold = args.time_threshold
         self.save_folder_name = args.save_folder_name
-        self.top_cnt = 20
-        self.auto_break = args.auto_break
+        self.top_cnt = 20  # What is ths...
+        self.auto_break = args.auto_break  # What is ths...
 
         self.clients = []
         self.selected_clients = []
@@ -114,16 +114,16 @@ class Server(object):
         self.test_subj_IDs = args.test_subj_IDs
         # Trial set up
         self.condition_number_lst = args.condition_number_lst
-        self.train_subj_IDs = args.train_subj_IDs
-        self.num_clients = len(self.train_subj_IDs) * len(self.condition_number_lst)
+
+        self.all_subj_IDs = args.all_subj_IDs
+        self.num_clients = 0  #len(self.train_subj_IDs) * len(self.condition_number_lst)           
+
         self.join_ratio = args.join_ratio
         self.random_join_ratio = args.random_join_ratio
         self.num_join_clients = ceil(self.num_clients * self.join_ratio)
         assert(self.num_join_clients>=1)
         if self.num_join_clients==1:
             print("num_join_clients IS JUST ONE (1) CLIENT!")
-        # This might need to get changed, but works as long as last 3 chars are the numerical subject ID (eg we drop the header and 'S')
-        self.train_numerical_subj_IDs = [id_str[-3:] for id_str in self.train_subj_IDs]
         self.loss_threshold = args.loss_threshold
         ## SEQUENTIAL TRAINING PARAMS
         self.sequential = args.sequential
@@ -508,7 +508,7 @@ class Server(object):
                     f"hidden_size = {self.hidden_size}\n"
                     f"sequence_length = {self.sequence_length}\n")
                 file.write(deep_base_str)
-            if self.algorithm.upper()=="PERAVG" or self.algorithm=="PERFEDAVG" or self.algorithm=="PFEDME":
+            if self.algorithm.upper()=="PERAVG" or self.algorithm=="PERFEDAVG" or self.algorithm=="PFA" or self.algorithm=="PFEDME":
                 perfedavg_param_str = ("\n\nPERFEDAVG\PFEDME PARAMS\n"
                     f"beta = {self.beta}\n")
                 file.write(perfedavg_param_str)
@@ -526,14 +526,17 @@ class Server(object):
                 else:
                     hf.create_dataset('rs_test_loss', data=self.rs_test_loss)
                     hf.create_dataset('rs_train_loss', data=self.rs_train_loss)
+
                 if self.sequential:
                     hf.create_dataset('curr_live_rs_test_loss', data=self.curr_live_rs_test_loss)
                     hf.create_dataset('prev_live_rs_test_loss', data=self.prev_live_rs_test_loss)
                     hf.create_dataset('unseen_live_rs_test_loss', data=self.unseen_live_rs_test_loss)
+
                 # Save cross-cli test log if necessary (SERVERLOCAL ONLY AS OF 11/26/23):
                 if self.test_against_all_other_clients:
                     hf.create_dataset('cross_client_loss_array', data=self.clii_on_clij_loss)
                     hf.create_dataset('cross_client_numsamples_array', data=self.clii_on_clij_numsamples)
+
                 if self.save_client_loss_logs:
                     # Is there some way to save all of these to a group...
                     group = hf.create_group('client_testing_logs')
@@ -541,6 +544,7 @@ class Server(object):
                         dataset_name = c.ID
                         data = c.client_testing_log  # Replace this with your actual data
                         group.create_dataset(dataset_name, data=data)
+
                 if save_cost_func_comps:
                     #print(f'cost_func_comps_log: \n {self.cost_func_comps_log}\n')                   
                     G1 = hf.create_group('cost_func_tuples_by_client')
@@ -550,6 +554,7 @@ class Server(object):
                             name_index = len(self.train_subj_IDs) - 1  # Ensure it doesn't exceed the last index
                         name_str = self.train_subj_IDs[name_index] + "_C" + str(self.condition_number_lst[idx%len(self.condition_number_lst)])
                         G1.create_dataset(name_str, data=cost_func_comps)
+
                 if save_gradient:
                     #print(f'gradient_norm_log: \n {self.gradient_norm_log}\n')
                     G2 = hf.create_group('gradient_norm_lists_by_client')
@@ -561,6 +566,42 @@ class Server(object):
                         G2.create_dataset(name_str, data=grad_norm_list)
         else:
             print("Saving failed.")
+
+
+    def save_fold_results(self):
+        # NOTE: FINISH ME
+        raise ValueError("save_fold_results NEVER FINISHED")
+
+        #self.result_path = "\\results\\" 
+        #relative_path = self.result_path + self.str_current_datetime + seq_str + self.algorithm + "_" + model_str + str(self.global_rounds)
+        #self.trial_result_path = script_directory+relative_path
+        # Now set the file names too
+        algo = self.algorithm + "_" + self.goal # + "_" + str(self.times) 
+        #self.h5_file_path = os.path.join(self.trial_result_path, "{}.h5".format(algo))
+        #self.paramtxt_file_path = os.path.join(self.trial_result_path, "param_log.txt")
+        #
+        # Original PFL Code
+        #algo = self.dataset + "_" + self.algorithm
+        #result_path = "../results/"
+        #if not os.path.exists(result_path):
+        #    os.makedirs(result_path)
+        #
+        if not os.path.exists(self.result_path):
+            os.makedirs(self.result_path)
+
+        #if (len(self.rs_test_acc)):
+        #    algo = algo + "_" + self.goal + "_" + str(self.times)
+        #    file_path = result_path + "{}.h5".format(algo)
+        #    print("File path: " + file_path)
+        #    with h5py.File(file_path, 'w') as hf:
+        #        hf.create_dataset('rs_test_acc', data=self.rs_test_acc)
+        #        hf.create_dataset('rs_test_auc', data=self.rs_test_auc)
+        #        hf.create_dataset('rs_train_loss', data=self.rs_train_loss)
+        group = hf.create_group('client_testing_logs')
+        for c in self.clients:
+            dataset_name = c.ID
+            data = c.client_testing_log  # Replace this with your actual data
+            group.create_dataset(dataset_name, data=data)
 
 
     def save_item(self, item, item_name):
@@ -575,9 +616,12 @@ class Server(object):
 
 
     def test_metrics(self):
+        ###############################
+        # Idk if this part works... should get subsumed (and ideally not used) by Seq anyways...
         if self.eval_new_clients and self.num_new_clients > 0:
             self.fine_tuning_new_clients()
             return self.test_metrics_new_clients()
+        ###############################
         
         num_samples = []
         tot_loss = []
@@ -634,11 +678,8 @@ class Server(object):
                 unseen_live_IDs.append(c.ID)
             elif self.sequential and c.ID in self.live_client_IDs_queue:
                 # Eg it hasn't been trained/called yet
+                ## Uh should this be pass or raise...
                 pass
-            elif self.sequential:
-                raise ValueError("This isn't supposed to run...")
-            else:
-                raise ValueError("This isn't supposed to run...")
         #IDs = [c.ID for c in self.clients]
         if self.sequential:
             seq_metrics = [curr_live_loss, curr_live_num_samples, curr_live_IDs, prev_live_loss, prev_live_num_samples, prev_live_IDs, unseen_live_loss, unseen_live_num_samples, unseen_live_IDs]
@@ -821,47 +862,6 @@ class Server(object):
             else:
                 raise NotImplementedError
         return True
-
-
-    # No idea what this does, I don't think it is used...
-    def call_dlg(self, R):
-        raise ValueError("call_dlg has not been developed yet")
-        # items = []
-        cnt = 0
-        psnr_val = 0
-        for cID, client_model in zip(self.uploaded_IDs, self.uploaded_models):
-            client_model.eval()
-            origin_grad = []
-            for gp, pp in zip(self.global_model.parameters(), client_model.parameters()):
-                origin_grad.append(gp.data - pp.data)
-
-            target_inputs = []
-            trainloader = self.clients[cID].load_train_data()
-            with torch.no_grad():
-                for i, (x, y) in enumerate(trainloader):
-                    if i >= self.batch_num_per_client:
-                        break
-                    
-                    # Some CUDA stuff to ignore for now
-                    if type(x) == type([]):
-                        x[0] = x[0].to(self.device)
-                    else:
-                        x = x.to(self.device)
-                    y = y.to(self.device)
-                    output = client_model(x)
-                    target_inputs.append((x, output))
-
-            d = DLG(client_model, origin_grad, target_inputs)
-            if d is not None:
-                psnr_val += d
-                cnt += 1
-            # items.append((client_model, origin_grad, target_inputs))
-                
-        if cnt > 0:
-            print('PSNR value is {:.2f} dB'.format(psnr_val / cnt))
-        else:
-            print('PSNR error')
-        # self.save_item(items, f'DLG_{R}')
 
 
     def set_new_clients(self, clientObj):

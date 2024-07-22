@@ -1,4 +1,6 @@
 import ast
+import os
+import h5py
 
 def convert_cmd_line_str_lst_to_type_lst(list_as_string, datatype, verbose=False):
     '''
@@ -49,3 +51,49 @@ def convert_cmd_line_str_lst_to_type_lst(list_as_string, datatype, verbose=False
         print(list_as_string)
         print(temp_lst)
     return temp_lst
+
+import numpy as np
+
+def average_kfold_data(algorithm="", dataset="", goal="", n_folds=5):
+    train_losses, test_losses = get_all_results_for_one_algo(algorithm, dataset, goal, n_folds)
+    
+    # Calculate best accuracy for each fold
+    best_train_acc = []
+    best_test_acc = []
+    for i in range(n_folds):
+        best_train_acc.append(train_losses[i].max())
+        best_test_acc.append(test_losses[i].max())
+    
+    print("Train accuracy:")
+    print("std for best accuracy:", np.std(best_train_acc))
+    print("mean for best accuracy:", np.mean(best_train_acc))
+    
+    print("\nTest accuracy:")
+    print("std for best accuracy:", np.std(best_test_acc))
+    print("mean for best accuracy:", np.mean(best_test_acc))
+    
+    return train_losses, test_losses
+
+def get_all_results_for_one_algo(algorithm="", dataset="", goal="", n_folds=5):
+    train_losses = []
+    test_losses = []
+    for i in range(n_folds):
+        # Verify that these are saved somewhere (still need to implement this somewhere...)
+        file_name = f"{dataset}_{algorithm}_{goal}_fold{i}"
+        fold_data = np.array(read_data_then_delete(file_name, delete=False))
+        train_losses.append(fold_data[:, 0])  # Assuming first column is train loss
+        test_losses.append(fold_data[:, 1])   # Assuming second column is test loss
+    return train_losses, test_losses
+
+def read_data_then_delete(file_name, delete=False):
+    file_path = "../results/" + file_name + ".h5"
+
+    # I think this needs to be fixed... I don't know how to get the hf file to work without testing it...
+    with h5py.File(file_path, 'r') as hf:
+        rs_test_acc = np.array(hf.get('rs_test_acc'))
+
+    if delete:
+        os.remove(file_path)
+    print("Length: ", len(rs_test_acc))
+
+    return rs_test_acc

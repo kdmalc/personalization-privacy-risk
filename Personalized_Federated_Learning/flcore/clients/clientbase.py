@@ -420,8 +420,11 @@ class Client(object):
         if batch_size == None:
             batch_size = self.batch_size
 
-        testing_samples = self.cond_samples_npy[self.test_split_idx:,:]
-        testing_labels = self.cond_labels_npy[self.test_split_idx:,:]
+        if self.use_kfold_crossval:
+            pass
+        elif self.test_split_each_update:
+            testing_samples = self.cond_samples_npy[self.test_split_idx:,:]
+            testing_labels = self.cond_labels_npy[self.test_split_idx:,:]
         if self.deep_bool:
             testing_dataset_obj = DeepSeqLenDataset(testing_samples, testing_labels, self.sequence_length)
         else:
@@ -461,7 +464,10 @@ class Client(object):
             model_obj:
             NOTE: setting both input params is unnecessary, only specify one. Otherwise an assertion will be raised
             ^ This is probably not ideal behaviour...
-            '''
+
+        NOTE: Should explicitly add a toggle for repeat testing (on the same dataset) using the global model or whatever, so it doesn't re-do val testing...
+        BUG: Should only load the test_data and create the test_dataloader once (eg outside of this function... in the k fold loop)
+        '''
 
         if model_obj != None:
             eval_model = model_obj
@@ -472,21 +478,16 @@ class Client(object):
             eval_model = self.model
         eval_model.to(self.device)
 
-        testloaderfull = self.load_test_data()
-        assert(len(testloaderfull)!=0)
         # Should I be simulate streaming with the testing data... 
         ## Simulating streaming happens in shared_loss_calc below (for now)
         eval_model.eval()
 
-        running_test_loss = 0
-        running_num_samples = 0
+        total_loss = 0
+        total_samples = 0
         if self.verbose:
             print(f'cb Client {self.ID} test_metrics()')
         with torch.no_grad():
-            for i, (x, y) in enumerate(testloaderfull):
-                #if self.verbose:
-                #    print(f"batch {i}, loss {test_loss:0,.5f}")
-
+            for i, (x, y) in enumerate(self.testloader):
                 if type(x) == type([]):
                     x[0] = x[0].to(self.device)
                 else:
@@ -500,11 +501,12 @@ class Client(object):
                 ### seems like that shouldn't be happening tho
                 # The testing data ought to be getting streamed tho, if only to normalize, to say nothing of setting F and V and such
 
-                test_loss = loss.item()  # Just get the actual loss function term
-                running_num_samples += num_samples
-                running_test_loss += test_loss * num_samples #num_samples_shared_loss
-        self.client_testing_log.append(running_test_loss / running_num_samples)   
-        return running_test_loss, running_num_samples
+                total_loss += loss.item() * num_samples
+                total_samples += num_samples
+
+            average_loss = total_loss / total_samples
+            self.client_testing_log.append(average_loss)
+        return average_loss, total_samples
     
 
     def train_metrics(self, saved_model_path=None, model_obj=None):
