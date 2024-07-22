@@ -414,6 +414,7 @@ class Client(object):
 
 
     def load_test_data(self, batch_size=None): 
+        print("\n\n\nLOADING THE TEST DATA\n\n\n")
         # Make sure this runs AFTER load_train_data so the data is already loaded in
         if self.verbose:
             print(f"Client {self.ID}: Setting Test DataLoader")

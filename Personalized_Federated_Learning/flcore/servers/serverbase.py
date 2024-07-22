@@ -31,7 +31,7 @@ class Server(object):
         self.time_threshold = args.time_threshold
         self.save_folder_name = args.save_folder_name
         self.top_cnt = 20  # What is ths...
-        self.auto_break = args.auto_break  # What is ths...
+        #self.auto_break = args.auto_break  # What is ths...
 
         self.clients = []
         self.selected_clients = []
@@ -57,9 +57,6 @@ class Server(object):
         self.train_slow_rate = args.train_slow_rate
         self.send_slow_rate = args.send_slow_rate
 
-        self.dlg_eval = args.dlg_eval
-        self.dlg_gap = args.dlg_gap
-        self.batch_num_per_client = args.batch_num_per_client
 
         self.new_clients_ID_lst = args.new_clients_ID_lst
         self.num_new_clients = len(self.new_clients_ID_lst)
@@ -109,7 +106,6 @@ class Server(object):
         self.learning_rate_decay = args.learning_rate_decay
         self.learning_rate_decay_gamma = args.learning_rate_decay_gamma
         # Testing
-        self.test_split_users = args.test_split_users
         self.test_split_each_update = args.test_split_each_update
         self.test_subj_IDs = args.test_subj_IDs
         # Trial set up

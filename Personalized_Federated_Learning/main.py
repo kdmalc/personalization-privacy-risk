@@ -170,17 +170,15 @@ def parse_args():
     
     # SECTION: Test Split Related
     # ^ GETTING REPLACED BY K-FOLD CROSS VAL!
-    #parser.add_argument('-test_split_fraction', "--test_split_fraction", type=float, default=0.2, 
-    #                    help="Fraction of data to use for testing")
+    parser.add_argument('-test_split_fraction', "--test_split_fraction", type=float, default=0.2, 
+                        help="Fraction of data to use for testing")
     ## ^ Is this x% of the TOTAL data or of the [starting_update:final_idx] data? ...
     parser.add_argument('-kfcv', "--use_kfold_crossval", type=bool, default=True,
                         help="Split testing data by holding out some users (fraction held out determined by test_split_fraction)")
     parser.add_argument('-test_split_each_update', "--test_split_each_update", type=bool, default=False,
                         help="Implement train/test split within each update or on the entire dataset")
-    #parser.add_argument('-test_split_users', "--test_split_users", type=bool, default=False,
-    #                    help="Split testing data by holding out some users (fraction held out determined by test_split_fraction)")
-    #parser.add_argument('-ts_ids', "--test_subj_IDs", type=str, default='[]',
-    #                    help="List of subject ID strings of all subjects to be set to test only")
+    parser.add_argument('-ts_ids', "--test_subj_IDs", type=str, default='[]',
+                        help="List of subject ID strings of all subjects to be set to test only")
     parser.add_argument('-nkfs', "--num_kfold_splits", type=int, default=5,
                         help="Number of K Fold for Cross Validation")
     #
@@ -218,11 +216,8 @@ def parse_args():
     parser.add_argument('-t', "--times", type=int, default=1,
                         help="Running times")
     #parser.add_argument('-ab', "--auto_break", type=bool, default=False)
-    #parser.add_argument('-dlg', "--dlg_eval", type=bool, default=False)  # DLG = Deep Leakage from Gradients
-    #parser.add_argument('-dlgg', "--dlg_gap", type=int, default=100)
-    #parser.add_argument('-bnpc', "--batch_num_per_client", type=int, default=None)  # Only used with DLG
     #############################################################################################################
-    #parser.add_argument('-nnc', "--new_clients_ID_lst", type=str, default=str([]))
+    parser.add_argument('-nnc', "--new_clients_ID_lst", type=str, default=str([]))
     # KAI: ^ I think that was for PFL algos, testing them on new clients. Seq replaces this...
     #############################################################################################################
     parser.add_argument('-fte', "--fine_tuning_epoch", type=int, default=0)
@@ -326,7 +321,7 @@ def parse_args():
     args = parser.parse_args()
 
     args.condition_number_lst = convert_cmd_line_str_lst_to_type_lst(args.condition_number_lst, int)
-    args.train_subj_IDs = convert_cmd_line_str_lst_to_type_lst(args.train_subj_IDs, str)
+    args.all_subj_IDs = convert_cmd_line_str_lst_to_type_lst(args.all_subj_IDs, str)
     if args.test_subj_IDs!=[]:
         args.test_subj_IDs = convert_cmd_line_str_lst_to_type_lst(args.test_subj_IDs, str)
     #if args.sequential != False:
@@ -356,12 +351,12 @@ if __name__ == "__main__":
     print("Local batch size: {}".format(args.batch_size))
     print("Local steps: {}".format(args.local_epochs))
     print("Local learing rate: {}".format(args.local_learning_rate))
-    print("train_subj_IDs subjects: {}".format(args.train_subj_IDs))
+    print("train_subj_IDs subjects: {}".format(args.all_subj_IDs))
     print("List of all condition numbers to train over: {}".format(args.condition_number_lst))
     #print("Local learing rate decay: {}".format(args.learning_rate_decay))
     #if args.learning_rate_decay:
     #    print("Local learing rate decay gamma: {}".format(args.learning_rate_decay_gamma))
-    print("Total number of clients: {}".format(len(args.train_subj_IDs)))
+    print("Total number of clients: {}".format(len(args.all_subj_IDs)))
     print("Clients join in each round: {}".format(args.join_ratio))
     #print("Clients randomly join: {}".format(args.random_join_ratio))
     #print("Client drop rate: {}".format(args.client_drop_rate))
@@ -376,13 +371,10 @@ if __name__ == "__main__":
     #if args.privacy:
     #    print("Sigma for DP: {}".format(args.dp_sigma))
     #print("Auto break: {}".format(args.auto_break))
-    if not args.auto_break:
-        print("Global rounds: {}".format(args.global_rounds))
+    #if not args.auto_break:
+    print("Global rounds: {}".format(args.global_rounds))
     if args.device == "cuda":
         print("Cuda device id: {}".format(os.environ["CUDA_VISIBLE_DEVICES"]))
-    #print("DLG attack: {}".format(args.dlg_eval))
-    if args.dlg_eval:
-        print("DLG attack round gap: {}".format(args.dlg_gap))
     ############################################################################################################################################
     print("Total number of new clients: {}".format(len(args.new_clients_ID_lst)))
     print("Fine tuning epoches on new clients: {}".format(args.fine_tuning_epoch))

@@ -51,10 +51,6 @@ class FedAvg(Server):
                 # If seq is on but you are a static client, your model shouldn't update, thus no training
 
             self.receive_models()
-            # I'm not using dlg
-            #if self.dlg_eval and i%self.dlg_gap == 0:
-            #    print("DLG think he on the team")
-            #    self.call_dlg(i)
             self.aggregate_parameters()
 
             self.Budget.append(time.time() - s_t)
