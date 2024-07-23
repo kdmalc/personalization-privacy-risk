@@ -13,6 +13,7 @@ np.random.seed(0)
 import random
 random.seed(0)
 
+import copy
 import argparse
 import os
 import time
@@ -20,22 +21,135 @@ import warnings
 import logging
 from utils.helper_funcs import convert_cmd_line_str_lst_to_type_lst
 
-from flcore.servers.serveravg import FedAvg
-from flcore.servers.serverpFedMe import pFedMe
-from flcore.servers.serverperavg import PerAvg
-from flcore.servers.serverlocal import Local
-from flcore.servers.serverapfl import APFL
-
 from flcore.pflniid_utils.result_utils import average_data
 from flcore.pflniid_utils.mem_utils import MemReporter
 
-from models.DNN_classes import *
+from sklearn.model_selection import KFold
+from utils.server_init_models_algos import *
+from utils.emg_dataset_class import *
+
 
 logger = logging.getLogger()
 logger.setLevel(logging.ERROR)
 
 warnings.simplefilter("ignore")
 torch.manual_seed(0)
+
+
+def create_user_folds(users, n_splits=5):
+    kf = KFold(n_splits=n_splits, shuffle=False)#, random_state=42)
+    user_folds = list(kf.split(users))
+    return user_folds
+
+
+def run_kfcv(args):
+    # Need to figure out file saving since it is running 5 times... does it overwrite? 
+    # Maybe times is for statistics/repeatability and not just PFL... double check what it is doing and how they used it...
+
+    time_list = []
+    reporter = MemReporter()
+
+    # TODO: Wait why do I need this up here at all...
+    #server = init_algo(args)
+
+    user_IDs = args.all_subj_IDs
+    user_folds = create_user_folds(user_IDs, args.num_kfold_splits)
+    
+    cv_results = []
+    
+    for fold, (train_idx, val_idx) in enumerate(user_folds):
+        print(f"Fold {fold + 1}/{args.num_kfold_splits}")
+
+        #if fold!=0:
+        #    # For the first run (0), server is already set above
+        #    server = init_algo(args)
+        args.model = init_model(args)
+        server = init_algo(args)
+        
+        # Set training and validation users
+        train_user_IDs = [user_IDs[i] for i in train_idx]
+        val_user_IDs = [user_IDs[i] for i in val_idx]
+        server.train_subj_IDs = train_user_IDs
+        server.test_subj_IDs = val_user_IDs
+
+        val_dataset_lst = []
+        # TODO: Need to get the actual client objects...
+        for val_cli_subjID in val_user_IDs:
+            val_cli = server.dict_map_subjID_to_clientobj[val_cli_subjID]
+            val_dataset_lst.append(val_cli.load_test_data())
+        
+        server.testloader = create_unified_fold_test_dataloader(val_dataset_lst, server.batch_size)
+        assert(len(server.testloader)!=0)
+        for cli_ID in server.all_subj_IDs:
+            cli_obj = server.dict_map_subjID_to_clientobj[cli_ID]
+            cli_obj.testloader = copy.deepcopy(server.testloader) # Not sure if a copy is necessary...
+        
+        # Initialize a new model for each fold
+        # RETURNS a fresh model object for args.model!
+        #args.model = init_model(args)
+
+        # args.times=1 for now... I'm not using this loop at all actually so I removed it...
+        #for i in range(args.prev, args.times):
+        #    print(f"\n============= Running time: {i}th =============")
+        print(f"\n============= STARTING NEW TRIAL =============")
+        start = time.time()
+        print(args.model)
+
+        # TODO: Remove entirely? Exists above...
+        # select algorithm
+        # RETURNS server obj!
+        #if fold!=0:
+        #    server = init_algo(args)
+
+        server.train()
+        time_list.append(time.time()-start)
+
+        server.plot_results()
+        print(f"\nAverage time cost: {round(np.average(time_list), 2)}s.")
+    
+    mean_cv_loss = np.mean(cv_results)
+    std_cv_loss = np.std(cv_results)
+    print(f"Cross-validation results: {mean_cv_loss:.4f} (+/- {std_cv_loss:.4f})")
+      
+    # Global average
+    ## Not sure if it should be running this at all, I think the average is already done above?
+    #if args.algorithm != "Local":
+    #    average_data(server.trial_result_path, dataset=args.dataset, algorithm=args.algorithm, goal=args.goal, times=args.times)
+
+    print("All done!")
+    reporter.report()
+    return server, cv_results, mean_cv_loss, std_cv_loss
+
+
+def collect_metrics(self):
+    '''Not integrated yet... not sure what else needs to be done'''
+
+    ###############################
+    # Idk if this part works... should get subsumed (and ideally not used) by Seq anyways...
+    if self.eval_new_clients and self.num_new_clients > 0:
+        self.fine_tuning_new_clients()
+        return self.test_metrics_new_clients() #collect_metrics_new_clients
+    ###############################
+    
+    train_losses = []
+    test_losses = []  # I dont think this should be here... 
+    num_samples = []
+    num_train_iterations = []
+    
+    for c in self.clients:
+        client_train_loss, client_test_loss, ns, nti = c.get_metrics()
+        train_losses.append(client_train_loss)
+        test_losses.append(client_test_loss)
+        num_samples.append(ns)
+        num_train_iterations.append(nti)
+    
+    ids = [c.id for c in self.clients]
+    
+    # Calculate average losses
+    avg_train_loss = sum([tl * ns for tl, ns in zip(train_losses, num_samples)]) / sum(num_samples)
+    avg_test_loss = sum([tl * ns for tl, ns in zip(test_losses, num_samples)]) / sum(num_samples)
+    
+    return ids, num_samples, num_train_iterations, train_losses, test_losses, avg_train_loss, avg_test_loss
 
 
 def run(args):
@@ -99,21 +213,6 @@ def run(args):
     if args.algorithm != "Local":
         average_data(server.trial_result_path, dataset=args.dataset, algorithm=args.algorithm, goal=args.goal, times=args.times)
         # Not super sure what "times" is, by default it is 1. Assuming it runs the process multiple times to average out the stochasticity?
-
-    # Idk why I was printing this...  
-    #print("Server's round, rs_train_loss, rs_test_loss (averaged over clients): ")
-    #print(server.rs_train_loss)  # I think this is a list...
-    #print("Server's rs_test_loss (averaged over clients): ")
-    #print(server.rs_test_loss)
-    #assert( len(server.rs_train_loss) == len(server.rs_test_loss))
-    #if args.run_train_metrics:
-    #    for i in range(len(server.rs_train_loss)):
-    #        print(f"Round {i}, Train Loss: {server.rs_train_loss[i]:0.5f}, Test Loss: {server.rs_test_loss[i]:0.5f}")
-    #        if i==(len(server.rs_train_loss)-1):
-    #            print(f"Final eval ({i+1}), Test Loss: {server.rs_test_loss[i+1]:0.5f}")
-    #else:
-    #    for i in range(len(server.rs_test_loss)):
-    #        print(f"Round {i}, Test Loss: {server.rs_test_loss[i]:0.5f}")
 
     print("All done!")
     reporter.report()
@@ -399,7 +498,8 @@ if __name__ == "__main__":
     print(f"YOU ARE RUNNING -{args.algorithm}- ALGORITHM")
 
     if args.run:
-        server_obj = run(args)
+        #server_obj = run(args)
+        server_obj = run_kfcv(args)
     
     # print(prof.key_averages().table(sort_by="cpu_time_total", row_limit=20))
     # print(f"\nTotal time cost: {round(time.time()-total_start, 2)}s.")

@@ -10,17 +10,18 @@ from flcore.servers.serverbase import Server
 class FedAvg(Server):
     def __init__(self, args, times=1):
         super().__init__(args, times=1)
+        print("SERVERAVG")
 
         # select slow clients
         #print("Serveravg init(): set_slow_clients()")
-        self.set_slow_clients()
+        self.set_slow_clients() # Not using this...
         self.set_clients(clientAVG)
         print(f"Serveravg init(): set_clients() --> set {len(self.clients)} clients")
         print(f"\nJoin ratio / total clients: {self.join_ratio} / {self.num_clients}")
         print("Finished creating server and clients.")
 
         # self.load_model()
-        self.Budget = []
+        self.Budget = [] # Not using this?
 
 
     def train(self):
@@ -56,8 +57,8 @@ class FedAvg(Server):
             self.Budget.append(time.time() - s_t)
             print('-'*25, 'time cost', '-'*25, self.Budget[-1])
 
-            if self.auto_break and self.check_done(acc_lss=[self.rs_test_acc], top_cnt=self.top_cnt):
-                break
+            #if self.auto_break and self.check_done(acc_lss=[self.rs_test_acc], top_cnt=self.top_cnt):
+            #    break
 
         # This ought to be replaced when/if eval_new_clients is integrated
         self.evaluate(train=False, test=True)

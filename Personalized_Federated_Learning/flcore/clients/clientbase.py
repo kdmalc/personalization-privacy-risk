@@ -4,7 +4,7 @@ import copy
 import torch
 import torch.nn as nn
 import numpy as np
-import random
+#import random
 import os
 from torch.utils.data import DataLoader
 
@@ -12,7 +12,6 @@ from sklearn.decomposition import PCA
 from utils.processing_funcs import normalize_tensor
 from utils.custom_loss_class import CPHSLoss
 from utils.emg_dataset_class import *
-
 
 #https://www.youtube.com/watch?v=3GVUzwXXihs
 #^ Very helpful video about samplers and getting data from DataLoaders
@@ -92,13 +91,11 @@ class Client(object):
         self.last_global_round = 0
 
         # Testing
-        self.test_split_each_update = args.test_split_each_update
-        self.test_subj_IDs = args.test_subj_IDs
-        self.test_split_fraction = args.test_split_fraction
+        self.test_split_each_update = args.test_split_each_update # Not used...
+        self.test_subj_IDs = args.test_subj_IDs # Uhhh is this even used rn...
+        self.test_split_fraction = args.test_split_fraction # Not used...
         self.use_kfold_crossval = args.use_kfold_crossval
-        self.num_kfolds = args.num_kfold_splits
-        #self.test_split_fraction = args.test_split_fraction
-        #self.test_split_each_update = args.test_split_each_update
+        self.num_kfolds = args.num_kfold_splits # Does clientbase need this...
 
         self.condition_number_lst = args.condition_number_lst
         if condition_number!=None:
@@ -120,7 +117,7 @@ class Client(object):
         self.cost_func_comps_log = []
         self.gradient_norm_log = []
         #self.running_epoch_loss = []
-        self.testing_clients = []
+        self.testing_clients = [] #??? Why does clientbase have this...
 
         if args.optimizer_str.upper() == "ADAM":
             self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.learning_rate)
@@ -336,7 +333,7 @@ class Client(object):
         self.cond_labels_npy = labels_npy[self.condition_number,starting_update_idx:self.final_idx,:]
         # Split data into train and test sets
         if self.use_kfold_crossval:
-            # Uhhhh do nothing? Not sure where I'm putting the actual kfold division code...
+            # Just set the training data to the full client dataset. KFold happens outside this code...
             ## It's gotta be outside the client so def not here
 
             # Set the number of examples (used to be done on init) --> ... THIS IS ABOUT TRAIN/TEST SPLIT
@@ -348,7 +345,7 @@ class Client(object):
             self.max_training_update_upbound = self.update_ix.index(self.update_ix[-1])  # Can I just remove this entirely... is used below...
         elif self.test_split_each_update:
             # Idk this might actually be supported just in a different function. I'm not sure. Don't plan on using it rn so who cares
-            raise ValueError("test_split_each_update not supported yet.  Idk if this is necessary to add")
+            raise ValueError("test_split_each_update not supported yet")
         else: 
             # PREVIOUSLY, BY DEFAULT I witheld the last self.test_split_fraction% of EVERY CLIENT as the test set (for that client or for all clients...)
             # I think this really ought to be named traintestsplit_upperbound...
@@ -424,7 +421,6 @@ class Client(object):
 
 
     def load_test_data(self, batch_size=None): 
-        print("\n\n\nLOADING THE TEST DATA\n\n\n")
         # Make sure this runs AFTER load_train_data so the data is already loaded in
         if self.verbose:
             print(f"Client {self.ID}: Setting Test DataLoader")
@@ -432,10 +428,17 @@ class Client(object):
             batch_size = self.batch_size
 
         if self.use_kfold_crossval:
-            pass
+            # If client is in the val split and loads its testing data, all the data is testing
+            testing_samples = self.cond_samples_npy
+            testing_labels = self.cond_labels_npy
+            # How is mine different from UserTimeSeriesDataset?
+            ## ^ Batching is built in by default for this one
+            testing_dataset_obj = UserTimeSeriesDataset(testing_samples, testing_labels, batch_size=self.batch_size)
+            return testing_dataset_obj
         elif self.test_split_each_update:
             testing_samples = self.cond_samples_npy[self.test_split_idx:,:]
             testing_labels = self.cond_labels_npy[self.test_split_idx:,:]
+
         if self.deep_bool:
             testing_dataset_obj = DeepSeqLenDataset(testing_samples, testing_labels, self.sequence_length)
         else:

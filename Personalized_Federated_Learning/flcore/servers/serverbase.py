@@ -113,6 +113,7 @@ class Server(object):
         self.condition_number_lst = args.condition_number_lst
 
         self.all_subj_IDs = args.all_subj_IDs
+        self.train_subj_IDs = None
 
         self.join_ratio = args.join_ratio
         self.random_join_ratio = args.random_join_ratio
@@ -181,10 +182,10 @@ class Server(object):
             print("ServerBase Set_Clients (SBSC) -- probably called in init() of server children classes")
         
         base_data_path = 'C:\\Users\\kdmen\\Desktop\\Research\\Data\\CPHS_EMG\\Subject_Specific_Files\\'
-        for i, train_slow, send_slow in zip(range(len(self.all_subj_IDs)), self.train_slow_clients, self.send_slow_clients):
+        #for i, train_slow, send_slow in zip(range(len(self.all_subj_IDs)), self.train_slow_clients, self.send_slow_clients):
+        for i in range(len(self.all_subj_IDs)):
             for j in self.condition_number_lst:
                 print(f"SB Set Client: iter {i}, cond number: {str(j)}: LOADING DATA: {self.all_subj_IDs[i]}")
-                #################################################################################
                 # For now, have to load the data because of how I set it up
                 # Look into changing this in the future...
                 ## This actually has to stay if I want to be able to run train/test_metrics() on the past clients
@@ -195,10 +196,9 @@ class Server(object):
                                     samples_path = base_data_path + 'S' + ID_str[-3:] + "_TrainData_8by20770by64.npy", 
                                     labels_path = base_data_path + 'S' + ID_str[-3:] + "_Labels_8by20770by2.npy", 
                                     condition_number = j-1, 
-                                    train_slow=train_slow, 
-                                    send_slow=send_slow)
+                                    train_slow=False, 
+                                    send_slow=False)
                 client.load_train_data(client_init=True) # This has to be here otherwise load_test_data() breaks...
-                #################################################################################
 
                 #if self.sequential and (self.train_subj_IDs[i] in self.static_client_IDs):  
                 # NOTE: should the above be train_subj_IDs (or its equivalent) or all_subj_IDs...
@@ -224,7 +224,13 @@ class Server(object):
                     #print()
                     # Requires full path to model (eg with extension)
                     client.load_item(model_name, full_path_to_item=path_to_trained_client_model)
+                
                 self.clients.append(client)
+
+        # Also create a mapping from subj_IDs to client objects
+        def create_client_mapping(clients):
+            return {client.ID: client for client in clients}
+        self.dict_map_subjID_to_clientobj = create_client_mapping(self.clients)
                 
 
     # random select slow clients
@@ -560,6 +566,8 @@ class Server(object):
                         ## Could maybe do this by just adding which fold it is to the save string which should be fine...
                         ### TODO: Add fold to save string
                         # TODO: Check this
+                        ## Actually I think this is completely broken...
+                        ## Made more complicated by the extra conditions (which I am not using AFAIK)
                         if name_index >= len(self.all_subj_IDs):
                             # TODO: Check this
                             name_index = len(self.all_subj_IDs) - 1  # Ensure it doesn't exceed the last index
