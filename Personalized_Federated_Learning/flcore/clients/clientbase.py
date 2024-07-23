@@ -78,9 +78,6 @@ class Client(object):
         self.lambdaE = args.lambdaE
         self.normalize_data = args.normalize_data
         self.local_round_threshold = args.local_round_threshold
-        self.test_split_fraction = args.test_split_fraction
-        self.test_split_each_update = args.test_split_each_update
-        self.test_split_users = args.test_split_users
         self.update_ix=[0,  1200,  2402,  3604,  4806,  6008,  7210,  8412,  9614, 10816, 12018, 13220, 14422, 15624, 16826, 18028, 19230, 20432, 20769]
         self.final_idx = self.update_ix[-1] # eg drop last update from consideration, stop before it
         self.learning_rate_decay = args.learning_rate_decay
@@ -93,7 +90,16 @@ class Client(object):
         self.dt = args.dt
         self.local_round = 0
         self.last_global_round = 0
-        assert (not (self.test_split_users and self.test_split_each_update)), "test_split_users and test_split_each_update cannot both be true (contradictory test conditions)"
+
+        # Testing
+        self.test_split_each_update = args.test_split_each_update
+        self.test_subj_IDs = args.test_subj_IDs
+        self.test_split_fraction = args.test_split_fraction
+        self.use_kfold_crossval = args.use_kfold_crossval
+        self.num_kfolds = args.num_kfold_splits
+        #self.test_split_fraction = args.test_split_fraction
+        #self.test_split_each_update = args.test_split_each_update
+
         self.condition_number_lst = args.condition_number_lst
         if condition_number!=None:
             self.condition_number = condition_number
@@ -329,37 +335,40 @@ class Client(object):
         self.cond_samples_npy = samples_npy[self.condition_number,starting_update_idx:self.final_idx,:]
         self.cond_labels_npy = labels_npy[self.condition_number,starting_update_idx:self.final_idx,:]
         # Split data into train and test sets
-        if self.test_split_users:
-            # NOT FINISHED YET
-            raise ValueError("test_split_users not supported yet.  Stat hetero concern")
-            # Randomly pick the test_split_fraction of users to be completely held out of training to be used for testing
-            num_test_users = round(len(self.clients)*self.test_split_fraction)
-            # Pick/sample num_test_users from self.clients to be removed and put into self.testing_clients
-            self.testing_clients = [self.clients.pop(random.randrange(len(self.clients))) for _ in range(num_test_users)]
-            # ^Hmmm this requires a full rewrite of the code... 
+        if self.use_kfold_crossval:
+            # Uhhhh do nothing? Not sure where I'm putting the actual kfold division code...
+            ## It's gotta be outside the client so def not here
+
+            # Set the number of examples (used to be done on init) --> ... THIS IS ABOUT TRAIN/TEST SPLIT
+            ## These should really be renamed num_train_samples and num_test_samples
+            self.train_samples = self.cond_samples_npy.shape[0]
+            self.test_samples = None  # TODO: Shouldnt even be computed here...
+            # Find the closest update idx (from predefined streamed batches in update_ix) to split the data at
+            #self.test_split_idx = min(self.update_ix, key=lambda x:abs(x-testsplit_upper_bound))
+            self.max_training_update_upbound = self.update_ix.index(self.update_ix[-1])  # Can I just remove this entirely... is used below...
         elif self.test_split_each_update:
             # Idk this might actually be supported just in a different function. I'm not sure. Don't plan on using it rn so who cares
             raise ValueError("test_split_each_update not supported yet.  Idk if this is necessary to add")
         else: 
-            # BY DEFAULT we are currently splitting the total dataset (eg witholding the last self.test_split_fraction% as the test set)
-            ## This obvi introduces some of its own biases...
+            # PREVIOUSLY, BY DEFAULT I witheld the last self.test_split_fraction% of EVERY CLIENT as the test set (for that client or for all clients...)
             # I think this really ought to be named traintestsplit_upperbound...
             testsplit_upper_bound = round((1-self.test_split_fraction)*(self.cond_samples_npy.shape[0]))
-        # Set the number of examples (used to be done on init) --> ... THIS IS ABOUT TRAIN/TEST SPLIT
-        self.train_samples = testsplit_upper_bound
-        self.test_samples = self.cond_samples_npy.shape[0] - testsplit_upper_bound
-        # Find the closest update idx (from predefined streamed batches in update_ix) to split the data at
-        self.test_split_idx = min(self.update_ix, key=lambda x:abs(x-testsplit_upper_bound))
-        self.max_training_update_upbound = self.update_ix.index(self.test_split_idx)
+            # Set the number of examples (used to be done on init) --> ... THIS IS ABOUT TRAIN/TEST SPLIT
+            self.train_samples = testsplit_upper_bound
+            self.test_samples = self.cond_samples_npy.shape[0] - testsplit_upper_bound
+            # Find the closest update idx (from predefined streamed batches in update_ix) to split the data at
+            self.test_split_idx = min(self.update_ix, key=lambda x:abs(x-testsplit_upper_bound))
+            self.max_training_update_upbound = self.update_ix.index(self.test_split_idx)
         
 
     def load_train_data(self, batch_size=None, eval=False, client_init=False):
         # Load full client dataasets
         if client_init:
             self._load_train_data()   # Returns nothing, sets self variables
+        
         # Do I really want this here...
         if eval==False:
-            # THIS SHOULD NOT BE UPDATED HERE LOL
+            # TODO: THIS SHOULD NOT BE UPDATED HERE LOL
             self.local_round += 1
 
             # Check if you need to advance the update
@@ -369,11 +378,12 @@ class Client(object):
                 print(f"Client {self.ID} advances to update {self.current_update} on local round {self.local_round}")
             # Slice the full client dataset based on the current update number
             if self.current_update < self.max_training_update_upbound:
-                self.update_lower_bound = self.update_ix[self.current_update]
-                self.update_upper_bound = self.update_ix[self.current_update+1]
+                # NOTE: Added the -self.update_ix[self.starting_update]
+                self.update_lower_bound = self.update_ix[self.current_update] - self.update_ix[self.starting_update]
+                self.update_upper_bound = self.update_ix[self.current_update+1] - self.update_ix[self.starting_update]
             else:
-                self.update_lower_bound = self.update_ix[self.max_training_update_upbound - 1]
-                self.update_upper_bound = self.update_ix[self.max_training_update_upbound]
+                self.update_lower_bound = self.update_ix[self.max_training_update_upbound - 1] - self.update_ix[self.starting_update]
+                self.update_upper_bound = self.update_ix[self.max_training_update_upbound] - self.update_ix[self.starting_update]
         else:
             # There is no update, so no need to update/set the self.bounds above
             pass

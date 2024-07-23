@@ -385,6 +385,7 @@ if __name__ == "__main__":
         print("Number of PCA Components Used: {}".format(args.pca_channels))
     print(f"Lambda penalty terms (F, D, E): {args.lambdaF}, {args.lambdaD}, {args.lambdaE}")
     print("Starting update: {}".format(args.starting_update))
+    # TODO: REWORK THIS!!!
     print("Testing split: {}".format(args.test_split_fraction))
     if args.dt!=1/60:
         print("dt: {}".format(args.dt))

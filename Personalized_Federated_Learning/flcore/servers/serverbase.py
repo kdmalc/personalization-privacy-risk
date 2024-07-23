@@ -57,7 +57,6 @@ class Server(object):
         self.train_slow_rate = args.train_slow_rate
         self.send_slow_rate = args.send_slow_rate
 
-
         self.new_clients_ID_lst = args.new_clients_ID_lst
         self.num_new_clients = len(self.new_clients_ID_lst)
         self.new_clients_obj_lst = []
@@ -75,7 +74,6 @@ class Server(object):
             self.deep_bool = False
         self.ndp = args.num_decimal_points
         self.global_round = 0
-        self.test_split_fraction = args.test_split_fraction
         self.debug_mode = args.debug_mode
         self.starting_update = args.starting_update
         self.global_update = args.starting_update # Where is global_update even used lol
@@ -108,14 +106,18 @@ class Server(object):
         # Testing
         self.test_split_each_update = args.test_split_each_update
         self.test_subj_IDs = args.test_subj_IDs
+        self.test_split_fraction = args.test_split_fraction
+        self.use_kfold_crossval = args.use_kfold_crossval
+        self.num_kfolds = args.num_kfold_splits
         # Trial set up
         self.condition_number_lst = args.condition_number_lst
 
         self.all_subj_IDs = args.all_subj_IDs
-        self.num_clients = 0  #len(self.train_subj_IDs) * len(self.condition_number_lst)           
 
         self.join_ratio = args.join_ratio
         self.random_join_ratio = args.random_join_ratio
+        #self.num_clients = 0  #len(self.train_subj_IDs) * len(self.condition_number_lst)  
+        self.num_clients = len(self.all_subj_IDs) // self.num_kfolds + (1 if len(self.all_subj_IDs) % self.num_kfolds > 0 else 0)
         self.num_join_clients = ceil(self.num_clients * self.join_ratio)
         assert(self.num_join_clients>=1)
         if self.num_join_clients==1:
@@ -179,32 +181,36 @@ class Server(object):
             print("ServerBase Set_Clients (SBSC) -- probably called in init() of server children classes")
         
         base_data_path = 'C:\\Users\\kdmen\\Desktop\\Research\\Data\\CPHS_EMG\\Subject_Specific_Files\\'
-        for i, train_slow, send_slow in zip(range(len(self.train_subj_IDs)), self.train_slow_clients, self.send_slow_clients):
+        for i, train_slow, send_slow in zip(range(len(self.all_subj_IDs)), self.train_slow_clients, self.send_slow_clients):
             for j in self.condition_number_lst:
-                print(f"SB Set Client: iter {i}, cond number: {str(j)}: LOADING DATA: {self.train_subj_IDs[i]}")
+                print(f"SB Set Client: iter {i}, cond number: {str(j)}: LOADING DATA: {self.all_subj_IDs[i]}")
                 #################################################################################
                 # For now, have to load the data because of how I set it up
                 # Look into changing this in the future...
                 ## This actually has to stay if I want to be able to run train/test_metrics() on the past clients
                 ## ^Since those functions require the local data in order to eval the model
+                ID_str = self.all_subj_IDs[i]
                 client = clientObj(self.args, 
-                                    ID=self.train_subj_IDs[i], 
-                                    samples_path = base_data_path + 'S' + str(self.train_numerical_subj_IDs[i]) + "_TrainData_8by20770by64.npy", 
-                                    labels_path = base_data_path + 'S' + str(self.train_numerical_subj_IDs[i]) + "_Labels_8by20770by2.npy", 
+                                    ID=ID_str, 
+                                    samples_path = base_data_path + 'S' + ID_str[-3:] + "_TrainData_8by20770by64.npy", 
+                                    labels_path = base_data_path + 'S' + ID_str[-3:] + "_Labels_8by20770by2.npy", 
                                     condition_number = j-1, 
                                     train_slow=train_slow, 
                                     send_slow=send_slow)
                 client.load_train_data(client_init=True) # This has to be here otherwise load_test_data() breaks...
                 #################################################################################
 
-                #if self.sequential and (self.train_subj_IDs[i] in self.static_client_IDs):
+                #if self.sequential and (self.train_subj_IDs[i] in self.static_client_IDs):  
+                # NOTE: should the above be train_subj_IDs (or its equivalent) or all_subj_IDs...
                 if self.sequential: # Load the prev global model for all clients actually
-                    print(f"SB Set Client: LOADING MODEL: {self.train_subj_IDs[i]}")
+                    print(f"SB Set Client: LOADING MODEL: {self.all_subj_IDs[i]}")
                     # Load the client model
                     ## This is not super robust. Assume the full path is the provided path and the file name is just the ID...
                     ### Does this need to be updated to include the file extension? Probably... .pt?
                     #path_to_trained_client_model = self.prev_model_directory + self.ID
-                    if (self.use_prev_pers_model==True) and (self.train_subj_IDs[i] in self.static_client_IDs):
+
+                    if (self.use_prev_pers_model==True) and (self.all_subj_IDs[i] in self.static_client_IDs):
+                        # NOTE: should the above be train_subj_IDs (or its equivalent) or all_subj_IDs...
                         # Then load the previous personalized model
                         # path_to_trained_client_model = self.prev_pers_model_directory + self.ID
                         # model_name = "somethingsomething_server_pers.pt" # Presumably include client ID...
@@ -458,9 +464,11 @@ class Server(object):
 
         cphs_base_str = ("\n\nSIMULATION PARAMS\n"
             f"starting_update = {self.starting_update}\n"
-            f"train_subj_IDs = {self.train_subj_IDs}\n"
+            f"all_subj_IDs = {self.all_subj_IDs}\n"
             f"condition_number_lst = {self.condition_number_lst}\n"
-            f"total effective clients = train_subj_IDs*condition_number_lst = {self.num_clients}\n"
+            f"total effective clients = {self.num_clients}\n"
+            # ^ Previously was calculated as: all_subj_IDs*condition_number_lst 
+            ## But num_clients is not calculated that way anymore......
             f"smoothbatch_boolean = {self.smoothbatch_boolean}\n"
             f"smoothbatch_learningrate = {self.smoothbatch_learningrate}\n")
 
@@ -485,6 +493,7 @@ class Server(object):
             f"(model) input_size = {self.input_size}\n"
             f"(model) output_size = {self.output_size}\n"
             "\n\nTESTING\n"
+            # REWORK THIS!!!
             f"test_split_fraction = {self.test_split_fraction}\n"
             f"test_split_each_update = {self.test_split_each_update}\n"
             f"test_split_users = {self.test_split_users}\n")
@@ -546,9 +555,16 @@ class Server(object):
                     G1 = hf.create_group('cost_func_tuples_by_client')
                     for idx, cost_func_comps in enumerate(self.cost_func_comps_log):
                         name_index = idx // len(self.condition_number_lst)
-                        if name_index >= len(self.train_subj_IDs):
-                            name_index = len(self.train_subj_IDs) - 1  # Ensure it doesn't exceed the last index
-                        name_str = self.train_subj_IDs[name_index] + "_C" + str(self.condition_number_lst[idx%len(self.condition_number_lst)])
+                        # TODO: should this be all_subj_IDs or its train equivalent? I think the train equivalent...
+                        ## TODO: Need to update all the saving regardless... am I gonna save everything from each trial/fold? Makes the most sense / easiest
+                        ## Could maybe do this by just adding which fold it is to the save string which should be fine...
+                        ### TODO: Add fold to save string
+                        # TODO: Check this
+                        if name_index >= len(self.all_subj_IDs):
+                            # TODO: Check this
+                            name_index = len(self.all_subj_IDs) - 1  # Ensure it doesn't exceed the last index
+                        # TODO: Check this
+                        name_str = self.all_subj_IDs[name_index] + "_C" + str(self.condition_number_lst[idx%len(self.condition_number_lst)])
                         G1.create_dataset(name_str, data=cost_func_comps)
 
                 if save_gradient:
@@ -556,9 +572,16 @@ class Server(object):
                     G2 = hf.create_group('gradient_norm_lists_by_client')
                     for idx, grad_norm_list in enumerate(self.gradient_norm_log):
                         name_index = idx // len(self.condition_number_lst)
-                        if name_index >= len(self.train_subj_IDs):
-                            name_index = len(self.train_subj_IDs) - 1  # Ensure it doesn't exceed the last index
-                        name_str = self.train_subj_IDs[name_index] + "_C" + str(self.condition_number_lst[idx%len(self.condition_number_lst)])
+                        # TODO: should this be all_subj_IDs or its train equivalent? I think the train equivalent...
+                        ## TODO: Need to update all the saving regardless... am I gonna save everything from each trial/fold? Makes the most sense / easiest
+                        ## Could maybe do this by just adding which fold it is to the save string which should be fine...
+                        ### TODO: Add fold to save string
+                        # TODO: Check this
+                        if name_index >= len(self.all_subj_IDs):
+                            # TODO: Check this
+                            name_index = len(self.all_subj_IDs) - 1  # Ensure it doesn't exceed the last index
+                        # TODO: Check this
+                        name_str = self.all_subj_IDs[name_index] + "_C" + str(self.condition_number_lst[idx%len(self.condition_number_lst)])
                         G2.create_dataset(name_str, data=grad_norm_list)
         else:
             print("Saving failed.")
@@ -869,10 +892,12 @@ class Server(object):
                 # Idk I guess I can keep the condition iter? Idk why I would want to turn it off other than not expecting it
                 for j in self.condition_number_lst:
                     print(f"SB Set New Client: iter iter {i}, cond number: {str(j)}")
+                    ID_str = self.all_subj_IDs[i]
                     client = clientObj(self.args, 
-                                        ID=self.train_subj_IDs[i], 
-                                        samples_path = base_data_path + 'S' + str(self.train_numerical_subj_IDs[i]) + "_TrainData_8by20770by64.npy", 
-                                        labels_path = base_data_path + 'S' + str(self.train_numerical_subj_IDs[i]) + "_Labels_8by20770by2.npy", 
+                                        ID=ID_str, 
+                                        # TODO: Update train_numerical_subj_IDs here as well
+                                        samples_path = base_data_path + 'S' + ID_str[-3:] + "_TrainData_8by20770by64.npy", 
+                                        labels_path = base_data_path + 'S' + ID_str[-3:] + "_Labels_8by20770by2.npy", 
                                         condition_number = j-1, 
                                         train_slow=False, 
                                         send_slow=False)
