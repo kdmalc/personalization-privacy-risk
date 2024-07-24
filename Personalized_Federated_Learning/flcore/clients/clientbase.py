@@ -150,7 +150,7 @@ class Client(object):
 
 
     # GOAL IS TO CONSOLIDATE EVERYTHING SHARED BETWEEN TRAIN_METRICS, TEST_METRICS, AND CPHS_TRAINING_SUBROUTINE
-    def shared_loss_calc(self, x, y, model, record_cost_func_comps=False, stream_data=True):
+    def shared_loss_calc(self, x, y, model, record_cost_func_comps=False):
         '''This simulates the data stream and then calculates the loss. DOES NOT BACKPROP'''
         if type(x) == type([]):
             x[0] = x[0].to(self.device)
@@ -161,22 +161,24 @@ class Client(object):
         #print(f"x: {torch.sum(x)}\n y: {torch.sum(y)}")
 
         # Maybe this is causing problems for some reason in testing? Idk
-        if stream_data:
-            self.simulate_data_streaming_xy(x, y, input_model=model)
+        ## Maybe try replacing self.F with a toggle for self.F vs self.F_testing...
+        ## Perhaps they share the same computational graph? ...
+        F, V, y_ref = self.simulate_data_streaming_xy(x, y, input_model=model)
 
         # D@s = predicted velocity
-        vel_pred = model(self.F)
+        vel_pred = model(F)
 
         # L2 regularization term (from CPHS formulation)
         l2_loss = 0
         for name, param in model.named_parameters():
             if 'weight' in name:
+                # Uhh should I square it here before adding or only square the sum (which is how I have it below...)
                 l2_loss += torch.norm(param, p=2)
-        t1 = self.loss_func(vel_pred, self.y_ref)
+        t1 = self.loss_func(vel_pred, y_ref)
         if type(t1)==torch.Tensor:
             t1 = t1.sum()
         t2 = self.lambdaD*(l2_loss**2)
-        t3 = self.lambdaF*(torch.linalg.matrix_norm((self.F))**2)
+        t3 = self.lambdaF*(torch.linalg.matrix_norm((F))**2)
         if type(t3)==torch.Tensor:
             t3 = t3.sum()
 
@@ -270,13 +272,13 @@ class Client(object):
         #running_num_samples += x.size(0)
 
     
-    def simulate_data_streaming_xy(self, x, y, input_model): #, test_data=False):
+    def simulate_data_streaming_xy(self, x, y, input_model):
         '''
         Input:
             x, y --> A single training example from the trainloader
 
         Output: 
-            Sets self.F, self.V, self.y_ref
+            Returns F, V, y_ref
 
         This function sets F (transformed input data) and V (Vplus used in cost func)
         Specifically: the loss function is its own class/object so it doesn't have 
@@ -301,14 +303,17 @@ class Client(object):
         else:
             s = s_normed
 
-        self.F = s[:-1,:]
+        F = s[:-1,:]
         v_actual =  input_model(s)
         # Numerical integration of v_actual to get p_actual
         p_actual = torch.cumsum(v_actual, dim=1)*self.dt
         # I don't think I actually use V later on
-        self.V = (p_reference - p_actual)*self.dt
-        self.y_ref = p_reference[:-1, :]  # To match the input
+        ## Well it's used in the cost function... and gradient I believe...
+        ### Wait does this code not even use the gradient...
+        V = (p_reference - p_actual)*self.dt
+        y_ref = p_reference[:-1, :]  # To match the input
         #^ This is used in t1 = self.loss_func(vel_pred, self.y_ref) in shared_loss_calc
+        return F, V, y_ref
 
 
     def _load_train_data(self):
@@ -390,21 +395,14 @@ class Client(object):
         training_samples = self.cond_samples_npy[self.update_lower_bound:self.update_upper_bound,:]
         training_labels = self.cond_labels_npy[self.update_lower_bound:self.update_upper_bound,:]
 
-        #print("CB: load_train_data()")
-        #print(f"training_samples.shape: {training_samples.shape}")
-        #print(f"training_labels.shape: {training_labels.shape}")
-        #print()
-
         if self.deep_bool:
             if self.sequence_length*self.batch_size > training_samples.shape[0]:
                 raise ValueError("seq_len*batch_size > num training samples: thus trainloader will be empty")
             training_dataset_obj = DeepSeqLenDataset(training_samples, training_labels, self.sequence_length)
-            #print("Size of CustomEMGDataset: ", len(training_dataset_obj))
         else:
             if self.batch_size > training_samples.shape[0]:
                 raise ValueError("bs > num training samples: thus trainloader will be empty")
             training_dataset_obj = CustomEMGDataset(training_samples, training_labels)
-            #print("Size of CustomEMGDataset: ", len(training_dataset_obj))
         
         if self.verbose:
             print(f"cb load_train_data(): Client {self.ID}: Setting Training DataLoader")
@@ -416,7 +414,6 @@ class Client(object):
             batch_size=batch_size, 
             drop_last=True,  # Yah idk if this should be true or false or if it matters...
             shuffle=False) 
-
         return dl
 
 
@@ -480,7 +477,6 @@ class Client(object):
             ^ This is probably not ideal behaviour...
 
         NOTE: Should explicitly add a toggle for repeat testing (on the same dataset) using the global model or whatever, so it doesn't re-do val testing...
-        BUG: Should only load the test_data and create the test_dataloader once (eg outside of this function... in the k fold loop)
         '''
 
         if model_obj != None:
@@ -488,12 +484,9 @@ class Client(object):
         elif saved_model_path != None:
             eval_model = self.load_model(saved_model_path)
         else:
-            # USING THE CLIENT'S LOCAL(/PERS) MODEL
+            # USING THE CLIENT'S LOCAL(/PERS) MODEL, NOT THE GLOBAL MODEL!
             eval_model = self.model
         eval_model.to(self.device)
-
-        # Should I be simulate streaming with the testing data... 
-        ## Simulating streaming happens in shared_loss_calc below (for now)
         eval_model.eval()
 
         total_loss = 0
@@ -508,12 +501,10 @@ class Client(object):
                     x = x.to(self.device)
                 y = y.to(self.device)
 
-                loss, num_samples = self.shared_loss_calc(x, y, eval_model)#, stream_data=False)
-                # Breaks if stream_data is False (F does not get set...)
+                loss, num_samples = self.shared_loss_calc(x, y, eval_model)
                 # I think an issue could be if after streaming the values are getting "double-dipped"
                 ## Eg the training values of F, V, y_ref are geting used for testing as well...?
-                ### seems like that shouldn't be happening tho
-                # The testing data ought to be getting streamed tho, if only to normalize, to say nothing of setting F and V and such
+                ### Or rather the computational graph (gradient/history) remains and is what is getting double-dipped...
 
                 total_loss += loss.item() * num_samples
                 total_samples += num_samples
@@ -535,16 +526,14 @@ class Client(object):
             eval_model = self.load_model(saved_model_path)
         else:
             eval_model = self.model
-        #eval_model.to(self.device) # Idk if this needs to be run or not...
+        #eval_model.to(self.device)
         eval_model.eval()
 
+        # TODO Fix this inefficiency!
         # ITS GOTTA BE SUPER INEFFICIENT TO RECREATE A NEW TL FOR EACH CLIENT EACH ROUND FOR TRAIN EVAL...
         ## How do I just reuse the existing training loader from the streamed training data?
         trainloader = self.load_train_data(eval=True)
         assert(len(trainloader)!=0)
-
-        #self.simulate_data_streaming(trainloader) 
-        # ^^ this is currently called in shared_loss_calc 12/14/23
 
         train_num = 0
         losses = 0
@@ -552,9 +541,6 @@ class Client(object):
             print(f'cb Client {self.ID} train_metrics()')
         with torch.no_grad():
             for i, (x, y) in enumerate(trainloader):
-                #if self.verbose:
-                #    print(f"batch {i}, loss {test_loss:0,.5f}")
-
                 if type(x) == type([]):
                     x[0] = x[0].to(self.device)
                 else:
@@ -563,18 +549,9 @@ class Client(object):
 
                 #print(f"TRAIN_METRICS, USER {self.ID}")
                 loss, num_samples = self.shared_loss_calc(x, y, eval_model)
-
-                ############################################################################
-                #if self.verbose:
-                #    print(f"batch {i}, loss {loss:0,.5f}")
                 train_num += num_samples
-                #print(f"CB train_metrics {i}::: y.shape: {y.shape}, x.shape: {x.shape}")
                 losses += loss.item() * num_samples
-            #print()
 
-        # self.model.cpu()
-        # self.save_model(self.model, 'model')
-        #print(f"losses: {losses}, train_num: {train_num}")
         return losses, train_num
 
     

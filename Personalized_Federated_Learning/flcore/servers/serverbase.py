@@ -139,8 +139,6 @@ class Server(object):
         self.unseen_live_rs_test_loss = []
         self.unseen_live_client_IDs = copy.deepcopy(self.live_client_IDs_queue)
         self.prev_live_client_IDs = []
-        # Idk if I care about the train loss  
-        #self.rs_train_loss = []
         #self.prev_pers_model_directory = args.prev_pers_model_directory
 
         # Dataset is one of the preceeding directory names
@@ -499,10 +497,12 @@ class Server(object):
             f"(model) input_size = {self.input_size}\n"
             f"(model) output_size = {self.output_size}\n"
             "\n\nTESTING\n"
-            # REWORK THIS!!!
-            f"test_split_fraction = {self.test_split_fraction}\n"
             f"test_split_each_update = {self.test_split_each_update}\n"
-            f"test_split_users = {self.test_split_users}\n")
+            #f"test_subj_IDs = {self.test_subj_IDs}\n"  # This might not be behaving correctly, it isn't used with kfcv anyways...
+            f"test_split_fraction = {self.test_split_fraction}\n"
+            f"use_kfold_crossval = {self.use_kfold_crossval}\n"
+            f"num_kfolds = {self.num_kfolds}\n")
+
         
         with open(self.paramtxt_file_path, 'w') as file:
             file.write(param_log_str)
@@ -596,7 +596,7 @@ class Server(object):
 
 
     def save_fold_results(self):
-        # NOTE: FINISH ME
+        # TODO: FINISH ME
         raise ValueError("save_fold_results NEVER FINISHED")
 
         #self.result_path = "\\results\\" 
@@ -643,6 +643,9 @@ class Server(object):
 
 
     def test_metrics(self):
+
+        tsmt_start = time.time()
+
         ###############################
         # Idk if this part works... should get subsumed (and ideally not used) by Seq anyways...
         if self.eval_new_clients and self.num_new_clients > 0:
@@ -666,7 +669,6 @@ class Server(object):
             unseen_live_num_samples = []
             unseen_live_IDs = []
 
-        #for c in self.clients:
         for i, c in enumerate(self.clients):
             #print(f"TEST_METRICS, USER {c.ID}")
             #if (self.sequential and c.ID in self.static_client_IDs):
@@ -703,15 +705,13 @@ class Server(object):
                 unseen_live_loss.append(tl*1.0)
                 unseen_live_num_samples.append(ns)
                 unseen_live_IDs.append(c.ID)
-            elif self.sequential and c.ID in self.live_client_IDs_queue:
-                # Eg it hasn't been trained/called yet
-                ## Uh should this be pass or raise...
-                pass
-        #IDs = [c.ID for c in self.clients]
         if self.sequential:
             seq_metrics = [curr_live_loss, curr_live_num_samples, curr_live_IDs, prev_live_loss, prev_live_num_samples, prev_live_IDs, unseen_live_loss, unseen_live_num_samples, unseen_live_IDs]
         else:
             seq_metrics = None
+
+        print(f"Server test metrics finished in {tsmt_start - time.time()}")
+
         # This also ought to be flipped around...
         return IDs, num_samples, tot_loss, seq_metrics
 
@@ -724,6 +724,8 @@ class Server(object):
         This is a problem that is unaddressed with test_metrics() as well...
         '''
         
+        trmt_start = time.time()
+
         if self.eval_new_clients and self.num_new_clients > 0:
             # if eval new client AND we actually have new clients, then return this
             # maps to depreceated values I think...
@@ -785,6 +787,9 @@ class Server(object):
             seq_metrics = [curr_live_loss, curr_live_num_samples, curr_live_IDs, prev_live_loss, prev_live_num_samples, prev_live_IDs]
         else:
             seq_metrics = None
+
+        print(f"Server train metrics finished in {trmt_start - time.time()}")
+
         # This really ought to be flipped to loss, ns, IDs ...
         return IDs, num_samples, tot_loss, seq_metrics
 
@@ -815,7 +820,6 @@ class Server(object):
             test_samples_per_round = stats[1]
 
             if acc == None:  # acc will always be None for regression
-                #avg_test_loss = sum(test_loss)/len(test_loss)
                 avg_test_loss = sum(test_loss)/sum(test_samples_per_round)
                 self.rs_test_loss.append(avg_test_loss)
 
@@ -903,7 +907,6 @@ class Server(object):
                     ID_str = self.all_subj_IDs[i]
                     client = clientObj(self.args, 
                                         ID=ID_str, 
-                                        # TODO: Update train_numerical_subj_IDs here as well
                                         samples_path = base_data_path + 'S' + ID_str[-3:] + "_TrainData_8by20770by64.npy", 
                                         labels_path = base_data_path + 'S' + ID_str[-3:] + "_Labels_8by20770by2.npy", 
                                         condition_number = j-1, 
@@ -938,7 +941,10 @@ class Server(object):
 
         return IDs, num_samples, tot_loss
 
-    def plot_results(self, plot_train=True, plot_test=True, plot_seq=True, my_title=None):
+    def plot_results(self, plot_this_vec=None, plot_train=True, plot_test=True, plot_seq=True, my_title=None):
+        if plot_this_vec is not None:
+            raise ValueError("plot_this_vec is not supported yet")
+
         if self.algorithm.upper() == 'LOCAL':
             #self.clii_on_clij_loss --> 14x14xR (R is number of global rounds)
             # I need to reduce this matrix down to 1x1x(r in R % ccm == 0)

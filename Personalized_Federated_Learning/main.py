@@ -110,6 +110,7 @@ def run_kfcv(args):
     mean_cv_loss = np.mean(cv_results)
     std_cv_loss = np.std(cv_results)
     print(f"Cross-validation results: {mean_cv_loss:.4f} (+/- {std_cv_loss:.4f})")
+    server.plot_results(plot_this_vec=mean_cv_loss, my_title="Mean K-Fold Cross Val Train And Test Loss")
       
     # Global average
     ## Not sure if it should be running this at all, I think the average is already done above?
@@ -121,38 +122,8 @@ def run_kfcv(args):
     return server, cv_results, mean_cv_loss, std_cv_loss
 
 
-def collect_metrics(self):
-    '''Not integrated yet... not sure what else needs to be done'''
-
-    ###############################
-    # Idk if this part works... should get subsumed (and ideally not used) by Seq anyways...
-    if self.eval_new_clients and self.num_new_clients > 0:
-        self.fine_tuning_new_clients()
-        return self.test_metrics_new_clients() #collect_metrics_new_clients
-    ###############################
-    
-    train_losses = []
-    test_losses = []  # I dont think this should be here... 
-    num_samples = []
-    num_train_iterations = []
-    
-    for c in self.clients:
-        client_train_loss, client_test_loss, ns, nti = c.get_metrics()
-        train_losses.append(client_train_loss)
-        test_losses.append(client_test_loss)
-        num_samples.append(ns)
-        num_train_iterations.append(nti)
-    
-    ids = [c.id for c in self.clients]
-    
-    # Calculate average losses
-    avg_train_loss = sum([tl * ns for tl, ns in zip(train_losses, num_samples)]) / sum(num_samples)
-    avg_test_loss = sum([tl * ns for tl, ns in zip(test_losses, num_samples)]) / sum(num_samples)
-    
-    return ids, num_samples, num_train_iterations, train_losses, test_losses, avg_train_loss, avg_test_loss
-
-
 def run(args):
+    # Old non k fold version. Not sure if it is compatible with the current code...
     time_list = []
     reporter = MemReporter()
 
@@ -237,7 +208,7 @@ def parse_args():
     # For non-deep keep 1202: --> Idk if this is necessary actually, I think it will work regardless
     parser.add_argument('-lr', "--local_learning_rate", type=float, default=0.1,
                         help="Local learning rate")
-    parser.add_argument('-gr', "--global_rounds", type=int, default=50)  # KAI: Originally was 2000
+    parser.add_argument('-gr', "--global_rounds", type=int, default=5)  # KAI: Originally was 2000 --> That's way too much for cross val lol
     parser.add_argument('-stup', "--starting_update", type=int, default=10,
                         help="Which update to start on (for CPHS Simulation). Use 0 or 10.")
     parser.add_argument('-save_mdls', "--save_models", type=bool, default=False) # Uhhh what does this do...
