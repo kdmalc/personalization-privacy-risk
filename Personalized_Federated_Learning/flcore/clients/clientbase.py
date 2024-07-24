@@ -78,7 +78,7 @@ class Client(object):
         self.normalize_data = args.normalize_data
         self.local_round_threshold = args.local_round_threshold
         self.update_ix=[0,  1200,  2402,  3604,  4806,  6008,  7210,  8412,  9614, 10816, 12018, 13220, 14422, 15624, 16826, 18028, 19230, 20432, 20769]
-        self.final_idx = self.update_ix[-1] # eg drop last update from consideration, stop before it
+        self.final_idx = self.update_ix[-2] # eg drop last update from consideration, stop before it
         self.learning_rate_decay = args.learning_rate_decay
         self.learning_rate_decay_gamma = args.learning_rate_decay_gamma
         self.smoothbatch_boolean = args.smoothbatch_boolean
@@ -334,8 +334,8 @@ class Client(object):
         # Select for given condition #THIS IS THE ACTUAL TRAINING DATA AND LABELS FOR THE GIVEN TRIAL
         # THIS SHOULD ONLY APPLY TO SIMULATIONS NOT REAL TIME RUNS!
         starting_update_idx = self.update_ix[self.starting_update]
-        self.cond_samples_npy = samples_npy[self.condition_number,starting_update_idx:self.final_idx,:]
-        self.cond_labels_npy = labels_npy[self.condition_number,starting_update_idx:self.final_idx,:]
+        self.cond_samples_npy = samples_npy[self.condition_number, starting_update_idx:self.final_idx, :]
+        self.cond_labels_npy = labels_npy[self.condition_number, starting_update_idx:self.final_idx, :]
         # Split data into train and test sets
         if self.use_kfold_crossval:
             # Just set the training data to the full client dataset. KFold happens outside this code...
@@ -426,6 +426,8 @@ class Client(object):
 
         if self.use_kfold_crossval:
             # If client is in the val split and loads its testing data, all the data is testing
+            # cond_samples_npy already starts at starting_update and ends at final_idx
+            # Should I use a deepcopy or something so it's a different object... will this cause problems with the underlying computational graph...
             testing_samples = self.cond_samples_npy
             testing_labels = self.cond_labels_npy
             # How is mine different from UserTimeSeriesDataset?
@@ -433,8 +435,8 @@ class Client(object):
             testing_dataset_obj = UserTimeSeriesDataset(testing_samples, testing_labels, batch_size=self.batch_size)
             return testing_dataset_obj
         elif self.test_split_each_update:
-            testing_samples = self.cond_samples_npy[self.test_split_idx:,:]
-            testing_labels = self.cond_labels_npy[self.test_split_idx:,:]
+            testing_samples = self.cond_samples_npy[self.test_split_idx:self.final_idx,:]
+            testing_labels = self.cond_labels_npy[self.test_split_idx:self.final_idx,:]
 
         if self.deep_bool:
             testing_dataset_obj = DeepSeqLenDataset(testing_samples, testing_labels, self.sequence_length)

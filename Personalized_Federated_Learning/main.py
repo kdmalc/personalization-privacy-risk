@@ -65,6 +65,7 @@ def run_kfcv(args):
         #    server = init_algo(args)
         args.model = init_model(args)
         server = init_algo(args)
+        server.current_fold = fold
         
         # Set training and validation users
         train_user_IDs = [user_IDs[i] for i in train_idx]

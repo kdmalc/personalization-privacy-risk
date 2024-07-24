@@ -109,6 +109,7 @@ class Server(object):
         self.test_split_fraction = args.test_split_fraction
         self.use_kfold_crossval = args.use_kfold_crossval
         self.num_kfolds = args.num_kfold_splits
+        self.current_fold = None # This gets set in the fold loop
         # Trial set up
         self.condition_number_lst = args.condition_number_lst
 
@@ -432,7 +433,12 @@ class Server(object):
             self.model_dir_path = os.path.join(self.models_base_dir, self.dataset, self.algorithm, self.str_current_datetime)
             if not os.path.exists(self.model_dir_path):
                 os.makedirs(self.model_dir_path)
-            model_file_path = os.path.join(self.model_dir_path, self.algorithm + "_server_global.pt")
+            if self.use_kfold_crossval:
+                # TODO Generalize this if I make my own fuzzy version of kf...
+                model_name_ext = f"_server_global_kfold{self.current_fold}.pt"
+            else:
+                model_name_ext = "_server_global.pt"
+            model_file_path = os.path.join(self.model_dir_path, self.algorithm + model_name_ext)
             torch.save(self.global_model, model_file_path)
 
             # Save client's local/personalized models (local and pers are the same objects)
