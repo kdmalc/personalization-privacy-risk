@@ -37,7 +37,7 @@ torch.manual_seed(0)
 
 
 def create_user_folds(users, n_splits=5):
-    kf = KFold(n_splits=n_splits, shuffle=False)#, random_state=42)
+    kf = KFold(n_splits=n_splits, shuffle=True, random_state=42)
     user_folds = list(kf.split(users))
     return user_folds
 
@@ -49,10 +49,8 @@ def run_kfcv(args):
     time_list = []
     reporter = MemReporter()
 
-    # TODO: Wait why do I need this up here at all...
-    #server = init_algo(args)
-
     user_IDs = args.all_subj_IDs
+    # This needs double checked...
     user_folds = create_user_folds(user_IDs, args.num_kfold_splits)
     
     cv_results = []
@@ -65,7 +63,10 @@ def run_kfcv(args):
         #    server = init_algo(args)
         args.model = init_model(args)
         server = init_algo(args)
-        server.current_fold = fold
+        server.current_fold += 1
+        if fold > server.num_max_kfold_splits:
+            print(f"Max kfold ({server.num_max_kfold_splits}) has been achieved, skipping the rest of the folds for speed")
+            continue
         
         # Set training and validation users
         train_user_IDs = [user_IDs[i] for i in train_idx]
@@ -84,10 +85,6 @@ def run_kfcv(args):
         for cli_ID in server.all_subj_IDs:
             cli_obj = server.dict_map_subjID_to_clientobj[cli_ID]
             cli_obj.testloader = copy.deepcopy(server.testloader) # Not sure if a copy is necessary...
-        
-        # Initialize a new model for each fold
-        # RETURNS a fresh model object for args.model!
-        #args.model = init_model(args)
 
         # args.times=1 for now... I'm not using this loop at all actually so I removed it...
         #for i in range(args.prev, args.times):
@@ -95,12 +92,6 @@ def run_kfcv(args):
         print(f"\n============= STARTING NEW TRIAL =============")
         start = time.time()
         print(args.model)
-
-        # TODO: Remove entirely? Exists above...
-        # select algorithm
-        # RETURNS server obj!
-        #if fold!=0:
-        #    server = init_algo(args)
 
         server.train()
         time_list.append(time.time()-start)
@@ -252,6 +243,8 @@ def parse_args():
                         help="List of subject ID strings of all subjects to be set to test only")
     parser.add_argument('-nkfs', "--num_kfold_splits", type=int, default=5,
                         help="Number of K Fold for Cross Validation")
+    parser.add_argument('-maxkfs', "--num_max_kfold_splits", type=int, default=1,
+                        help="Number of K Fold for Cross Validation")
     #
     # default=str(['METACPHS_S106', 'METACPHS_S107', 'METACPHS_S108', 'METACPHS_S109', 'METACPHS_S110', 'METACPHS_S111', 'METACPHS_S112', 'METACPHS_S113', 'METACPHS_S114', 'METACPHS_S115', 'METACPHS_S116', 'METACPHS_S117', 'METACPHS_S118', 'METACPHS_S119']),
     parser.add_argument('-lcidsq', "--live_client_IDs_queue", type=str, default='[]',
@@ -336,16 +329,16 @@ def parse_args():
                         help="Penalty term for the decoder norm (interface effort)")
     parser.add_argument('-lE', "--lambdaE", type=float, default=1e-6,
                         help="Penalty term on performance error norm")
-    parser.add_argument('-sbb', "--smoothbatch_boolean", type=bool, default=False,
+    parser.add_argument('-sbb', "--smoothbatch_boolean", type=bool, default=True,
                         help="Boolean switch for whether or not to use SmoothBatch. See Madduri CPHS Paper.")
-    parser.add_argument('-sblr', "--smoothbatch_learningrate", type=float, default=0.75, #0.75 slow, 0.25 fast
+    parser.add_argument('-sblr', "--smoothbatch_learningrate", type=float, default=0.75, #0.75 is the slow condition, 0.25 is fast
                         help="Value of alpha (mixing param) for SB. Alpha=1 uses only the optimal dec, Alpha=0 uses only the previous dec")
     ##
     parser.add_argument('-device_ch', "--device_channels", type=int, default=64,
                         help="Number of recording channels with the used EMG device")
     parser.add_argument('-dt', "--dt", type=float, default=1/60,
                         help="Delta time, amount of time (sec?) between measurements")
-    parser.add_argument('-normalize_data', "--normalize_data", type=bool, default=True, # Only works when True! ... what? Maybe things won't run if False is what I meant?
+    parser.add_argument('-normalize_data', "--normalize_data", type=bool, default=True,
                         help="Normalize (actually scales...) the input EMG signals and its labels. This is good practice.")
     parser.add_argument('-debug_mode', "--debug_mode", type=bool, default=False,
                         help="Will do additional checks on loss magnitudes and such (check_loss_for_nan_inf, etc).")

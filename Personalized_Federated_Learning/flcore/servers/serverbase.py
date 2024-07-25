@@ -109,7 +109,8 @@ class Server(object):
         self.test_split_fraction = args.test_split_fraction
         self.use_kfold_crossval = args.use_kfold_crossval
         self.num_kfolds = args.num_kfold_splits
-        self.current_fold = None # This gets set in the fold loop
+        self.num_max_kfold_splits = args.num_max_kfold_splits
+        self.current_fold = 0
         # Trial set up
         self.condition_number_lst = args.condition_number_lst
 
@@ -148,7 +149,7 @@ class Server(object):
         # convert datetime obj to string
         self.str_current_datetime = str(current_datetime)
         # Get the directory of the current script
-        script_directory = os.path.dirname(os.path.abspath(__file__))[:-15]  # This returns the path to serverbase... so don't index the end of the path
+        self.script_directory = os.path.dirname(os.path.abspath(__file__))[:-15]  # This returns the path to serverbase... so don't index the end of the path
         # Specify the relative path from the script's directory
         #relative_path = os.path.join(self.result_path, self.str_current_datetime+"_"+self.algorithm)
         if self.sequential:
@@ -159,18 +160,7 @@ class Server(object):
             model_str = "LinRegr"
         else:
             model_str = self.model_str
-        relative_path = self.result_path + self.str_current_datetime + seq_str + self.algorithm + "_" + model_str + str(self.global_rounds)
-        # Combine the script's directory and the relative path to get the full path
-        #self.trial_result_path = os.path.join(script_directory, relative_path)  # No idea why this doesn't work
-        self.kfold_suffix = f"_kfold{self.current_fold}" if self.use_kfold_crossval else ""
-        self.trial_result_path = script_directory+relative_path + self.kfold_suffix
-        # Now set the file names too
-        algo = self.algorithm + "_" + self.goal# + "_" + str(self.times) 
-        self.h5_file_path = os.path.join(self.trial_result_path, "{}.h5".format(algo))
-        self.paramtxt_file_path = os.path.join(self.trial_result_path, "param_log.txt")
-
-        if not os.path.exists(self.trial_result_path):
-            os.makedirs(self.trial_result_path)
+        self.relative_path = self.result_path + self.str_current_datetime + seq_str + self.algorithm + "_" + model_str + str(self.global_rounds)
 
         self.ewc_bool = args.ewc_bool
         self.fisher_mult = args.fisher_mult
@@ -428,6 +418,16 @@ class Server(object):
     
         
     def save_results(self, personalized=False, save_cost_func_comps=False, save_gradient=False):
+        # Combine the script's directory and the relative path to get the full path
+        ## kfold_suffix must be updated since there is a new fold idx, which affects the rest of these file names...
+        self.kfold_suffix = f"_kfold{self.current_fold}" if self.use_kfold_crossval else ""
+        self.trial_result_path = self.script_directory+self.relative_path + self.kfold_suffix
+        algo = self.algorithm + "_" + self.goal# + "_" + str(self.times) 
+        self.h5_file_path = os.path.join(self.trial_result_path, "{}.h5".format(algo))
+        self.paramtxt_file_path = os.path.join(self.trial_result_path, "param_log.txt")
+        if not os.path.exists(self.trial_result_path):
+            os.makedirs(self.trial_result_path)
+
         if self.save_models==True:
             # Save Server Global Model
             self.model_dir_path = os.path.join(self.models_base_dir, self.dataset, self.algorithm, self.str_current_datetime)
@@ -504,7 +504,7 @@ class Server(object):
             f"use_kfold_crossval = {self.use_kfold_crossval}\n"
             f"num_kfolds = {self.num_kfolds}\n")
 
-        # Use 0 or 1 for kfold? I forget which it starts at... presumably 1 since it is init'd as None?
+        # current_fold=1 since fold is incremented BEFORE training/saving is completed
         if (self.use_kfold_crossval==False) or (self.use_kfold_crossval==True and self.current_fold==1):
             with open(self.paramtxt_file_path, 'w') as file:
                 file.write(param_log_str)
@@ -692,7 +692,7 @@ class Server(object):
         else:
             seq_metrics = None
 
-        print(f"Server test metrics finished in {tsmt_start - time.time()}")
+        print(f"Server test metrics finished in {time.time() - tsmt_start}")
 
         # This also ought to be flipped around...
         return IDs, num_samples, tot_loss, seq_metrics
@@ -770,7 +770,7 @@ class Server(object):
         else:
             seq_metrics = None
 
-        print(f"Server train metrics finished in {trmt_start - time.time()}")
+        print(f"Server train metrics finished in {time.time() - trmt_start}")
 
         # This really ought to be flipped to loss, ns, IDs ...
         return IDs, num_samples, tot_loss, seq_metrics
