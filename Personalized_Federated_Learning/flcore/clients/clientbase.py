@@ -427,16 +427,16 @@ class Client(object):
         if self.use_kfold_crossval:
             # If client is in the val split and loads its testing data, all the data is testing
             # cond_samples_npy already starts at starting_update and ends at final_idx
-            # Should I use a deepcopy or something so it's a different object... will this cause problems with the underlying computational graph...
+            # TODO: Should I use a deepcopy or something so it's a different object... will this cause problems with the underlying computational graph...
             testing_samples = self.cond_samples_npy
             testing_labels = self.cond_labels_npy
             # How is mine different from UserTimeSeriesDataset?
-            ## ^ Batching is built in by default for this one
+            ## ^ Batching is built in by default for this one ... not sure how batching was done with the other one then...
             testing_dataset_obj = UserTimeSeriesDataset(testing_samples, testing_labels, batch_size=self.batch_size)
             return testing_dataset_obj
         elif self.test_split_each_update:
-            testing_samples = self.cond_samples_npy[self.test_split_idx:self.final_idx,:]
-            testing_labels = self.cond_labels_npy[self.test_split_idx:self.final_idx,:]
+            testing_samples = self.cond_samples_npy[self.test_split_idx,:]
+            testing_labels = self.cond_labels_npy[self.test_split_idx,:]
 
         if self.deep_bool:
             testing_dataset_obj = DeepSeqLenDataset(testing_samples, testing_labels, self.sequence_length)

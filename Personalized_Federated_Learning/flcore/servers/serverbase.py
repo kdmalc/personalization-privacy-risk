@@ -162,7 +162,8 @@ class Server(object):
         relative_path = self.result_path + self.str_current_datetime + seq_str + self.algorithm + "_" + model_str + str(self.global_rounds)
         # Combine the script's directory and the relative path to get the full path
         #self.trial_result_path = os.path.join(script_directory, relative_path)  # No idea why this doesn't work
-        self.trial_result_path = script_directory+relative_path
+        self.kfold_suffix = f"_kfold{self.current_fold}" if self.use_kfold_crossval else ""
+        self.trial_result_path = script_directory+relative_path + self.kfold_suffix
         # Now set the file names too
         algo = self.algorithm + "_" + self.goal# + "_" + str(self.times) 
         self.h5_file_path = os.path.join(self.trial_result_path, "{}.h5".format(algo))
@@ -174,6 +175,10 @@ class Server(object):
         self.ewc_bool = args.ewc_bool
         self.fisher_mult = args.fisher_mult
         self.optimizer_str = args.optimizer_str
+
+
+    def create_client_mapping(self, clients):
+            return {client.ID: client for client in clients}
 
 
     def set_clients(self, clientObj):  
@@ -197,10 +202,9 @@ class Server(object):
                                     condition_number = j-1, 
                                     train_slow=False, 
                                     send_slow=False)
-                client.load_train_data(client_init=True) # This has to be here otherwise load_test_data() breaks...
+                client.load_train_data(client_init=True) # This has to be here otherwise load_test_data() breaks... is this still true? I think so?
 
-                #if self.sequential and (self.train_subj_IDs[i] in self.static_client_IDs):  
-                # NOTE: should the above be train_subj_IDs (or its equivalent) or all_subj_IDs...
+                #if self.sequential and (self.all_subj_IDs[i] in self.static_client_IDs):  
                 if self.sequential: # Load the prev global model for all clients actually
                     print(f"SB Set Client: LOADING MODEL: {self.all_subj_IDs[i]}")
                     # Load the client model
@@ -209,7 +213,6 @@ class Server(object):
                     #path_to_trained_client_model = self.prev_model_directory + self.ID
 
                     if (self.use_prev_pers_model==True) and (self.all_subj_IDs[i] in self.static_client_IDs):
-                        # NOTE: should the above be train_subj_IDs (or its equivalent) or all_subj_IDs...
                         # Then load the previous personalized model
                         # path_to_trained_client_model = self.prev_pers_model_directory + self.ID
                         # model_name = "somethingsomething_server_pers.pt" # Presumably include client ID...
@@ -220,16 +223,13 @@ class Server(object):
                         path_to_trained_client_model = self.prev_model_directory
                         model_name = "FedAvg_server_global.pt"
                     # Need to print whether the personalized or locally fine-tuned model was used...
-                    #print()
                     # Requires full path to model (eg with extension)
                     client.load_item(model_name, full_path_to_item=path_to_trained_client_model)
                 
                 self.clients.append(client)
 
         # Also create a mapping from subj_IDs to client objects
-        def create_client_mapping(clients):
-            return {client.ID: client for client in clients}
-        self.dict_map_subjID_to_clientobj = create_client_mapping(self.clients)
+        self.dict_map_subjID_to_clientobj = self.create_client_mapping(self.clients)
                 
 
     # random select slow clients
@@ -433,12 +433,7 @@ class Server(object):
             self.model_dir_path = os.path.join(self.models_base_dir, self.dataset, self.algorithm, self.str_current_datetime)
             if not os.path.exists(self.model_dir_path):
                 os.makedirs(self.model_dir_path)
-            if self.use_kfold_crossval:
-                # TODO Generalize this if I make my own fuzzy version of kf...
-                model_name_ext = f"_server_global_kfold{self.current_fold}.pt"
-            else:
-                model_name_ext = "_server_global.pt"
-            model_file_path = os.path.join(self.model_dir_path, self.algorithm + model_name_ext)
+            model_file_path = os.path.join(self.model_dir_path, self.algorithm + "_server_global" + self.kfold_suffix + ".pt")
             torch.save(self.global_model, model_file_path)
 
             # Save client's local/personalized models (local and pers are the same objects)
@@ -448,7 +443,7 @@ class Server(object):
                 client_algo_type = "Local"
             client_model_path = os.path.join(self.models_base_dir, self.dataset, client_algo_type, self.str_current_datetime)
             for client in self.clients:
-                client.save_item(client.model, 'local_client_model', item_path=client_model_path)
+                client.save_item(client.model, "local_client_model"+self.kfold_suffix, item_path=client_model_path)
 
             if personalized==True:
                 pers_model_file_path = os.path.join(self.model_dir_path, self.algorithm + "_client_pers_model")
@@ -456,7 +451,7 @@ class Server(object):
                     if not os.path.exists(pers_model_file_path):
                         print(f"SB pers model save made directory! {pers_model_file_path}")
                         os.makedirs(pers_model_file_path)
-                    torch.save(c.model, os.path.join(self.model_dir_path, self.algorithm + "_client_pers_model", c.ID + "_pers_model.pt"))
+                    torch.save(c.model, os.path.join(self.model_dir_path, self.algorithm + "_client_pers_model", c.ID + "_pers_model" + self.kfold_suffix + ".pt"))
 
         sequential_base_list = [
             "\n\nSEQUENTIAL\n",
@@ -509,26 +504,27 @@ class Server(object):
             f"use_kfold_crossval = {self.use_kfold_crossval}\n"
             f"num_kfolds = {self.num_kfolds}\n")
 
-        
-        with open(self.paramtxt_file_path, 'w') as file:
-            file.write(param_log_str)
-            file.write(sequential_base_str)
-            file.write(federated_base_str)
-            file.write(cphs_base_str)
-            if self.ewc_bool:
-                continual_base_str = ("\n\nCONTINUAL LEARNING PARAMS\n"
-                f"ewc_bool = {self.ewc_bool}\n"
-                f"fisher_multiplier = {self.fisher_mult}\n")
-                file.write(continual_base_str)
-            if self.deep_bool:
-                deep_base_str = ("\n\nDEEP NETWORK HYPERPARAMETERS\n"
-                    f"hidden_size = {self.hidden_size}\n"
-                    f"sequence_length = {self.sequence_length}\n")
-                file.write(deep_base_str)
-            if self.algorithm.upper()=="PERAVG" or self.algorithm=="PERFEDAVG" or self.algorithm=="PFA" or self.algorithm=="PFEDME":
-                perfedavg_param_str = ("\n\nPERFEDAVG\PFEDME PARAMS\n"
-                    f"beta = {self.beta}\n")
-                file.write(perfedavg_param_str)
+        # Use 0 or 1 for kfold? I forget which it starts at... presumably 1 since it is init'd as None?
+        if (self.use_kfold_crossval==False) or (self.use_kfold_crossval==True and self.current_fold==1):
+            with open(self.paramtxt_file_path, 'w') as file:
+                file.write(param_log_str)
+                file.write(sequential_base_str)
+                file.write(federated_base_str)
+                file.write(cphs_base_str)
+                if self.ewc_bool:
+                    continual_base_str = ("\n\nCONTINUAL LEARNING PARAMS\n"
+                    f"ewc_bool = {self.ewc_bool}\n"
+                    f"fisher_multiplier = {self.fisher_mult}\n")
+                    file.write(continual_base_str)
+                if self.deep_bool:
+                    deep_base_str = ("\n\nDEEP NETWORK HYPERPARAMETERS\n"
+                        f"hidden_size = {self.hidden_size}\n"
+                        f"sequence_length = {self.sequence_length}\n")
+                    file.write(deep_base_str)
+                if self.algorithm.upper()=="PERAVG" or self.algorithm=="PERFEDAVG" or self.algorithm=="PFA" or self.algorithm=="PFEDME":
+                    perfedavg_param_str = ("\n\nPERFEDAVG\PFEDME PARAMS\n"
+                        f"beta = {self.beta}\n")
+                    file.write(perfedavg_param_str)
 
         if (personalized==True and ((len(self.rs_test_loss_per))!=0)) or (personalized==False and ((len(self.rs_test_loss))!=0)):
             print("File path: " + self.h5_file_path)
@@ -601,40 +597,20 @@ class Server(object):
             print("Saving failed.")
 
 
-    def save_fold_results(self):
-        # TODO: FINISH ME
-        raise ValueError("save_fold_results NEVER FINISHED")
-
-        #self.result_path = "\\results\\" 
-        #relative_path = self.result_path + self.str_current_datetime + seq_str + self.algorithm + "_" + model_str + str(self.global_rounds)
-        #self.trial_result_path = script_directory+relative_path
-        # Now set the file names too
-        algo = self.algorithm + "_" + self.goal # + "_" + str(self.times) 
-        #self.h5_file_path = os.path.join(self.trial_result_path, "{}.h5".format(algo))
-        #self.paramtxt_file_path = os.path.join(self.trial_result_path, "param_log.txt")
-        #
-        # Original PFL Code
-        #algo = self.dataset + "_" + self.algorithm
-        #result_path = "../results/"
-        #if not os.path.exists(result_path):
-        #    os.makedirs(result_path)
-        #
-        if not os.path.exists(self.result_path):
-            os.makedirs(self.result_path)
-
-        #if (len(self.rs_test_acc)):
-        #    algo = algo + "_" + self.goal + "_" + str(self.times)
-        #    file_path = result_path + "{}.h5".format(algo)
-        #    print("File path: " + file_path)
-        #    with h5py.File(file_path, 'w') as hf:
-        #        hf.create_dataset('rs_test_acc', data=self.rs_test_acc)
-        #        hf.create_dataset('rs_test_auc', data=self.rs_test_auc)
-        #        hf.create_dataset('rs_train_loss', data=self.rs_train_loss)
-        group = hf.create_group('client_testing_logs')
-        for c in self.clients:
-            dataset_name = c.ID
-            data = c.client_testing_log  # Replace this with your actual data
-            group.create_dataset(dataset_name, data=data)
+    #def save_fold_results(self):
+    #    # TODO: Use this? I think the above save function can just be repurposed instead...
+    #    raise ValueError("save_fold_results NEVER FINISHED")
+    #
+    #    algo = self.algorithm + "_" + self.goal # + "_" + str(self.times) 
+    #
+    #    if not os.path.exists(self.result_path):
+    #        os.makedirs(self.result_path)
+    #
+    #    group = hf.create_group('client_testing_logs')
+    #    for c in self.clients:
+    #        dataset_name = c.ID
+    #        data = c.client_testing_log  # Replace this with your actual data
+    #        group.create_dataset(dataset_name, data=data)
 
 
     def save_item(self, item, item_name):
@@ -919,7 +895,6 @@ class Server(object):
                                         train_slow=False, 
                                         send_slow=False)
                     self.clients.append(client)
-                    #client.load_test_data(client_init=True)
 
 
     # fine-tuning on new clients
