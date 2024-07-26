@@ -105,7 +105,7 @@ def run_kfcv(args):
     std_cv_test_loss = np.std(cv_test_loss, axis=0)
     mean_cv_train_loss = np.mean(cv_train_loss, axis=0)
     std_cv_train_loss = np.std(cv_train_loss, axis=0)
-    print(f"Averaged k-fold cross-validation results: {mean_cv_test_loss:.4f} (+/- {std_cv_test_loss:.4f})")
+    print(f"Averaged k-fold cross-validation results: {mean_cv_test_loss[-1]:.4f} (+/- {std_cv_test_loss[-1]:.4f})")
     server.plot_results(plot_this_list_of_vecs=[mean_cv_test_loss, mean_cv_train_loss], list_of_labels=['test', 'train'], my_title="Mean K-Fold Cross Val Train And Test Loss")
       
     # Global average

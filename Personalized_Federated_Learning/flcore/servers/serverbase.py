@@ -923,50 +923,58 @@ class Server(object):
         return IDs, num_samples, tot_loss
 
     def plot_results(self, plot_this_list_of_vecs=None, list_of_labels=None, plot_train=True, plot_test=True, plot_seq=True, my_title=None):
-        if plot_this_vec is not None:
-            # TODO: Finish this
-            raise ValueError("plot_this_vec is not supported yet")
-
-        if self.algorithm.upper() == 'LOCAL':
-            #self.clii_on_clij_loss --> 14x14xR (R is number of global rounds)
-            # I need to reduce this matrix down to 1x1x(r in R % ccm == 0)
-            # First, we only need the diagonal rows, as this is where the averages should be saved
-            avg_cc_nestedlst = [[] for _ in range(len(self.clients))]
-            for i in range(len(self.clients)):
-                for j in range(self.global_rounds):
-                    if j%self.cross_client_modulus==0:
-                        # ... why are all avg_cc_nestedlst entries the same......
-                        avg_cc_nestedlst[i].append(self.clii_on_clij_loss[i, i, j])
-            # Now, we need to extract every rth value, where r is set directly by ccm
-            ## Should be easy to do by filter...
-            # Make an x_axis determined by ccm:
-            spaced_xs = list(range(0, self.global_rounds, self.cross_client_modulus))
-            local_x_axis = [int(ele) for ele in spaced_xs]
-            for i in range(len(self.clients)):
-                # Fix this label... switch to subjectID
-                plt.plot(local_x_axis, avg_cc_nestedlst[i], label=self.clients[i].ID)
+        # Apparently this hasn't run yet? ...
+        ## kfold_suffix must be updated since there is a new fold idx, which affects the rest of these file names...
+        self.kfold_suffix = f"_kfold{self.current_fold}" if self.use_kfold_crossval else ""
+        self.trial_result_path = self.script_directory+self.relative_path + self.kfold_suffix
+        if not os.path.exists(self.trial_result_path):
+            os.makedirs(self.trial_result_path)
+        
+        if plot_this_list_of_vecs is not None and list_of_labels is not None:
+            for vec, vec_label in zip(plot_this_list_of_vecs, list_of_labels):
+                plt.plot(range(len(vec)), vec, label=vec_label)
         else:
-            if plot_test:
-                plt.plot(range(len(self.rs_test_loss)), self.rs_test_loss, label='Test')
-            if plot_train:
-                plt.plot(range(len(self.rs_train_loss)), self.rs_train_loss, label='Train')
-        if plot_seq==True and self.sequential==True:
-            # cl should be the same length
-            ## Yah I have no idea why I need/have an offset here, it should always be being written to...
-            cl_offset_diff = len(self.rs_test_loss) - len(self.curr_live_rs_test_loss)
-            cl_x_axis = np.array(range(len(self.curr_live_rs_test_loss))) + cl_offset_diff
+            if self.algorithm.upper() == 'LOCAL':
+                #self.clii_on_clij_loss --> 14x14xR (R is number of global rounds)
+                # I need to reduce this matrix down to 1x1x(r in R % ccm == 0)
+                # First, we only need the diagonal rows, as this is where the averages should be saved
+                avg_cc_nestedlst = [[] for _ in range(len(self.clients))]
+                for i in range(len(self.clients)):
+                    for j in range(self.global_rounds):
+                        if j%self.cross_client_modulus==0:
+                            # ... why are all avg_cc_nestedlst entries the same......
+                            avg_cc_nestedlst[i].append(self.clii_on_clij_loss[i, i, j])
+                # Now, we need to extract every rth value, where r is set directly by ccm
+                ## Should be easy to do by filter...
+                # Make an x_axis determined by ccm:
+                spaced_xs = list(range(0, self.global_rounds, self.cross_client_modulus))
+                local_x_axis = [int(ele) for ele in spaced_xs]
+                for i in range(len(self.clients)):
+                    # Fix this label... switch to subjectID
+                    plt.plot(local_x_axis, avg_cc_nestedlst[i], label=self.clients[i].ID)
+            else:
+                if plot_test:
+                    plt.plot(range(len(self.rs_test_loss)), self.rs_test_loss, label='Test')
+                if plot_train:
+                    plt.plot(range(len(self.rs_train_loss)), self.rs_train_loss, label='Train')
+            if plot_seq==True and self.sequential==True:
+                # cl should be the same length
+                ## Yah I have no idea why I need/have an offset here, it should always be being written to...
+                cl_offset_diff = len(self.rs_test_loss) - len(self.curr_live_rs_test_loss)
+                cl_x_axis = np.array(range(len(self.curr_live_rs_test_loss))) + cl_offset_diff
 
-            # pl should start late tho, I believe
-            pl_offset_diff = len(self.rs_test_loss) - len(self.prev_live_rs_test_loss)
-            pl_x_axis = np.array(range(len(self.prev_live_rs_test_loss))) + pl_offset_diff
+                # pl should start late tho, I believe
+                pl_offset_diff = len(self.rs_test_loss) - len(self.prev_live_rs_test_loss)
+                pl_x_axis = np.array(range(len(self.prev_live_rs_test_loss))) + pl_offset_diff
 
-            # ul should be shorter but it just isn't written to at the end I think? 
-            ## So theoretically I shoudln't have to do anything at all here...
-            ul_x_axis = np.array(range(len(self.unseen_live_rs_test_loss)))
+                # ul should be shorter but it just isn't written to at the end I think? 
+                ## So theoretically I shoudln't have to do anything at all here...
+                ul_x_axis = np.array(range(len(self.unseen_live_rs_test_loss)))
 
-            plt.plot(cl_x_axis, self.curr_live_rs_test_loss, label='Current Testing')
-            plt.plot(pl_x_axis, self.prev_live_rs_test_loss, label='Previous Testing')#, width=5, alpha=0.5)
-            plt.plot(ul_x_axis, self.unseen_live_rs_test_loss, label='Unseen Testing')
+                plt.plot(cl_x_axis, self.curr_live_rs_test_loss, label='Current Testing')
+                plt.plot(pl_x_axis, self.prev_live_rs_test_loss, label='Previous Testing')#, width=5, alpha=0.5)
+                plt.plot(ul_x_axis, self.unseen_live_rs_test_loss, label='Unseen Testing')
+
         if my_title is None:
             plt.title("Train/test loss")
         else:
