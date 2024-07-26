@@ -36,7 +36,7 @@ class clientAVG(Client):
                     starting_weights[name] = param.data.clone()
         for epoch in range(self.local_epochs):
             for step in range(self.num_gradient_steps):
-                # Currently, each tl has 1200 samples [eg 1 update] (1/13/24)
+                # Currently, each tl has 1200 (or 1202...) samples [eg 1 update] (1/13/24)
                 for i, (x, y) in enumerate(trainloader):
                     if self.verbose:
                         print(f"Epoch {epoch}, grad step {step}, batch {i}")
@@ -48,15 +48,8 @@ class clientAVG(Client):
                     if param.requires_grad:
                         param.data = self.smoothbatch_learningrate*starting_weights[name] + (1 - self.smoothbatch_learningrate)*param.data
 
-
-        # self.model.cpu()
-
         if self.learning_rate_decay:
             self.learning_rate_scheduler.step()
 
         self.train_time_cost['num_rounds'] += 1
         self.train_time_cost['total_cost'] += time.time() - start_time
-
-        #if self.privacy:
-        #    eps, DELTA = get_dp_params(privacy_engine)
-        #    print(f"Client {self.ID}", f"epsilon = {eps:.2f}, sigma = {DELTA}")

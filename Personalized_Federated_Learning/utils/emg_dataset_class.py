@@ -4,22 +4,23 @@ from torch.utils.data import Dataset, DataLoader, ConcatDataset
 
 
 class UserTimeSeriesDataset(Dataset):
-    def __init__(self, data, labels, batch_size=32):
+    def __init__(self, data, labels):#, batch_size=32):
         self.data = torch.FloatTensor(data)
         self.labels = torch.FloatTensor(labels)
-        self.batch_size = batch_size
+        #self.batch_size = batch_size
 
     def __len__(self):
-        return len(self.data) - self.batch_size + 1
+        return len(self.data)# - self.batch_size + 1
 
     def __getitem__(self, idx):
-        return self.data[idx:idx+self.batch_size], self.labels[idx:idx+self.batch_size]
+        #return self.data[idx:idx+self.batch_size], self.labels[idx:idx+self.batch_size]
+        return self.data[idx], self.labels[idx]
 
 
 def create_unified_fold_test_dataloader(user_dataset_lst, batch_size):
-            combined_dataset = ConcatDataset(user_dataset_lst)
-            dataloader = DataLoader(combined_dataset, batch_size=batch_size, shuffle=False, drop_last=True)
-            return dataloader
+    combined_dataset = ConcatDataset(user_dataset_lst)
+    dataloader = DataLoader(combined_dataset, batch_size=batch_size, shuffle=False, drop_last=True)
+    return dataloader
 
 # Custom Dataset Class
 ## Needs ATLEAST 3 class methods

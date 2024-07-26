@@ -75,16 +75,15 @@ def run_kfcv(args):
         server.test_subj_IDs = val_user_IDs
 
         val_dataset_lst = []
-        # TODO: Need to get the actual client objects...
         for val_cli_subjID in val_user_IDs:
             val_cli = server.dict_map_subjID_to_clientobj[val_cli_subjID]
             val_dataset_lst.append(val_cli.load_test_data())
         
-        server.testloader = create_unified_fold_test_dataloader(val_dataset_lst, server.batch_size)
-        assert(len(server.testloader)!=0)
+        testloader = create_unified_fold_test_dataloader(val_dataset_lst, server.batch_size)
+        assert(len(testloader)!=0)
         for cli_ID in server.all_subj_IDs:
             cli_obj = server.dict_map_subjID_to_clientobj[cli_ID]
-            cli_obj.testloader = copy.deepcopy(server.testloader) # Not sure if a copy is necessary...
+            cli_obj.testloader = copy.deepcopy(testloader)
 
         # args.times=1 for now... I'm not using this loop at all actually so I removed it...
         #for i in range(args.prev, args.times):
@@ -96,7 +95,7 @@ def run_kfcv(args):
         server.train()
         time_list.append(time.time()-start)
 
-        server.plot_results()
+        #server.plot_results()
         print(f"\nAverage time cost: {round(np.average(time_list), 2)}s.")
     
     mean_cv_loss = np.mean(cv_results)

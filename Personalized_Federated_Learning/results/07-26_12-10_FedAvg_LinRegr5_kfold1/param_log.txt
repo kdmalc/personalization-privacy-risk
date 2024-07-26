@@ -41,5 +41,5 @@ starting_update = 10
 all_subj_IDs = ['METACPHS_S106', 'METACPHS_S107', 'METACPHS_S108', 'METACPHS_S109', 'METACPHS_S110', 'METACPHS_S111', 'METACPHS_S112', 'METACPHS_S113', 'METACPHS_S114', 'METACPHS_S115', 'METACPHS_S116', 'METACPHS_S117', 'METACPHS_S118', 'METACPHS_S119']
 condition_number_lst = [3]
 total effective clients = 3
-smoothbatch_boolean = False
+smoothbatch_boolean = True
 smoothbatch_learningrate = 0.75

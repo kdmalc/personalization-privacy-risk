@@ -150,37 +150,31 @@ class Client(object):
 
 
     # GOAL IS TO CONSOLIDATE EVERYTHING SHARED BETWEEN TRAIN_METRICS, TEST_METRICS, AND CPHS_TRAINING_SUBROUTINE
-    def shared_loss_calc(self, x, y, model, record_cost_func_comps=False):
+    def shared_loss_calc(self, x, y, model, train_mode=True):
         '''This simulates the data stream and then calculates the loss. DOES NOT BACKPROP'''
-        if type(x) == type([]):
+        if isinstance(x, list):
             x[0] = x[0].to(self.device)
         else:
             x = x.to(self.device)
         y = y.to(self.device)
 
-        #print(f"x: {torch.sum(x)}\n y: {torch.sum(y)}")
-
         # Maybe this is causing problems for some reason in testing? Idk
         ## Maybe try replacing self.F with a toggle for self.F vs self.F_testing...
         ## Perhaps they share the same computational graph? ...
-        F, V, y_ref = self.simulate_data_streaming_xy(x, y, input_model=model)
+        F, V, y_ref = self.simulate_data_streaming_xy(x, y, input_model=model, train_mode=train_mode)
 
         # D@s = predicted velocity
         vel_pred = model(F)
 
         # L2 regularization term (from CPHS formulation)
-        l2_loss = 0
-        for name, param in model.named_parameters():
-            if 'weight' in name:
-                # Uhh should I square it here before adding or only square the sum (which is how I have it below...)
-                l2_loss += torch.norm(param, p=2)
+        l2_loss = sum(torch.norm(param, p=2)**2 for name, param in model.named_parameters() if 'weight' in name)
         t1 = self.loss_func(vel_pred, y_ref)
-        if type(t1)==torch.Tensor:
-            t1 = t1.sum()
-        t2 = self.lambdaD*(l2_loss**2)
+        #if type(t1)==torch.Tensor:
+        #    t1 = t1.sum()
+        t2 = self.lambdaD*(l2_loss)
         t3 = self.lambdaF*(torch.linalg.matrix_norm((F))**2)
-        if type(t3)==torch.Tensor:
-            t3 = t3.sum()
+        #if type(t3)==torch.Tensor:
+        #    t3 = t3.sum()
 
         if self.verbose or self.debug_mode:
             print(f"CB shared_loss_calc loss t1: {t1}")
@@ -197,6 +191,7 @@ class Client(object):
         # Apply additional regularizers (eg for continual learning)
         reg_sum = 0
         if self.regularizers!=None:
+            print("Regularizers is not None: Applying additional regularizers!")
             if type(self.regularizers)==list:
                 for reg_term in self.regularizers:
                     # This isn't quite correct, would need to be reg_term.penalty or something...
@@ -207,7 +202,7 @@ class Client(object):
             print(f"CB shared_loss_calc reg_sum: {reg_sum}")
 
         # Only do this during training NOT TESTING EVAL!
-        if record_cost_func_comps == True:
+        if train_mode:
             self.cost_func_comps_log = [(t1.item(), t2.item(), t3.item())]
 
         loss = t1 + t2 + t3 + reg_sum
@@ -228,19 +223,18 @@ class Client(object):
             # reset gradient so it doesn't accumulate
             self.optimizer.zero_grad()
         
-        # record_cost_func_comps should be True since this is the actual training loop
         #print(f"CPHS_TRAINING_SUBROUTINE, USER {self.ID}")
-        loss_obj, num_samples = self.shared_loss_calc(x, y, self.model, record_cost_func_comps=True)
+        self.model.train()
+        loss_obj, num_samples = self.shared_loss_calc(x, y, self.model, train_mode=True)
 
         if self.algorithm=='APFL':
             self.optimizer.zero_grad()
         
         # backward pass
         loss_obj.backward()
-        self.loss_log.append(loss_obj.item()*1.0/num_samples) #VS: loss_obj.item()
-        # This would need to be changed if you switch to a sequential (not single layer) model
+        self.loss_log.append(loss_obj.item()/num_samples)
+        # This would need to be changed if you switch to a multi-layer model
         # Gradient norm
-        # Uhh is this checking to see if it exists I guess?...
         if self.model_str == 'LinearRegression':
             weight_grad = self.model.weight.grad
             if weight_grad == None:
@@ -248,11 +242,10 @@ class Client(object):
                 grad_norm = -1
                 self.gradient_norm_log.append(grad_norm)
             else:
-                #grad_norm = torch.linalg.norm(self.model.weight.grad, ord='fro') 
-                # ^Equivalent to the below but its still a tensor
-                grad_norm = np.linalg.norm(self.model.weight.grad.detach().numpy())
+                grad_norm = torch.linalg.norm(self.model.weight.grad, ord='fro') 
                 self.gradient_norm_log.append(grad_norm)
         else:
+            print(f"{self.model_str} is not LinearRegression: running separate grad norm extraction")
             grad_norm = 0
             for param in self.model.parameters():
                 if param.grad is not None:
@@ -267,12 +260,9 @@ class Client(object):
 
         if self.verbose:
             print(f"Client {self.ID}; update {self.current_update}; x.size(): {x.size()}; loss: {loss_obj.item():0.5f}")
-        #print(f"Model ID / Object: {id(self.model)}; {self.model}") --> #They all appear to be different...
-        #self.running_epoch_loss.append(loss.item() * x.size(0))  # From: running_epoch_loss.append(loss.item() * images.size(0))
-        #running_num_samples += x.size(0)
 
     
-    def simulate_data_streaming_xy(self, x, y, input_model):
+    def simulate_data_streaming_xy(self, x, y, input_model, train_mode=True):
         '''
         Input:
             x, y --> A single training example from the trainloader
@@ -304,7 +294,12 @@ class Client(object):
             s = s_normed
 
         F = s[:-1,:]
-        v_actual =  input_model(s)
+        if train_mode:
+            v_actual = input_model(s)
+        else:
+            # For testing, turn off the gradient tracking in the forward pass!
+            with torch.no_grad():
+                v_actual = input_model(s)
         # Numerical integration of v_actual to get p_actual
         p_actual = torch.cumsum(v_actual, dim=1)*self.dt
         # I don't think I actually use V later on
@@ -432,7 +427,7 @@ class Client(object):
             testing_labels = self.cond_labels_npy
             # How is mine different from UserTimeSeriesDataset?
             ## ^ Batching is built in by default for this one ... not sure how batching was done with the other one then...
-            testing_dataset_obj = UserTimeSeriesDataset(testing_samples, testing_labels, batch_size=self.batch_size)
+            testing_dataset_obj = UserTimeSeriesDataset(testing_samples, testing_labels)#, batch_size=self.batch_size)
             return testing_dataset_obj
         elif self.test_split_each_update:
             testing_samples = self.cond_samples_npy[self.test_split_idx,:]
@@ -503,7 +498,7 @@ class Client(object):
                     x = x.to(self.device)
                 y = y.to(self.device)
 
-                loss, num_samples = self.shared_loss_calc(x, y, eval_model)
+                loss, num_samples = self.shared_loss_calc(x, y, eval_model, train_mode=False)
                 # I think an issue could be if after streaming the values are getting "double-dipped"
                 ## Eg the training values of F, V, y_ref are geting used for testing as well...?
                 ### Or rather the computational graph (gradient/history) remains and is what is getting double-dipped...
@@ -528,7 +523,7 @@ class Client(object):
             eval_model = self.load_model(saved_model_path)
         else:
             eval_model = self.model
-        #eval_model.to(self.device)
+        eval_model.to(self.device)
         eval_model.eval()
 
         # TODO Fix this inefficiency!
