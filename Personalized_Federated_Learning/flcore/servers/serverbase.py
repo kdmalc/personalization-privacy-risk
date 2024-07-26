@@ -653,7 +653,10 @@ class Server(object):
             unseen_live_num_samples = []
             unseen_live_IDs = []
 
-        for i, c in enumerate(self.clients):
+        for i, cID in enumerate(self.train_subj_IDs):
+            # Get the actual client objects from the ID
+            c = self.dict_map_subjID_to_clientobj[cID]
+
             #print(f"TEST_METRICS, USER {c.ID}")
             #if (self.sequential and c.ID in self.static_client_IDs):
             if self.sequential:
@@ -728,7 +731,9 @@ class Server(object):
             prev_live_num_samples = []
             prev_live_IDs = []
         # ITERATES OVER ALL CLIENTS, THEN SUMS ALL CLIENT LOSSES!
-        for i, c in enumerate(self.clients):
+        for i, cID in enumerate(self.train_subj_IDs):
+            # Get the actual client objects from the ID
+            c = self.dict_map_subjID_to_clientobj[cID]
             #print(f"TRAIN_METRICS, USER {c.ID}")
             if (self.sequential and c.ID in self.static_client_IDs):
                 # Test the current global model on the training data of the static clients!
