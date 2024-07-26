@@ -53,7 +53,8 @@ def run_kfcv(args):
     # This needs double checked...
     user_folds = create_user_folds(user_IDs, args.num_kfold_splits)
     
-    cv_results = []
+    cv_test_loss = []
+    cv_train_loss = []
     
     for fold, (train_idx, val_idx) in enumerate(user_folds):
         print(f"Fold {fold + 1}/{args.num_kfold_splits}")
@@ -93,15 +94,19 @@ def run_kfcv(args):
         print(args.model)
 
         server.train()
+        cv_test_loss.append(server.rs_test_loss)
+        cv_train_loss.append(server.rs_train_loss)
         time_list.append(time.time()-start)
 
         #server.plot_results()
         print(f"\nAverage time cost: {round(np.average(time_list), 2)}s.")
     
-    mean_cv_loss = np.mean(cv_results)
-    std_cv_loss = np.std(cv_results)
-    print(f"Cross-validation results: {mean_cv_loss:.4f} (+/- {std_cv_loss:.4f})")
-    server.plot_results(plot_this_vec=mean_cv_loss, my_title="Mean K-Fold Cross Val Train And Test Loss")
+    mean_cv_test_loss = np.mean(cv_test_loss, axis=0)
+    std_cv_test_loss = np.std(cv_test_loss, axis=0)
+    mean_cv_train_loss = np.mean(cv_train_loss, axis=0)
+    std_cv_train_loss = np.std(cv_train_loss, axis=0)
+    print(f"Averaged k-fold cross-validation results: {mean_cv_test_loss:.4f} (+/- {std_cv_test_loss:.4f})")
+    server.plot_results(plot_this_list_of_vecs=[mean_cv_test_loss, mean_cv_train_loss], list_of_labels=['test', 'train'], my_title="Mean K-Fold Cross Val Train And Test Loss")
       
     # Global average
     ## Not sure if it should be running this at all, I think the average is already done above?
@@ -110,7 +115,7 @@ def run_kfcv(args):
 
     print("All done!")
     reporter.report()
-    return server, cv_results, mean_cv_loss, std_cv_loss
+    return server, [mean_cv_test_loss, std_cv_test_loss, mean_cv_train_loss, std_cv_train_loss]
 
 
 def run(args):
@@ -463,7 +468,7 @@ if __name__ == "__main__":
 
     if args.run:
         #server_obj = run(args)
-        server_obj = run_kfcv(args)
+        server_obj, cv_results = run_kfcv(args)
     
     # print(prof.key_averages().table(sort_by="cpu_time_total", row_limit=20))
     # print(f"\nTotal time cost: {round(time.time()-total_start, 2)}s.")

@@ -922,8 +922,9 @@ class Server(object):
 
         return IDs, num_samples, tot_loss
 
-    def plot_results(self, plot_this_vec=None, plot_train=True, plot_test=True, plot_seq=True, my_title=None):
+    def plot_results(self, plot_this_list_of_vecs=None, list_of_labels=None, plot_train=True, plot_test=True, plot_seq=True, my_title=None):
         if plot_this_vec is not None:
+            # TODO: Finish this
             raise ValueError("plot_this_vec is not supported yet")
 
         if self.algorithm.upper() == 'LOCAL':
