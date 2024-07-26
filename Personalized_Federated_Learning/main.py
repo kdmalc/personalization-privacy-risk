@@ -204,7 +204,7 @@ def parse_args():
     # For non-deep keep 1202: --> Idk if this is necessary actually, I think it will work regardless
     parser.add_argument('-lr', "--local_learning_rate", type=float, default=0.1,
                         help="Local learning rate")
-    parser.add_argument('-gr', "--global_rounds", type=int, default=5)  # KAI: Originally was 2000 --> That's way too much for cross val lol
+    parser.add_argument('-gr', "--global_rounds", type=int, default=10)  # KAI: Originally was 2000 --> That's way too much for cross val lol
     parser.add_argument('-stup', "--starting_update", type=int, default=10,
                         help="Which update to start on (for CPHS Simulation). Use 0 or 10.")
     parser.add_argument('-save_mdls', "--save_models", type=bool, default=False) # Uhhh what does this do...
@@ -212,7 +212,7 @@ def parse_args():
     # CONTINUAL LEARNING
     parser.add_argument('-ewc_bool', "--ewc_bool", type=bool, default=False)
     parser.add_argument('-fisher_mult', "--fisher_mult", type=int, default=1e3)
-    parser.add_argument('-optimizer_str', "--optimizer_str", type=str, default="SGD")
+    parser.add_argument('-optimizer_str', "--optimizer_str", type=str, default="ADAM")
 
     # THESE ARE NOT CHANGING FREQUENTLY:
     ##################################################################################################################################

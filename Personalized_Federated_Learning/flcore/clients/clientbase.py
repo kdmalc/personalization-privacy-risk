@@ -110,7 +110,7 @@ class Client(object):
         self.ndp = args.num_decimal_points
         
         self.loss_func = CPHSLoss(lambdaF=self.lambdaF, lambdaD=self.lambdaD, lambdaE=self.lambdaE)
-        # This is the training loss log written to during cphs_subrountine
+        # This is the training loss log written to during CPHS_TRAINING_SUBROUTINE
         self.loss_log = []
         # Testing loss log written to directly within client.test_metrics()
         self.client_testing_log = []
@@ -302,10 +302,7 @@ class Client(object):
                 v_actual = input_model(s)
         # Numerical integration of v_actual to get p_actual
         p_actual = torch.cumsum(v_actual, dim=1)*self.dt
-        # I don't think I actually use V later on
-        ## Well it's used in the cost function... and gradient I believe...
-        ### Wait does this code not even use the gradient...
-        V = (p_reference - p_actual)*self.dt
+        V = (p_reference - p_actual)*self.dt # V doesn't actually get used...
         y_ref = p_reference[:-1, :]  # To match the input
         #^ This is used in t1 = self.loss_func(vel_pred, self.y_ref) in shared_loss_calc
         return F, V, y_ref
@@ -482,6 +479,7 @@ class Client(object):
             eval_model = self.load_model(saved_model_path)
         else:
             # USING THE CLIENT'S LOCAL(/PERS) MODEL, NOT THE GLOBAL MODEL!
+            ## This should be the default case, right?
             eval_model = self.model
         eval_model.to(self.device)
         eval_model.eval()
@@ -497,23 +495,26 @@ class Client(object):
                 else:
                     x = x.to(self.device)
                 y = y.to(self.device)
-
+                
                 loss, num_samples = self.shared_loss_calc(x, y, eval_model, train_mode=False)
                 # I think an issue could be if after streaming the values are getting "double-dipped"
-                ## Eg the training values of F, V, y_ref are geting used for testing as well...?
-                ### Or rather the computational graph (gradient/history) remains and is what is getting double-dipped...
+                ## F, y_ref are geting used for testing as well, or rather the computational graph (gradient/history) remains and is what is getting double-dipped...
+                print(f"(loss, num_samples): ({loss}, {num_samples})")
 
                 total_loss += loss.item() * num_samples
                 total_samples += num_samples
-
+            print(f"TOTAL (total_loss, total_samples): ({total_loss}, {total_samples})")
             average_loss = total_loss / total_samples
             self.client_testing_log.append(average_loss)
-        return average_loss, total_samples
+            print(f"CALC'd AVERAGE: {average_loss}\n")
+        return total_loss, total_samples # Return average_loss or total_loss...
     
 
     def train_metrics(self, saved_model_path=None, model_obj=None):
         '''Kai's docs: This function is for evaluating the model (on the training data for some reason) during training
-        Note that model.eval() is called so params aren't updated.'''
+        Note that model.eval() is called so params aren't updated.
+        
+        7/26/24: Why does this exist, just use the loss during actual training??? This is how PFL broke it up tho...'''
         if self.verbose:
             print("Client train_metrics()")
 
@@ -538,6 +539,7 @@ class Client(object):
             print(f'cb Client {self.ID} train_metrics()')
         with torch.no_grad():
             for i, (x, y) in enumerate(trainloader):
+                print(f'cb Client {self.ID} train_metrics() batch {i}')
                 if type(x) == type([]):
                     x[0] = x[0].to(self.device)
                 else:
@@ -546,9 +548,10 @@ class Client(object):
 
                 #print(f"TRAIN_METRICS, USER {self.ID}")
                 loss, num_samples = self.shared_loss_calc(x, y, eval_model)
+                print(f"(loss, num_samples): ({loss}, {num_samples})")
                 train_num += num_samples
                 losses += loss.item() * num_samples
-
+        print(f"TOTAL (losses, train_num): ({losses}, {train_num})\n")
         return losses, train_num
 
     

@@ -8,7 +8,7 @@ MODEL HYPERPARAMETERS
 lambdaF = 0.0
 lambdaD = 0.0001
 lambdaE = 1e-06
-global_rounds = 5
+global_rounds = 50
 local_epochs = 1
 batch_size = 600
 local_learning_rate = 0.1

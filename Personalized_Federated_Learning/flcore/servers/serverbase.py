@@ -551,7 +551,9 @@ class Server(object):
                     hf.create_dataset('cross_client_numsamples_array', data=self.clii_on_clij_numsamples)
 
                 if self.save_client_loss_logs:
-                    # Is there some way to save all of these to a group...
+                    # Uhhh how is client_testing_log different from rs_test_loss again? ... 
+                    ## rs_test_loss is the version averaged across clients?... I'm assuming client_testing_log doesnt include the round number...
+                    ### Or is it called every round when each client gets evaluated? .......
                     group = hf.create_group('client_testing_logs')
                     for c in self.clients:
                         dataset_name = c.ID
@@ -776,7 +778,7 @@ class Server(object):
         return IDs, num_samples, tot_loss, seq_metrics
 
     # evaluate selected clients
-    def evaluate(self, train=True, test=True, acc=None, loss=None):
+    def evaluate(self, train=True, test=True):
         '''
         KAI Docstring
         This func runs test_metrics and train_metrics, and then sums all of ...
@@ -798,28 +800,25 @@ class Server(object):
                 print(f"Sum (ns) of test_metrics() output: {sum(stats[1])}")
             #test_loss = sum(stats[2])*1.0 / len(stats[2])  # Idk what this was doing either. Not relevant to us...
             #test_loss = sum(stats[2])*1.0  # Used to return test_acc, test_num, auc; idk what it is summing tho (or why auc wouldn't be a scalar...)
-            test_loss = stats[2]#*1.0  #It's already a float...
+            test_loss = stats[2]
             test_samples_per_round = stats[1]
 
-            if acc == None:  # acc will always be None for regression
-                avg_test_loss = sum(test_loss)/sum(test_samples_per_round)
-                self.rs_test_loss.append(avg_test_loss)
+            avg_test_loss = sum(test_loss)/sum(test_samples_per_round)
+            self.rs_test_loss.append(avg_test_loss)
 
-                if self.sequential:
-                    # seq_stats <-- [curr_live_loss, curr_live_num_samples, curr_live_IDs, prev_live_loss, prev_live_num_samples, prev_live_IDs, unseen_live_loss, unseen_live_num_samples, unseen_live_IDs]
-                    # Hmm do I need to save/use the actual IDs at all? Do I care? Don't think so...
-                    seq_stats = stats[3]
-                    if len(seq_stats[0])!=0:
-                        #self.curr_live_rs_test_loss.append(sum(seq_stats[0])/len(seq_stats[0]))
-                        self.curr_live_rs_test_loss.append(sum(seq_stats[0])/sum(seq_stats[1]))
-                    if len(seq_stats[3])!=0:
-                        #self.prev_live_rs_test_loss.append(sum(seq_stats[3])/len(seq_stats[3]))
-                        self.prev_live_rs_test_loss.append(sum(seq_stats[3])/sum(seq_stats[4]))
-                    if len(seq_stats[6])!=0:
-                        #self.unseen_live_rs_test_loss.append(sum(seq_stats[6])/len(seq_stats[6]))
-                        self.unseen_live_rs_test_loss.append(sum(seq_stats[6])/sum(seq_stats[7]))
-            else:
-                acc.append(test_loss)
+            if self.sequential:
+                # seq_stats <-- [curr_live_loss, curr_live_num_samples, curr_live_IDs, prev_live_loss, prev_live_num_samples, prev_live_IDs, unseen_live_loss, unseen_live_num_samples, unseen_live_IDs]
+                # Hmm do I need to save/use the actual IDs at all? Do I care? Don't think so...
+                seq_stats = stats[3]
+                if len(seq_stats[0])!=0:
+                    #self.curr_live_rs_test_loss.append(sum(seq_stats[0])/len(seq_stats[0]))
+                    self.curr_live_rs_test_loss.append(sum(seq_stats[0])/sum(seq_stats[1]))
+                if len(seq_stats[3])!=0:
+                    #self.prev_live_rs_test_loss.append(sum(seq_stats[3])/len(seq_stats[3]))
+                    self.prev_live_rs_test_loss.append(sum(seq_stats[3])/sum(seq_stats[4]))
+                if len(seq_stats[6])!=0:
+                    #self.unseen_live_rs_test_loss.append(sum(seq_stats[6])/len(seq_stats[6]))
+                    self.unseen_live_rs_test_loss.append(sum(seq_stats[6])/sum(seq_stats[7]))
 
             #assert(test_loss<1e5)
             print("Averaged Test Loss: {:.5f}".format(avg_test_loss))
@@ -829,20 +828,13 @@ class Server(object):
             if self.verbose:
                 print(f"Len of train_metrics() output: {len(stats_train[0])}")
                 print(f"Sum (ns) of train_metrics() output: {len(stats_train[1])}")
-            #train_loss = sum(stats_train[2])*1.0
-            #train_loss = sum(stats_train[2])*1.0 / len(stats_train[2])
-            # IS THIS THE AVERAGE PER EXAMPLE OR PER EPOCH OR PER ITERATION??
-            avg_train_loss = sum(stats_train[2])*1.0 / sum(stats_train[1])
-        
-            if loss == None:
-                self.rs_train_loss.append(avg_train_loss)
-                # I'm not even recording the training seq metrics right now... don't really care
-                # Do I even have those lol
-            else:
-                print("Server evaluate loss!=None")
-                loss.append(avg_train_loss)
+            avg_train_loss = sum(stats_train[2]) / sum(stats_train[1])
+            self.rs_train_loss.append(avg_train_loss)
+            # I'm not even recording the training seq metrics right now... don't really care
+            # Do I even have those lol
 
             print("Averaged Train Loss: {:.5f}".format(avg_train_loss))
+
             # If the average loss is unreasonably high just abort the run
             if avg_train_loss>self.loss_threshold:
                 # Log training loss up to this point...
