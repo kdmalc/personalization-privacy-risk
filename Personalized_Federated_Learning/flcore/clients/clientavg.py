@@ -16,7 +16,7 @@ class clientAVG(Client):
         super().__init__(args, ID, samples_path, labels_path, condition_number, **kwargs)
 
     def train(self):
-        trainloader = self.load_train_data()
+        self.load_train_data()
         self.model.train()
         start_time = time.time()
         if self.verbose:
@@ -30,7 +30,7 @@ class clientAVG(Client):
         for epoch in range(self.local_epochs):
             for step in range(self.num_gradient_steps):
                 # Currently, each tl has 1200 (or 1202...) samples [eg 1 update] (1/13/24)
-                for i, (x, y) in enumerate(trainloader):
+                for i, (x, y) in enumerate(self.trainloader):
                     if self.verbose:
                         print(f"Epoch {epoch}, grad step {step}, batch {i}")
                     #self.cphs_training_subroutine(x, y)

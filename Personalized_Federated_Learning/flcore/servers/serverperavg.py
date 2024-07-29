@@ -8,7 +8,7 @@ import time
 
 
 class PerAvg(Server):
-    def __init__(self, args, times):
+    def __init__(self, args, times=1):
         super().__init__(args, times)
 
         self.beta = args.beta
@@ -56,8 +56,8 @@ class PerAvg(Server):
             self.Budget.append(time.time() - s_t)
             print('-'*25, 'time cost', '-'*25, self.Budget[-1])
 
-            if self.auto_break and self.check_done(acc_lss=[self.rs_test_loss], top_cnt=self.top_cnt):
-                break
+            #if self.auto_break and self.check_done(acc_lss=[self.rs_test_loss], top_cnt=self.top_cnt):
+            #    break
 
         #self.evaluate(train=False, test=True)  # Is this wrong? Causing the test spike jump?
             

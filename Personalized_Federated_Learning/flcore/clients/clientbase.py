@@ -356,20 +356,34 @@ class Client(object):
         
 
     def load_train_data(self, batch_size=None, eval=False, client_init=False):
-        # Load full client dataasets
+        # Load full client datasets
         if client_init:
+            # This loads the actual data from the csv files, should only happen once 
             self._load_train_data()   # Returns nothing, sets self variables
         
-        # Do I really want this here...
-        if eval==False:
-            # TODO: THIS SHOULD NOT BE UPDATED HERE LOL
+        if eval==True:
+            # For eval, we do not update, and can just use the existing trainloader
+            return self.trainloader
+        elif eval==False:
+            # eval=False is the version that is called at the top of each train() func
+
+            # TODO: There really has to be a better place to update the client's local round...
+            ## Could put it in train() but would have to manually add it to each train() func in each .py file...
             self.local_round += 1
 
+            # If local round is 0 or 1, just set a fresh trainloader
+            ## Really only need to do it for 0 or 1, I am just not sure what local_round is equal to at this point in the code
+            if self.local_round in [0, 1]:
+                print(f"Client {self.ID} begins with update {self.current_update}")
             # Check if you need to advance the update
             # ---> THIS IMPLIES THAT I AM CREATING A NEW TRAINING LOADER FOR EACH UPDATE... this is what I want actually I think
-            if (self.local_round%self.local_round_threshold==0) and (self.local_round>1) and (self.current_update < self.max_training_update_upbound):
+            elif (self.local_round%self.local_round_threshold==0) and (self.local_round>1) and (self.current_update < self.max_training_update_upbound):
                 self.current_update += 1
                 print(f"Client {self.ID} advances to update {self.current_update} on local round {self.local_round}")
+            else:
+                # Else no update is happening so you can just reuse the existing trainloader
+                return self.trainloader
+            
             # Slice the full client dataset based on the current update number
             if self.current_update < self.max_training_update_upbound:
                 # NOTE: Added the -self.update_ix[self.starting_update]
@@ -378,9 +392,6 @@ class Client(object):
             else:
                 self.update_lower_bound = self.update_ix[self.max_training_update_upbound - 1] - self.update_ix[self.starting_update]
                 self.update_upper_bound = self.update_ix[self.max_training_update_upbound] - self.update_ix[self.starting_update]
-        else:
-            # There is no update, so no need to update/set the self.bounds above
-            pass
 
         # Set the Dataset Obj
         # Creates a new TL each time, but doesn't have to re-read in the data. May not be optimal
@@ -401,12 +412,11 @@ class Client(object):
         # Set dataloader
         if batch_size == None:
             batch_size = self.batch_size
-        dl = DataLoader(
+        self.trainloader = DataLoader(
             dataset=training_dataset_obj,
             batch_size=batch_size, 
             drop_last=True,  # Yah idk if this should be true or false or if it matters...
             shuffle=False) 
-        return dl
 
 
     def load_test_data(self, batch_size=None): 
@@ -499,7 +509,8 @@ class Client(object):
                 loss, num_samples = self.shared_loss_calc(x, y, eval_model, train_mode=False)
                 # I think an issue could be if after streaming the values are getting "double-dipped"
                 ## F, y_ref are geting used for testing as well, or rather the computational graph (gradient/history) remains and is what is getting double-dipped...
-                print(f"(loss, num_samples): ({loss}, {num_samples})")
+                if i==0 or i==len(self.testloader)-1:
+                    print(f"TEST: (loss, num_samples): ({loss}, {num_samples})")
 
                 total_loss += loss.item() * num_samples
                 total_samples += num_samples
@@ -530,15 +541,15 @@ class Client(object):
         # TODO Fix this inefficiency!
         # ITS GOTTA BE SUPER INEFFICIENT TO RECREATE A NEW TL FOR EACH CLIENT EACH ROUND FOR TRAIN EVAL...
         ## How do I just reuse the existing training loader from the streamed training data?
-        trainloader = self.load_train_data(eval=True)
-        assert(len(trainloader)!=0)
+        self.load_train_data(eval=True)
+        assert(len(self.trainloader)!=0)
 
         train_num = 0
         losses = 0
         if self.verbose:
             print(f'cb Client {self.ID} train_metrics()')
         with torch.no_grad():
-            for i, (x, y) in enumerate(trainloader):
+            for i, (x, y) in enumerate(self.trainloader):
                 print(f'cb Client {self.ID} train_metrics() batch {i}')
                 if type(x) == type([]):
                     x[0] = x[0].to(self.device)
@@ -548,10 +559,11 @@ class Client(object):
 
                 #print(f"TRAIN_METRICS, USER {self.ID}")
                 loss, num_samples = self.shared_loss_calc(x, y, eval_model)
-                print(f"(loss, num_samples): ({loss}, {num_samples})")
+                if i==0 or i==len(self.testloader)-1:
+                    print(f"TRAIN: (loss, num_samples): ({loss}, {num_samples})")
                 train_num += num_samples
                 losses += loss.item() * num_samples
-        print(f"TOTAL (losses, train_num): ({losses}, {train_num})\n")
+            print(f"TOTAL (losses, train_num): ({losses}, {train_num})\n")
         return losses, train_num
 
     

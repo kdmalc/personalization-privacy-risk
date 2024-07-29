@@ -27,7 +27,7 @@ class clientPerAvg(Client):
         # trainloader obj will have a bs twice that of the input one, effectively sampling twice as many points
         ## So that way you can run step 1 and step 2 from PerFedAvg
         ### This is FO MAML...
-        trainloader = self.load_train_data(self.batch_size*2)
+        self.load_train_data(self.batch_size*2)
         start_time = time.time()
 
         # self.model.to(self.device)
@@ -37,7 +37,7 @@ class clientPerAvg(Client):
             max_local_epochs = np.random.randint(1, max_local_epochs // 2)
 
         for epoch in range(self.local_epochs):  # local update
-            for X, Y in trainloader:
+            for X, Y in self.trainloader:
                 # Use list because self.model.parameters() is an iterator 
                 temp_model = copy.deepcopy(list(self.model.parameters()))
 
@@ -57,14 +57,12 @@ class clientPerAvg(Client):
 
                 #output = self.model(x)
                 #loss = self.loss(output, y)
-                loss, num_samples = self.shared_loss_calc(x, y, self.model, record_cost_func_comps=True)
+                loss, num_samples = self.shared_loss_calc(x, y, self.model, train_mode=True)
                 self.optimizer.zero_grad()
                 loss.backward()
                 self.optimizer.step()
 
                 # step 2
-                # How is this any different from step 1?
-                ## I'm assuming this is the local fine-tuning or smth or other?
                 if type(X) == type([]):
                     print("X is a list still/again?")
                     x = [None, None]
@@ -80,7 +78,7 @@ class clientPerAvg(Client):
                 self.optimizer.zero_grad()
                 #output = self.model(x)
                 #loss = self.loss(output, y)
-                loss, num_samples = self.shared_loss_calc(x, y, self.model, record_cost_func_comps=False) # Idk if it should be recording or not...
+                loss, num_samples = self.shared_loss_calc(x, y, self.model, train_mode=True) # Idk if it should be recording or not...
                 loss.backward()
 
                 # restore the model parameters to the one before first update
@@ -99,8 +97,8 @@ class clientPerAvg(Client):
 
 
     def train_one_step(self):
-        trainloader = self.load_train_data(self.batch_size)
-        iter_loader = iter(trainloader)
+        self.load_train_data(self.batch_size)
+        iter_loader = iter(self.trainloader)
         # self.model.to(self.device)
         self.model.train()
 
@@ -123,7 +121,7 @@ class clientPerAvg(Client):
 
 
     def train_metrics(self, saved_model_path=None, model_obj=None):
-        trainloader = self.load_train_data(batch_size=self.batch_size*2, eval=True)
+        self.load_train_data(batch_size=self.batch_size*2, eval=True)
         if model_obj != None:
             eval_model = model_obj
         elif saved_model_path != None:
@@ -134,7 +132,7 @@ class clientPerAvg(Client):
 
         train_num = 0
         losses = 0
-        for X, Y in trainloader:
+        for X, Y in self.trainloader:
             # step 1
             if type(X) == type([]):
                 x = [None, None]
@@ -147,7 +145,7 @@ class clientPerAvg(Client):
             self.optimizer.zero_grad()
             #output = self.model(x)
             #loss = self.loss(output, y)
-            loss, num_samples = self.shared_loss_calc(x, y, eval_model, record_cost_func_comps=False) # Idk if it should be recording or not here...
+            loss, num_samples = self.shared_loss_calc(x, y, eval_model, train_mode=False)
             loss.backward()
             self.optimizer.step()
 
@@ -163,7 +161,7 @@ class clientPerAvg(Client):
             self.optimizer.zero_grad()
             #output = self.model(x)
             #loss1 = self.loss(output, y)
-            loss1, num_samples = self.shared_loss_calc(x, y, eval_model, record_cost_func_comps=False) # Idk if it should be recording or not here...
+            loss1, num_samples = self.shared_loss_calc(x, y, eval_model, train_mode=False)
 
             train_num += num_samples
             #print(f"CPerAvg train_metrics y.shape: {y.shape[0]}, x.shape: {x.shape[0]}")

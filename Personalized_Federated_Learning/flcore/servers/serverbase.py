@@ -13,7 +13,7 @@ from math import ceil
 
 
 class Server(object):
-    def __init__(self, args, times):
+    def __init__(self, args, times=1):
         # Set up the main attributes
         self.args = args
         self.device = args.device

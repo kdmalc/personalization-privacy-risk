@@ -9,7 +9,7 @@ from flcore.servers.serverbase import Server
 
 class FedAvg(Server):
     def __init__(self, args, times=1):
-        super().__init__(args, times=1)
+        super().__init__(args, times)
         print("SERVERAVG")
 
         # select slow clients

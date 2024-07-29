@@ -8,7 +8,7 @@ import numpy as np
 
 
 class Local(Server):
-    def __init__(self, args, times):
+    def __init__(self, args, times=1):
         super().__init__(args, times)
 
         # select slow clients
@@ -110,9 +110,9 @@ class Local(Server):
 
             #print()
 
-            if self.auto_break and self.check_done(acc_lss=[self.rs_test_acc], top_cnt=self.top_cnt):
-                print("Breaking")
-                break
+            #if self.auto_break and self.check_done(acc_lss=[self.rs_test_acc], top_cnt=self.top_cnt):
+            #    print("Breaking")
+            #    break
 
         # Set the average in the diagonal 
         if self.test_against_all_other_clients:

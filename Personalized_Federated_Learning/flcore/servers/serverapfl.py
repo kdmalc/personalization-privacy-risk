@@ -6,7 +6,7 @@ from flcore.servers.serverbase import Server
 
 
 class APFL(Server):
-    def __init__(self, args, times):
+    def __init__(self, args, times=1):
         super().__init__(args, times)
 
         # select slow clients
