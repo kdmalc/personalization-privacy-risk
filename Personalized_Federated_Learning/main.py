@@ -191,7 +191,7 @@ def parse_args():
 
     # THINGS I AM CURRENTLY CHANGING A LOT
     #Local #FedAvg #APFL #pFedMe (not working) ## #PerAvg #Centralized
-    parser.add_argument('-algo', "--algorithm", type=str, default="FedAvg")
+    parser.add_argument('-algo', "--algorithm", type=str, default="PerAvg")
     parser.add_argument('-bt', "--beta", type=float, default=0.001,
                         help="Average moving parameter for pFedMe, Second learning rate of Per-FedAvg, \
                         or L1 regularization weight of FedTransfer")

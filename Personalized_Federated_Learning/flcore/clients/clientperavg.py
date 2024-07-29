@@ -97,7 +97,10 @@ class clientPerAvg(Client):
 
 
     def train_one_step(self):
+        # I don't think I even run this func ...
+
         self.load_train_data(self.batch_size)
+        # Why does it do it with iter...
         iter_loader = iter(self.trainloader)
         # self.model.to(self.device)
         self.model.train()
@@ -112,7 +115,7 @@ class clientPerAvg(Client):
         #self.simulate_data_streaming_xy(x, y)
         #output = self.model(x)
         #loss = self.loss(output, y)
-        loss, num_samples = self.shared_loss_calc(x, y, self.model, record_cost_func_comps=False) # Idk if it should be recording or not here...
+        loss, num_samples = self.shared_loss_calc(x, y, self.model, train_mode=True)
         self.optimizer.zero_grad()
         loss.backward()
         self.optimizer.step()
@@ -172,8 +175,10 @@ class clientPerAvg(Client):
         return losses, train_num
 
     def train_one_epoch(self):
-        trainloader = self.load_train_data(self.batch_size)
-        for i, (x, y) in enumerate(trainloader):
+        # Also appears to not be used... 
+
+        self.load_train_data(self.batch_size)
+        for i, (x, y) in enumerate(self.trainloader):
             if type(x) == type([]):
                 x[0] = x[0].to(self.device)
             else:
@@ -182,7 +187,7 @@ class clientPerAvg(Client):
 
             #output = self.model(x)
             #loss = self.loss(output, y)
-            loss, num_samples = self.shared_loss_calc(x, y, self.model, record_cost_func_comps=False) # Idk if it should be recording or not here...
+            loss, num_samples = self.shared_loss_calc(x, y, self.model, train_mode=True)
             self.optimizer.zero_grad()
             loss.backward()
             self.optimizer.step()
