@@ -362,6 +362,9 @@ class Client(object):
             # This runs with eval=False and client_init=False --> This should load the data and set the initial trainloader...
             # This loads the actual data from the csv files, should only happen once 
             self._load_train_data()   # Returns nothing, sets self variables
+
+        if batch_size is None:
+            batch_size = self.batch_size
         
         if eval==True:
             # For eval, we do not update, and can just use the existing trainloader
@@ -420,23 +423,24 @@ class Client(object):
             shuffle=False) 
 
 
-    def load_test_data(self, batch_size=None): 
+    def load_test_data(self, batch_size=None, val_cli=False): 
         # Make sure this runs AFTER load_train_data so the data is already loaded in
         if self.verbose:
             print(f"Client {self.ID}: Setting Test DataLoader")
         if batch_size == None:
             batch_size = self.batch_size
 
-        if self.use_kfold_crossval:
-            # If client is in the val split and loads its testing data, all the data is testing
-            # cond_samples_npy already starts at starting_update and ends at final_idx
-            # TODO: Should I use a deepcopy or something so it's a different object... will this cause problems with the underlying computational graph...
-            testing_samples = self.cond_samples_npy
-            testing_labels = self.cond_labels_npy
-            # How is mine different from UserTimeSeriesDataset?
-            ## ^ Batching is built in by default for this one ... not sure how batching was done with the other one then...
-            testing_dataset_obj = UserTimeSeriesDataset(testing_samples, testing_labels)#, batch_size=self.batch_size)
-            return testing_dataset_obj
+        if self.use_kfold_crossval==True:
+            if val_cli==True:
+                # If client is in the val split and loads its testing data, all the data is testing
+                # cond_samples_npy already starts at starting_update and ends at final_idx
+                testing_samples = self.cond_samples_npy
+                testing_labels = self.cond_labels_npy
+                testing_dataset_obj = UserTimeSeriesDataset(testing_samples, testing_labels)
+                return testing_dataset_obj
+            else:
+                # DO NOTHING --> testloader is assigned at the start, in main.py for kfold!!!
+                return
         elif self.test_split_each_update:
             testing_samples = self.cond_samples_npy[self.test_split_idx,:]
             testing_labels = self.cond_labels_npy[self.test_split_idx,:]
@@ -446,12 +450,11 @@ class Client(object):
         else:
             testing_dataset_obj = CustomEMGDataset(testing_samples, testing_labels)
 
-        dl = DataLoader(
+        self.testloader = DataLoader(
             dataset=testing_dataset_obj,
             batch_size=batch_size, 
             drop_last=True,  # Yah idk if this should be true or false or if it matters...
             shuffle=False) 
-        return dl
 
 
     def set_parameters(self, model):
@@ -494,6 +497,13 @@ class Client(object):
             eval_model = self.model
         eval_model.to(self.device)
         eval_model.eval()
+
+        if self.use_kfold_crossval:
+            # This is taken care of elsewhere, testloader is set in main
+            pass
+        else:
+            # Set the testloader
+            self.load_test_data()
 
         total_loss = 0
         total_samples = 0

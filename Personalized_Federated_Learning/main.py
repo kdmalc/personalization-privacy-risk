@@ -20,6 +20,7 @@ import time
 import warnings
 import logging
 from utils.helper_funcs import convert_cmd_line_str_lst_to_type_lst
+from math import ceil
 
 from flcore.pflniid_utils.result_utils import average_data
 from flcore.pflniid_utils.mem_utils import MemReporter
@@ -50,7 +51,6 @@ def run_kfcv(args):
     reporter = MemReporter()
 
     user_IDs = args.all_subj_IDs
-    # This needs double checked...
     user_folds = create_user_folds(user_IDs, args.num_kfold_splits)
     
     cv_test_loss = []
@@ -58,27 +58,28 @@ def run_kfcv(args):
     
     for fold, (train_idx, val_idx) in enumerate(user_folds):
         print(f"Fold {fold + 1}/{args.num_kfold_splits}")
+        if fold > args.num_max_kfold_splits:
+            print(f"Max kfold ({args.num_max_kfold_splits}) has been achieved, skipping the rest of the folds for speed")
+            continue
 
-        #if fold!=0:
-        #    # For the first run (0), server is already set above
-        #    server = init_algo(args)
         args.model = init_model(args)
         server = init_algo(args)
         server.current_fold += 1
-        if fold > server.num_max_kfold_splits:
-            print(f"Max kfold ({server.num_max_kfold_splits}) has been achieved, skipping the rest of the folds for speed")
-            continue
         
         # Set training and validation users
+        # Ought to find a way to set this within serverbase automatically... since it can't be done in init...
         train_user_IDs = [user_IDs[i] for i in train_idx]
         val_user_IDs = [user_IDs[i] for i in val_idx]
         server.train_subj_IDs = train_user_IDs
+        server.all_train_clis = [server.dict_map_subjID_to_clientobj[cli_str] for cli_str in train_user_IDs]
+        server.num_clients = len(server.all_train_clis)
+        server.num_join_clients = ceil(server.num_clients * server.join_ratio)
         server.test_subj_IDs = val_user_IDs
 
         val_dataset_lst = []
         for val_cli_subjID in val_user_IDs:
             val_cli = server.dict_map_subjID_to_clientobj[val_cli_subjID]
-            val_dataset_lst.append(val_cli.load_test_data())
+            val_dataset_lst.append(val_cli.load_test_data(val_cli=True))
         
         testloader = create_unified_fold_test_dataloader(val_dataset_lst, server.batch_size)
         assert(len(testloader)!=0)
@@ -109,7 +110,7 @@ def run_kfcv(args):
     server.plot_results(plot_this_list_of_vecs=[mean_cv_test_loss, mean_cv_train_loss], list_of_labels=['test', 'train'], my_title="Mean K-Fold Cross Val Train And Test Loss")
       
     # Global average
-    ## Not sure if it should be running this at all, I think the average is already done above?
+    ## My code doesnt use the same saving scheme that is used by PFL for this, so I can't even run this
     #if args.algorithm != "Local":
     #    average_data(server.trial_result_path, dataset=args.dataset, algorithm=args.algorithm, goal=args.goal, times=args.times)
 
@@ -189,7 +190,7 @@ def parse_args():
 
     # THINGS I AM CURRENTLY CHANGING A LOT
     #Local #FedAvg #APFL #pFedMe (not working) ## #PerAvg #Centralized
-    parser.add_argument('-algo', "--algorithm", type=str, default="PerAvg")
+    parser.add_argument('-algo', "--algorithm", type=str, default="FedAvg")
     parser.add_argument('-bt', "--beta", type=float, default=0.001,
                         help="Average moving parameter for pFedMe, Second learning rate of Per-FedAvg, \
                         or L1 regularization weight of FedTransfer")

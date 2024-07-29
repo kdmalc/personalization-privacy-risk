@@ -114,17 +114,25 @@ class Server(object):
         # Trial set up
         self.condition_number_lst = args.condition_number_lst
 
-        self.all_subj_IDs = args.all_subj_IDs
-        self.train_subj_IDs = None
+        self.all_subj_IDs = args.all_subj_IDs # Includes train/val/test/static/live/etc
+        # TODO: Both of these need to get integrated with seq...
+        self.train_subj_IDs = None # The clients that are able to get trained (no val/test)
+        self.all_train_clis = None
 
         self.join_ratio = args.join_ratio
         self.random_join_ratio = args.random_join_ratio
-        #self.num_clients = 0  #len(self.train_subj_IDs) * len(self.condition_number_lst)  
-        self.num_clients = len(self.all_subj_IDs) // self.num_kfolds + (1 if len(self.all_subj_IDs) % self.num_kfolds > 0 else 0)
-        self.num_join_clients = ceil(self.num_clients * self.join_ratio)
-        assert(self.num_join_clients>=1)
-        if self.num_join_clients==1:
-            print("num_join_clients IS JUST ONE (1) CLIENT!")
+        if self.use_kfold_crossval:
+            # Not sure which is correct, can probably just use neigther and overwrite with len(self.all_train_clis)
+            #self.num_clients = len(self.all_subj_IDs) // self.num_kfolds + (1 if len(self.all_subj_IDs) % self.num_kfolds > 0 else 0)
+            #self.num_clients = len(self.all_train_clis) // self.num_kfolds + (1 if len(self.all_train_clis) % self.num_kfolds > 0 else 0)
+            # THis should get overwritten or I need to create a new var (eg num_training_clients) --> probably do the latter...
+            self.num_clients = len(self.all_subj_IDs)
+        else:
+            self.num_clients = len(self.all_subj_IDs) # self.clients is still an empty list on init I think!
+            self.num_join_clients = ceil(self.num_clients * self.join_ratio)
+            assert(self.num_join_clients>=1)
+            if self.num_join_clients==1:
+                print("num_join_clients IS JUST ONE (1) CLIENT!")
         self.loss_threshold = args.loss_threshold
         ## SEQUENTIAL TRAINING PARAMS
         self.sequential = args.sequential
@@ -192,7 +200,7 @@ class Server(object):
                                     condition_number = j-1, 
                                     train_slow=False, 
                                     send_slow=False)
-                client.load_train_data(client_init=True) # This has to be here otherwise load_test_data() breaks... is this still true? I think so?
+                client.load_train_data(client_init=True)
 
                 #if self.sequential and (self.all_subj_IDs[i] in self.static_client_IDs):  
                 if self.sequential: # Load the prev global model for all clients actually
@@ -224,6 +232,7 @@ class Server(object):
 
     # random select slow clients
     def select_slow_clients(self, slow_rate):
+        # num_clients is correct here, this is used later to load in both train and testing clients
         slow_clients = [False for _ in range(self.num_clients)]
         if self.slow_clients_bool==False:
             return slow_clients
@@ -253,6 +262,7 @@ class Server(object):
             if self.global_round==0: 
                 print(f"SB sel_cli: Global round {self.global_round}: setting first live client")
                 # List of client objects which match the current live_indices (presumably live_idx=0)
+                # TODO: Confirm self.clients use here is fine...
                 self.live_clients = [client_obj for client_obj in self.clients if client_obj.ID==self.live_client_IDs_queue[self.live_idx]]
 
                 # Remove the new live client from the unseen log
@@ -273,6 +283,7 @@ class Server(object):
                 if finished_cli_ID not in self.prev_live_client_IDs:
                     self.prev_live_client_IDs.append(finished_cli_ID)
                 # Now select the next seq live client
+                # TODO: Confirm self.clients use here is fine...
                 self.live_clients = [client_obj for client_obj in self.clients if client_obj.ID==self.live_client_IDs_queue[self.live_idx]]
 
                 # Remove the new live client from the unseen log
@@ -295,6 +306,7 @@ class Server(object):
                 #remaining_client_ids = [client.ID for client in self.clients if client.ID not in self.live_clients]
                 # ^I already have this actually, it's just self.static_client_IDs. Might be better to do implicitly tho...
                 random.shuffle(self.static_client_IDs) # Idk if I should be doing this honestly lol, cause idxs might get mixed up
+                # TODO: Confirm self.clients use here is fine...
                 selected_clients = [client_obj for client_obj in self.clients if client_obj.ID in self.static_client_IDs[:(num_join_clients - len(self.live_clients))]]
                 # Add in the single live client
                 selected_clients.extend(self.live_clients)
@@ -309,19 +321,20 @@ class Server(object):
                 if self.global_round<2:
                     print("SB: len(self.live_clients) > num_join_clients, so just sample the live clients")
                 selected_clients = list(np.random.choice(self.live_clients, num_join_clients, replace=False))
+        # NORMAL NON-SEQ CASE:
         else:
-            selected_clients = list(np.random.choice(self.clients, num_join_clients, replace=False))
+            selected_clients = list(np.random.choice(self.all_train_clis, num_join_clients, replace=False))
         return selected_clients
 
 
     def send_models(self):
         if self.verbose:
             print("SENDING GLOBAL MODEL TO CLIENTS")
-        assert (len(self.clients) > 0)
+        assert (len(self.selected_clients) > 0)
 
         # The way they have it implies that EVERY CLIENT SETS TO THE GLOBAL MODEL EVERY ROUND...
         ## Go back and change this after the rest just to make sure it doesn't break the rest of the code
-        # for client in self.clients: # This was the original
+        # for client in self.all_train_clis: # This was the original
         for client in self.selected_clients: # This is my updated version...
             # If (seq is off) or (current client is the live seq client) then train as normal
             if (self.sequential==False) or ((self.sequential==True) and (client in self.live_clients)):
@@ -442,12 +455,12 @@ class Server(object):
             else:
                 client_algo_type = "Local"
             client_model_path = os.path.join(self.models_base_dir, self.dataset, client_algo_type, self.str_current_datetime)
-            for client in self.clients:
+            for client in self.all_train_clis:
                 client.save_item(client.model, "local_client_model"+self.kfold_suffix, item_path=client_model_path)
 
             if personalized==True:
                 pers_model_file_path = os.path.join(self.model_dir_path, self.algorithm + "_client_pers_model")
-                for c in self.clients:
+                for c in self.all_train_clis:
                     if not os.path.exists(pers_model_file_path):
                         print(f"SB pers model save made directory! {pers_model_file_path}")
                         os.makedirs(pers_model_file_path)
@@ -528,7 +541,7 @@ class Server(object):
 
         if (personalized==True and ((len(self.rs_test_loss_per))!=0)) or (personalized==False and ((len(self.rs_test_loss))!=0)):
             print("File path: " + self.h5_file_path)
-            #for client in self.clients:
+            #for client in self.all_train_clis:
             #    client.results_file_path = self.trial_result_path
             #    client.h5_file_path = self.h5_file_path
 
@@ -555,7 +568,7 @@ class Server(object):
                     ## rs_test_loss is the version averaged across clients?... I'm assuming client_testing_log doesnt include the round number...
                     ### Or is it called every round when each client gets evaluated? .......
                     group = hf.create_group('client_testing_logs')
-                    for c in self.clients:
+                    for c in self.all_train_clis:
                         dataset_name = c.ID
                         data = c.client_testing_log  # Replace this with your actual data
                         group.create_dataset(dataset_name, data=data)
@@ -609,7 +622,7 @@ class Server(object):
     #        os.makedirs(self.result_path)
     #
     #    group = hf.create_group('client_testing_logs')
-    #    for c in self.clients:
+    #    for c in self.all_train_clis:
     #        dataset_name = c.ID
     #        data = c.client_testing_log  # Replace this with your actual data
     #        group.create_dataset(dataset_name, data=data)
@@ -731,9 +744,7 @@ class Server(object):
             prev_live_num_samples = []
             prev_live_IDs = []
         # ITERATES OVER ALL CLIENTS, THEN SUMS ALL CLIENT LOSSES!
-        for i, cID in enumerate(self.train_subj_IDs):
-            # Get the actual client objects from the ID
-            c = self.dict_map_subjID_to_clientobj[cID]
+        for i, c in enumerate(self.all_train_clis):
             #print(f"TRAIN_METRICS, USER {c.ID}")
             if (self.sequential and c.ID in self.static_client_IDs):
                 # Test the current global model on the training data of the static clients!
@@ -770,7 +781,7 @@ class Server(object):
                 raise ValueError("This isn't supposed to run...")
             else:
                 raise ValueError("This isn't supposed to run...")
-        #IDs = [c.ID for c in self.clients]
+        #IDs = [c.ID for c in self.all_train_clis]
         if self.sequential:
             # Why doesn't this one do unseen testing? I guess unseen implies testing not training
             seq_metrics = [curr_live_loss, curr_live_num_samples, curr_live_IDs, prev_live_loss, prev_live_num_samples, prev_live_IDs]
@@ -789,9 +800,9 @@ class Server(object):
         This func runs test_metrics and train_metrics, and then sums all of ...
         Previously, test_metrics and train_metrics were collecting the losses on ALL clients (even the untrained ones...)
         I switched that (5/31/23) to be just the selected clients, the idea being that ALL clients explode the loss func
-        ^ 1/12/24 uhh what? No idea where this change is. Idk if I really want that... prob shold stay with what they had
-        ^^ Unless that was related to classification accuracy and thus I couldn't use it
-        ^^^ I don't even see self.clients...
+            - I think that self.selected_clients is reflected in the client side versions of train/test metrics
+            or maybe server side, they aren't in this func regardless
+        ^ 1/12/24 I think it would be better to stay with what they had... untrained clients have a bounded performance error I believe...
 
         This is kind of annoying, it's basically a logging function that wraps the test_metrics and train_metrics functions...
         IMO this functionality would be better used inside of those functions... I'm not gonna change it now tho (1/12/24)
@@ -891,6 +902,8 @@ class Server(object):
                                         condition_number = j-1, 
                                         train_slow=False, 
                                         send_slow=False)
+                    # TODO: Do I want to use it this way... should probably be its own dedicated list or something idk
+                    ## I'm not really using this func regardless
                     self.clients.append(client)
 
 
@@ -910,13 +923,12 @@ class Server(object):
         ## My seq tests on live and prev clients, this is testing on entirely new
         num_samples = []
         tot_loss = []
+        # TODO: self.clients might not be the best, but this func doesnt get used anyways...
         for c in self.clients:
             tl, ns = c.test_metrics()
             tot_loss.append(tl*1.0)
             num_samples.append(ns)
-
         IDs = [c.ID for c in self.clients]
-
         return IDs, num_samples, tot_loss
 
     def plot_results(self, plot_this_list_of_vecs=None, list_of_labels=None, plot_train=True, plot_test=True, plot_seq=True, my_title=None):
@@ -935,6 +947,7 @@ class Server(object):
                 #self.clii_on_clij_loss --> 14x14xR (R is number of global rounds)
                 # I need to reduce this matrix down to 1x1x(r in R % ccm == 0)
                 # First, we only need the diagonal rows, as this is where the averages should be saved
+                # SELF.CLIENTS IS FINE HERE SINCE IT IS LOCAL!
                 avg_cc_nestedlst = [[] for _ in range(len(self.clients))]
                 for i in range(len(self.clients)):
                     for j in range(self.global_rounds):

@@ -16,8 +16,11 @@ class FedAvg(Server):
         #print("Serveravg init(): set_slow_clients()")
         self.set_slow_clients() # Not using this...
         self.set_clients(clientAVG)
-        print(f"Serveravg init(): set_clients() --> set {len(self.clients)} clients")
-        print(f"\nJoin ratio / total clients: {self.join_ratio} / {self.num_clients}")
+
+        # Move this somewhere? It can only run after the train_clis have been input in the main kf loop...
+        ## Note that self.clients is filled at this point! The train/test split just isn't in yet
+        #print(f"Serveravg init(): set_clients() --> set {len(self.all_train_clis)} clients")
+        #print(f"\nJoin ratio / total clients: {self.join_ratio} / {self.num_clients}")
         print("Finished creating server and clients.")
 
         # self.load_model()
@@ -75,7 +78,7 @@ class FedAvg(Server):
         print("\nAverage time cost per round.")
         print(sum(self.Budget[1:])/len(self.Budget[1:]))
 
-        for client in self.clients:
+        for client in self.all_train_clis:
             self.cost_func_comps_log.append(client.cost_func_comps_log)
             self.gradient_norm_log.append(client.gradient_norm_log)
 
