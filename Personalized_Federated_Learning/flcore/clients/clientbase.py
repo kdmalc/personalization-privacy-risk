@@ -117,7 +117,6 @@ class Client(object):
         self.cost_func_comps_log = []
         self.gradient_norm_log = []
         #self.running_epoch_loss = []
-        self.testing_clients = [] #??? Why does clientbase have this...
 
         if args.optimizer_str.upper() == "ADAM":
             self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.learning_rate)
@@ -358,22 +357,24 @@ class Client(object):
     def load_train_data(self, batch_size=None, eval=False, client_init=False):
         # Load full client datasets
         if client_init:
+            if self.algorithm=='PerAvg':
+                batch_size = self.batch_size*2
+            # This runs with eval=False and client_init=False --> This should load the data and set the initial trainloader...
             # This loads the actual data from the csv files, should only happen once 
             self._load_train_data()   # Returns nothing, sets self variables
         
         if eval==True:
             # For eval, we do not update, and can just use the existing trainloader
             return self.trainloader
-        elif eval==False:
+        if (eval==False):
             # eval=False is the version that is called at the top of each train() func
 
             # TODO: There really has to be a better place to update the client's local round...
             ## Could put it in train() but would have to manually add it to each train() func in each .py file...
             self.local_round += 1
 
-            # If local round is 0 or 1, just set a fresh trainloader
-            ## Really only need to do it for 0 or 1, I am just not sure what local_round is equal to at this point in the code
-            if self.local_round in [0, 1]:
+            # If local round is 1, just set a fresh trainloader
+            if self.local_round==1:
                 print(f"Client {self.ID} begins with update {self.current_update}")
             # Check if you need to advance the update
             # ---> THIS IMPLIES THAT I AM CREATING A NEW TRAINING LOADER FOR EACH UPDATE... this is what I want actually I think
@@ -399,11 +400,11 @@ class Client(object):
         training_labels = self.cond_labels_npy[self.update_lower_bound:self.update_upper_bound,:]
 
         if self.deep_bool:
-            if self.sequence_length*self.batch_size > training_samples.shape[0]:
+            if self.sequence_length*batch_size > training_samples.shape[0]:
                 raise ValueError("seq_len*batch_size > num training samples: thus trainloader will be empty")
             training_dataset_obj = DeepSeqLenDataset(training_samples, training_labels, self.sequence_length)
         else:
-            if self.batch_size > training_samples.shape[0]:
+            if batch_size > training_samples.shape[0]:
                 raise ValueError("bs > num training samples: thus trainloader will be empty")
             training_dataset_obj = CustomEMGDataset(training_samples, training_labels)
         

@@ -161,8 +161,6 @@ def run(args):
             server = FedAvg(args, i)
         elif args.algorithm == "Local":
             server = Local(args, i)
-        elif args.algorithm == "APFL":
-            server = APFL(args, i)
         elif args.algorithm == "PerAvg":
             server = PerAvg(args, i)
         elif args.algorithm == "pFedMe":

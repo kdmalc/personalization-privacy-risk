@@ -4,7 +4,6 @@ from flcore.servers.serveravg import FedAvg
 from flcore.servers.serverpFedMe import pFedMe
 from flcore.servers.serverperavg import PerAvg
 from flcore.servers.serverlocal import Local
-from flcore.servers.serverapfl import APFL
 
 from models.DNN_classes import *
 
@@ -18,8 +17,6 @@ def init_algo(args):
         server = FedAvg(args)
     elif args.algorithm == "Local":
         server = Local(args)
-    elif args.algorithm == "APFL":
-        server = APFL(args)
     elif args.algorithm == "PerAvg":
         server = PerAvg(args)
     elif args.algorithm == "pFedMe":
