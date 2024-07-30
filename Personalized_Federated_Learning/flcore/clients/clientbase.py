@@ -487,9 +487,9 @@ class Client(object):
         NOTE: Should explicitly add a toggle for repeat testing (on the same dataset) using the global model or whatever, so it doesn't re-do val testing...
         '''
 
-        if model_obj != None:
+        if model_obj is not None:
             eval_model = model_obj
-        elif saved_model_path != None:
+        elif saved_model_path is not None:
             eval_model = self.load_model(saved_model_path)
         else:
             # USING THE CLIENT'S LOCAL(/PERS) MODEL, NOT THE GLOBAL MODEL!
@@ -498,17 +498,14 @@ class Client(object):
         eval_model.to(self.device)
         eval_model.eval()
 
-        if self.use_kfold_crossval:
-            # This is taken care of elsewhere, testloader is set in main
-            pass
-        else:
-            # Set the testloader
+        if not self.use_kfold_crossval:
+            # Set the testloader (kfcv has its testloader set in main)
             self.load_test_data()
 
         total_loss = 0
         total_samples = 0
         if self.verbose:
-            print(f'cb Client {self.ID} test_metrics()')
+            print(f'CB Client {self.ID} test_metrics()')
         with torch.no_grad():
             for i, (x, y) in enumerate(self.testloader):
                 if type(x) == type([]):
@@ -540,23 +537,22 @@ class Client(object):
         if self.verbose:
             print("Client train_metrics()")
 
-        if model_obj != None:
+        if model_obj is not None:
             eval_model = model_obj
-        elif saved_model_path != None:
+        elif saved_model_path is not None:
             eval_model = self.load_model(saved_model_path)
         else:
             eval_model = self.model
         eval_model.to(self.device)
         eval_model.eval()
 
-        # TODO Fix this inefficiency!
-        # ITS GOTTA BE SUPER INEFFICIENT TO RECREATE A NEW TL FOR EACH CLIENT EACH ROUND FOR TRAIN EVAL...
-        ## How do I just reuse the existing training loader from the streamed training data?
+        # This doesn't necessary load a new trainloader
+        ## eg if there is no update it will just reuse the existing one
         self.load_train_data(eval=True)
         assert(len(self.trainloader)!=0)
 
-        train_num = 0
-        losses = 0
+        total_train_samples = 0
+        total_train_loss = 0
         if self.verbose:
             print(f'cb Client {self.ID} train_metrics()')
         with torch.no_grad():
@@ -569,13 +565,18 @@ class Client(object):
                 y = y.to(self.device)
 
                 #print(f"TRAIN_METRICS, USER {self.ID}")
-                loss, num_samples = self.shared_loss_calc(x, y, eval_model)
-                if i==0 or i==len(self.testloader)-1:
+                loss, num_samples = self.shared_loss_calc(x, y, eval_model, train_mode=False)
+                if i==0 or i==len(self.trainloader)-1:
                     print(f"TRAIN: (loss, num_samples): ({loss}, {num_samples})")
-                train_num += num_samples
-                losses += loss.item() * num_samples
-            print(f"TOTAL (losses, train_num): ({losses}, {train_num})\n")
-        return losses, train_num
+                total_train_samples += num_samples
+                total_train_loss += loss.item() * num_samples
+            print(f"TOTAL (total_train_loss, total_train_samples): ({total_train_loss}, {total_train_samples})\n")
+
+            average_loss = total_train_loss / total_train_samples
+            #self.client_training_log.append(average_loss) # this doesnt' exist rn
+            print(f"CALC'd AVERAGE: {average_loss}\n")
+
+        return total_train_loss, total_train_samples
 
     
     def assert_tl_samples_match_npy(self, x, y, batch_num=None):  # I think batch_num should always work? As long as the batch size works out...

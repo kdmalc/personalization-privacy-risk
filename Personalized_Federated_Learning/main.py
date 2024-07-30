@@ -47,6 +47,9 @@ def run_kfcv(args):
     # Need to figure out file saving since it is running 5 times... does it overwrite? 
     # Maybe times is for statistics/repeatability and not just PFL... double check what it is doing and how they used it...
 
+    if args.algorithm=='Local' and args.use_kfold_crossval==True:
+        raise ValueError('Local algo + kf has not been correctly implemented yet. Review other testing schemes...')
+
     time_list = []
     reporter = MemReporter()
 
@@ -58,7 +61,7 @@ def run_kfcv(args):
     
     for fold, (train_idx, val_idx) in enumerate(user_folds):
         print(f"Fold {fold + 1}/{args.num_kfold_splits}")
-        if fold > args.num_max_kfold_splits:
+        if fold >= args.num_max_kfold_splits:
             print(f"Max kfold ({args.num_max_kfold_splits}) has been achieved, skipping the rest of the folds for speed")
             continue
 
@@ -196,14 +199,14 @@ def parse_args():
                         or L1 regularization weight of FedTransfer")
     parser.add_argument('-jr', "--join_ratio", type=float, default=0.3,
                         help="Fraction of clients to be active in training per round")
-    parser.add_argument('-lrt', "--local_round_threshold", type=int, default=50,
+    parser.add_argument('-lrt', "--local_round_threshold", type=int, default=20,
                         help="Number of communication rounds per client until a client will advance to the next batch of streamed data")
     parser.add_argument('-m', "--model_str", type=str, default="LinearRegression")  
     parser.add_argument('-lbs', "--batch_size", type=int, default=600)
     # For non-deep keep 1202: --> Idk if this is necessary actually, I think it will work regardless
     parser.add_argument('-lr', "--local_learning_rate", type=float, default=0.1,
                         help="Local learning rate")
-    parser.add_argument('-gr', "--global_rounds", type=int, default=10)  # KAI: Originally was 2000 --> That's way too much for cross val lol
+    parser.add_argument('-gr', "--global_rounds", type=int, default=100)  # KAI: Originally was 2000 --> That's way too much for cross val lol
     parser.add_argument('-stup', "--starting_update", type=int, default=10,
                         help="Which update to start on (for CPHS Simulation). Use 0 or 10.")
     parser.add_argument('-save_mdls', "--save_models", type=bool, default=False) # Uhhh what does this do...
@@ -228,7 +231,7 @@ def parse_args():
     parser.add_argument('-con_num', "--condition_number_lst", type=str, default='[3]', # Use 3 and/or 7
                         help="Which condition number (trial) to train on. Must be a list. By default, will iterate through all train_subjs for each cond (eg each cond_num gets its own client even for the same subject)")
     parser.add_argument('-ld', "--learning_rate_decay", type=bool, default=False)
-    parser.add_argument('-ls', "--local_epochs", type=int, default=1, 
+    parser.add_argument('-ls', "--local_epochs", type=int, default=3, 
                         help="How many times a client should iterate through their current update dataset.")  
     parser.add_argument('-ngradsteps', "--num_gradient_steps", type=int, default=1, 
                         help="How many gradient steps in one local epoch.")  
@@ -245,9 +248,9 @@ def parse_args():
     parser.add_argument('-ts_ids', "--test_subj_IDs", type=str, default='[]',
                         help="List of subject ID strings of all subjects to be set to test only")
     parser.add_argument('-nkfs', "--num_kfold_splits", type=int, default=5,
-                        help="Number of K Fold for Cross Validation")
+                        help="Number of K Folds for Cross Validation")
     parser.add_argument('-maxkfs', "--num_max_kfold_splits", type=int, default=1,
-                        help="Number of K Fold for Cross Validation")
+                        help="Number of K Folds to actually evaluate (eg can save time during debugging by lowering this)")
     #
     # default=str(['METACPHS_S106', 'METACPHS_S107', 'METACPHS_S108', 'METACPHS_S109', 'METACPHS_S110', 'METACPHS_S111', 'METACPHS_S112', 'METACPHS_S113', 'METACPHS_S114', 'METACPHS_S115', 'METACPHS_S116', 'METACPHS_S117', 'METACPHS_S118', 'METACPHS_S119']),
     parser.add_argument('-lcidsq', "--live_client_IDs_queue", type=str, default='[]',

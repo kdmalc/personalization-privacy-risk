@@ -75,7 +75,7 @@ class PerAvg(Server):
 
         # This is run in severavg, I'm assuming it must need to be run here
         ## Am further assuming that it won't break due to seq...
-        for client in self.clients:
+        for client in self.all_train_clis:
             self.cost_func_comps_log.append(client.cost_func_comps_log)
             self.gradient_norm_log.append(client.gradient_norm_log)
 
@@ -85,20 +85,18 @@ class PerAvg(Server):
     def evaluate_one_step(self, acc=None, loss=None):
         models_temp = []
         # Only use selected clients since real trials won't have past clients?...
-        ## I won't run this py file for the lab tho... leave it as self.clients
-        for c in self.clients:
+        ## I won't run this py file for the lab tho... leave it as self.all_train_clis
+        for c in self.all_train_clis:
             models_temp.append(copy.deepcopy(c.model))
             c.train_one_step()
         stats = self.test_metrics()
         # set the local model back on clients for training process
-        for i, c in enumerate(self.clients):
+        for i, c in enumerate(self.all_train_clis):
             c.clone_model(models_temp[i], c.model)
         stats_train = self.train_metrics()
         # set the local model back on clients for training process
-        #for i, c in enumerate(self.clients):
-        for i, c in enumerate(self.clients):
+        for i, c in enumerate(self.all_train_clis):
             c.clone_model(models_temp[i], c.model)
-        #accs = [a / n for a, n in zip(stats[2], stats[1])]
         test_loss = sum(stats[2])*1.0 / sum(stats[1])
         train_loss = sum(stats_train[2])*1.0 / sum(stats_train[1])
         

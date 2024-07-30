@@ -185,13 +185,10 @@ class Server(object):
         
         base_data_path = 'C:\\Users\\kdmen\\Desktop\\Research\\Data\\CPHS_EMG\\Subject_Specific_Files\\'
         #for i, train_slow, send_slow in zip(range(len(self.all_subj_IDs)), self.train_slow_clients, self.send_slow_clients):
+        # ^ Not used slow clients, set that to False permanently
         for i in range(len(self.all_subj_IDs)):
             for j in self.condition_number_lst:
                 print(f"SB Set Client: iter {i}, cond number: {str(j)}: LOADING DATA: {self.all_subj_IDs[i]}")
-                # For now, have to load the data because of how I set it up
-                # Look into changing this in the future...
-                ## This actually has to stay if I want to be able to run train/test_metrics() on the past clients
-                ## ^Since those functions require the local data in order to eval the model
                 ID_str = self.all_subj_IDs[i]
                 client = clientObj(self.args, 
                                     ID=ID_str, 
@@ -809,13 +806,12 @@ class Server(object):
         '''
         if self.verbose:
             print("Serverbase evaluate()")
+
         if test:
             stats = self.test_metrics()
-            if self.verbose:
-                print(f"Len of test_metrics() output: {len(stats[0])}")
-                print(f"Sum (ns) of test_metrics() output: {sum(stats[1])}")
-            #test_loss = sum(stats[2])*1.0 / len(stats[2])  # Idk what this was doing either. Not relevant to us...
-            #test_loss = sum(stats[2])*1.0  # Used to return test_acc, test_num, auc; idk what it is summing tho (or why auc wouldn't be a scalar...)
+            #if self.verbose:
+            print(f"SB EVAL TS: Len of test_metrics() test_loss, summed test_loss: {len(stats[2])}, {sum(stats[2])}")
+            print(f"SB EVAL TS: Sum (ns) of test_metrics() output: {sum(stats[1])}")
             test_loss = stats[2]
             test_samples_per_round = stats[1]
 
@@ -837,19 +833,19 @@ class Server(object):
                     self.unseen_live_rs_test_loss.append(sum(seq_stats[6])/sum(seq_stats[7]))
 
             #assert(test_loss<1e5)
-            print("Averaged Test Loss: {:.5f}".format(avg_test_loss))
+            print("Averaged Test Loss: {:.7f}".format(avg_test_loss))
 
         if train:
             stats_train = self.train_metrics()
-            if self.verbose:
-                print(f"Len of train_metrics() output: {len(stats_train[0])}")
-                print(f"Sum (ns) of train_metrics() output: {len(stats_train[1])}")
+            #if self.verbose:
+            print(f"SB EVAL TR: Len of train_metrics() train_loss, summed train_loss: {len(stats_train[2])}, {sum(stats_train[2])}")
+            print(f"SB EVAL TR: Sum (ns) of train_metrics() output: {len(stats_train[1])}")
             avg_train_loss = sum(stats_train[2]) / sum(stats_train[1])
             self.rs_train_loss.append(avg_train_loss)
             # I'm not even recording the training seq metrics right now... don't really care
             # Do I even have those lol
 
-            print("Averaged Train Loss: {:.5f}".format(avg_train_loss))
+            print("Averaged Train Loss: {:.7f}".format(avg_train_loss))
 
             # If the average loss is unreasonably high just abort the run
             if avg_train_loss>self.loss_threshold:
