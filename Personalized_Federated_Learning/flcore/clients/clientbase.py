@@ -441,9 +441,9 @@ class Client(object):
             else:
                 # DO NOTHING --> testloader is assigned at the start, in main.py for kfold!!!
                 return
-        elif self.test_split_each_update:
-            testing_samples = self.cond_samples_npy[self.test_split_idx,:]
-            testing_labels = self.cond_labels_npy[self.test_split_idx,:]
+        else: #if self.test_split_each_update:
+            testing_samples = self.cond_samples_npy[:self.test_split_idx,:]
+            testing_labels = self.cond_labels_npy[:self.test_split_idx,:]
 
         if self.deep_bool:
             testing_dataset_obj = DeepSeqLenDataset(testing_samples, testing_labels, self.sequence_length)
@@ -455,7 +455,7 @@ class Client(object):
             batch_size=batch_size, 
             drop_last=True,  # Yah idk if this should be true or false or if it matters...
             shuffle=False) 
-
+        
 
     def set_parameters(self, model):
         for new_param, old_param in zip(model.parameters(), self.model.parameters()):
@@ -499,6 +499,7 @@ class Client(object):
         eval_model.eval()
 
         if not self.use_kfold_crossval:
+            print("Loading test data")
             # Set the testloader (kfcv has its testloader set in main)
             self.load_test_data()
 
@@ -522,9 +523,9 @@ class Client(object):
 
                 total_loss += loss.item() * num_samples
                 total_samples += num_samples
-            print(f"TOTAL (total_loss, total_samples): ({total_loss}, {total_samples})")
             average_loss = total_loss / total_samples
             self.client_testing_log.append(average_loss)
+            print(f"TOTAL (total_loss, total_samples): ({total_loss}, {total_samples})")
             print(f"CALC'd AVERAGE: {average_loss}\n")
         return total_loss, total_samples # Return average_loss or total_loss...
     
@@ -570,7 +571,7 @@ class Client(object):
                     print(f"TRAIN: (loss, num_samples): ({loss}, {num_samples})")
                 total_train_samples += num_samples
                 total_train_loss += loss.item() * num_samples
-            print(f"TOTAL (total_train_loss, total_train_samples): ({total_train_loss}, {total_train_samples})\n")
+            print(f"TOTAL (total_train_loss, total_train_samples): ({total_train_loss}, {total_train_samples})")
 
             average_loss = total_train_loss / total_train_samples
             #self.client_training_log.append(average_loss) # this doesnt' exist rn
