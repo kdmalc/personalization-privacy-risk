@@ -146,88 +146,31 @@ class Client(object):
         # Note this double dipping
         self.debug_mode = args.debug_mode
         self.check_loss_for_nan_inf = args.debug_mode
-
-
-    # GOAL IS TO CONSOLIDATE EVERYTHING SHARED BETWEEN TRAIN_METRICS, TEST_METRICS, AND CPHS_TRAINING_SUBROUTINE
-    def shared_loss_calc(self, x, y, model, train_mode=True):
-        '''This simulates the data stream and then calculates the loss. DOES NOT BACKPROP'''
-        if isinstance(x, list):
-            x[0] = x[0].to(self.device)
-        else:
-            x = x.to(self.device)
-        y = y.to(self.device)
-
-        # Maybe this is causing problems for some reason in testing? Idk
-        ## Maybe try replacing self.F with a toggle for self.F vs self.F_testing...
-        ## Perhaps they share the same computational graph? ...
-        F, V, y_ref = self.simulate_data_streaming_xy(x, y, input_model=model, train_mode=train_mode)
-
-        # D@s = predicted velocity
-        vel_pred = model(F)
-
-        # L2 regularization term (from CPHS formulation)
-        l2_loss = sum(torch.norm(param, p=2)**2 for name, param in model.named_parameters() if 'weight' in name)
-        t1 = self.loss_func(vel_pred, y_ref)
-        #if type(t1)==torch.Tensor:
-        #    t1 = t1.sum()
-        t2 = self.lambdaD*(l2_loss)
-        t3 = self.lambdaF*(torch.linalg.matrix_norm((F))**2)
-        #if type(t3)==torch.Tensor:
-        #    t3 = t3.sum()
-
-        if self.verbose or self.debug_mode:
-            print(f"CB shared_loss_calc loss t1: {t1}")
-            print(f"CB shared_loss_calc l2_loss: {l2_loss}")
-        if self.check_loss_for_nan_inf:
-            # It's working right now so I'll turn this off for the slight speed boost
-            if np.isnan(t1.item()) or np.isinf(t1.item()):
-                raise ValueError("CLIENTBASE: Error term is NAN/inf..")
-            if np.isnan(t2.item()) or np.isinf(t2.item()):
-                raise ValueError("CLIENTBASE: Decoder Effort term is NAN/inf...")
-            if np.isnan(t3.item()) or np.isinf(t3.item()):
-                raise ValueError("CLIENTBASE: User Effort term is NAN/inf...")
-
-        # Apply additional regularizers (eg for continual learning)
-        reg_sum = 0
-        if self.regularizers!=None:
-            print("Regularizers is not None: Applying additional regularizers!")
-            if type(self.regularizers)==list:
-                for reg_term in self.regularizers:
-                    # This isn't quite correct, would need to be reg_term.penalty or something...
-                    reg_sum += reg_term.penalty()
-            else:
-                reg_sum = self.regularizers.penalty()
-        if self.verbose or self.debug_mode:
-            print(f"CB shared_loss_calc reg_sum: {reg_sum}")
-
-        # Only do this during training NOT TESTING EVAL!
-        if train_mode:
-            self.cost_func_comps_log = [(t1.item(), t2.item(), t3.item())]
-
-        loss = t1 + t2 + t3 + reg_sum
-        num_samples = x.size()[0]
-
-        #print(f"t1: {t1.item():.6f}, t2: {t2.item():.6f}, t3: {t3.item()}, loss: {loss:.6f}, num_samples: {num_samples}\n")
-        return loss, num_samples
     
 
     def cphs_training_subroutine(self, x, y):
-        # Assert that the dataloader data corresponds to the correct update data
-        # I think trainloader is fine so I can turn it off once tl has been verified
-        #self.assert_tl_samples_match_npy(x, y)
-
-        # Idk if train/test metrics need to be running this for APFL too
-        ## PFL-NONIID did not...
-        if self.algorithm!='APFL':
-            # reset gradient so it doesn't accumulate
-            self.optimizer.zero_grad()
-        
+        self.optimizer.zero_grad()
         #print(f"CPHS_TRAINING_SUBROUTINE, USER {self.ID}")
         self.model.train()
-        loss_obj, num_samples = self.shared_loss_calc(x, y, self.model, train_mode=True)
-
-        if self.algorithm=='APFL':
-            self.optimizer.zero_grad()
+        #loss_obj, num_samples = self.shared_loss_calc(x, y, self.model, train_mode=True)
+        #F, V, y_ref = self.simulate_data_streaming_xy(x, y, input_model=model, train_mode=train_mode)
+        if self.normalize_data:
+            s = normalize_tensor(x)
+            p_reference = normalize_tensor(y)
+        else:
+            s = x
+        F = s[:-1,:]
+        y_ref = p_reference[:-1, :]  # To match the input
+        #
+        vel_pred = self.model(F)
+        l2_loss = sum(torch.norm(param, p=2)**2 for name, param in self.model.named_parameters() if 'weight' in name)
+        t1 = self.loss_func(vel_pred, y_ref)
+        t2 = self.lambdaD*(l2_loss)
+        t3 = self.lambdaF*(torch.linalg.matrix_norm((F))**2)
+        # TODO: So... does anything happen with these lol
+        self.cost_func_comps_log = [(t1.item(), t2.item(), t3.item())]
+        loss_obj = t1 + t2 + t3 #+ reg_sum
+        num_samples = x.size()[0]
         
         # backward pass
         loss_obj.backward()
@@ -259,52 +202,6 @@ class Client(object):
 
         if self.verbose:
             print(f"Client {self.ID}; update {self.current_update}; x.size(): {x.size()}; loss: {loss_obj.item():0.5f}")
-
-    
-    def simulate_data_streaming_xy(self, x, y, input_model, train_mode=True):
-        '''
-        Input:
-            x, y --> A single training example from the trainloader
-
-        Output: 
-            Returns F, V, y_ref
-
-        This function sets F (transformed input data) and V (Vplus used in cost func)
-        Specifically: the loss function is its own class/object so it doesn't have 
-            access to these (F and V)
-        Must set F and V for model.output --> where? why? --> F is in the cost func, but where is V used? grad eval or something?
-        '''
-
-        s_temp = x
-        p_reference = y
-
-        # First, normalize the entire input data
-        if self.normalize_data:
-            # This is really scaling not norming
-            s_normed = normalize_tensor(s_temp)
-            p_reference = normalize_tensor(p_reference)
-        else:
-            s_normed = s_temp
-        # Apply PCA if applicable
-        if self.pca_channels!=self.device_channels:
-            pca = PCA(n_components=self.pca_channels)
-            s = torch.tensor(pca.fit_transform(s_normed), dtype=torch.float32)
-        else:
-            s = s_normed
-
-        F = s[:-1,:]
-        if train_mode:
-            v_actual = input_model(s)
-        else:
-            # For testing, turn off the gradient tracking in the forward pass!
-            with torch.no_grad():
-                v_actual = input_model(s)
-        # Numerical integration of v_actual to get p_actual
-        p_actual = torch.cumsum(v_actual, dim=1)*self.dt
-        V = (p_reference - p_actual)*self.dt # V doesn't actually get used...
-        y_ref = p_reference[:-1, :]  # To match the input
-        #^ This is used in t1 = self.loss_func(vel_pred, self.y_ref) in shared_loss_calc
-        return F, V, y_ref
 
 
     def _load_train_data(self):
@@ -515,14 +412,30 @@ class Client(object):
                     x = x.to(self.device)
                 y = y.to(self.device)
                 
-                loss, num_samples = self.shared_loss_calc(x, y, eval_model, train_mode=False)
+                #loss, num_samples = self.shared_loss_calc(x, y, eval_model, train_mode=False)
+                if self.normalize_data:
+                    s = normalize_tensor(x)
+                    p_reference = normalize_tensor(y)
+                else:
+                    s = x
+                F = s[:-1,:]
+                y_ref = p_reference[:-1, :]  # To match the input
+                #
+                vel_pred = self.model(F)
+                l2_loss = sum(torch.norm(param, p=2)**2 for name, param in self.model.named_parameters() if 'weight' in name)
+                t1 = self.loss_func(vel_pred, y_ref)
+                t2 = self.lambdaD*(l2_loss)
+                t3 = self.lambdaF*(torch.linalg.matrix_norm((F))**2)
+                ts_mtr_loss = t1 + t2 + t3 #+ reg_sum
+                ts_mtr_num_samples = x.size()[0]
+
                 # I think an issue could be if after streaming the values are getting "double-dipped"
                 ## F, y_ref are geting used for testing as well, or rather the computational graph (gradient/history) remains and is what is getting double-dipped...
                 if i==0 or i==len(self.testloader)-1:
-                    print(f"TEST: (loss, num_samples): ({loss}, {num_samples})")
+                    print(f"TEST: (loss, num_samples): ({ts_mtr_loss}, {ts_mtr_num_samples})")
 
-                total_loss += loss.item() * num_samples
-                total_samples += num_samples
+                total_loss += ts_mtr_loss.item() * ts_mtr_num_samples
+                total_samples += ts_mtr_num_samples
             average_loss = total_loss / total_samples
             self.client_testing_log.append(average_loss)
             print(f"TOTAL (total_loss, total_samples): ({total_loss}, {total_samples})")
@@ -566,11 +479,28 @@ class Client(object):
                 y = y.to(self.device)
 
                 #print(f"TRAIN_METRICS, USER {self.ID}")
-                loss, num_samples = self.shared_loss_calc(x, y, eval_model, train_mode=False)
+                #loss, num_samples = self.shared_loss_calc(x, y, eval_model, train_mode=False)
+                if self.normalize_data:
+                    s = normalize_tensor(x)
+                    p_reference = normalize_tensor(y)
+                else:
+                    s = x
+                F = s[:-1,:]
+                y_ref = p_reference[:-1, :]  # To match the input
+                #
+                vel_pred = self.model(F)
+                l2_loss = sum(torch.norm(param, p=2)**2 for name, param in self.model.named_parameters() if 'weight' in name)
+                t1 = self.loss_func(vel_pred, y_ref)
+                t2 = self.lambdaD*(l2_loss)
+                t3 = self.lambdaF*(torch.linalg.matrix_norm((F))**2)
+                # TODO: So... does anything happen with these lol
+                #self.cost_func_comps_log = [(t1.item(), t2.item(), t3.item())]
+                tr_mtr_loss = t1 + t2 + t3 #+ reg_sum
+                tr_mtr_num_samples = x.size()[0]
                 if i==0 or i==len(self.trainloader)-1:
-                    print(f"TRAIN: (loss, num_samples): ({loss}, {num_samples})")
-                total_train_samples += num_samples
-                total_train_loss += loss.item() * num_samples
+                    print(f"TRAIN: (loss, num_samples): ({tr_mtr_loss}, {tr_mtr_num_samples})")
+                total_train_samples += tr_mtr_num_samples
+                total_train_loss += tr_mtr_loss.item() * tr_mtr_num_samples
             print(f"TOTAL (total_train_loss, total_train_samples): ({total_train_loss}, {total_train_samples})")
 
             average_loss = total_train_loss / total_train_samples
@@ -578,48 +508,6 @@ class Client(object):
             print(f"CALC'd AVERAGE: {average_loss}\n")
 
         return total_train_loss, total_train_samples
-
-    
-    def assert_tl_samples_match_npy(self, x, y, batch_num=None):  # I think batch_num should always work? As long as the batch size works out...
-        # Assert that the dataloader data corresponds to the correct update data from the npy file that is loaded in
-        # Right now this doesn't check the labels y... does print them tho
-
-        nondl_x = np.round(self.cond_samples_npy[self.update_lower_bound:self.update_upper_bound], 4)
-        nondl_y = np.round(self.cond_labels_npy[self.update_lower_bound:self.update_upper_bound], 4)
-        if batch_num!=None:
-            nondl_x = nondl_x[self.batch_size*batch_num:self.batch_size*batch_num+self.batch_size]
-            nondl_y = nondl_y[self.batch_size*batch_num:self.batch_size*batch_num+self.batch_size]
-        if (sum(sum(x[:5]-nondl_x[:5]))>0.01):  # 0.01 randomly chosen arbitarily small threshold
-            # I think this bug is fixed now
-
-            # ^Client11 fails when threshold is < 0.002, idk why there is any discrepancy
-            # ^All numbers are positive so anything <1 is just rounding as far as I'm concerned
-            print(f"clientavg: TRAINLOADER DOESN'T MATCH EXPECTED!! (@ update {self.current_update}, with x.size={x.size()})")
-            print(f"Summed difference: {sum(sum(x[:5]-nondl_x[:5]))}")
-            print(f"Trainloader x first 10 entries of channel 0: {x[:10, 0]}") 
-            print(f"cond_samples_npy first 10 entries of channel 0: {nondl_x[:10, 0]}") 
-            print()
-            print(f"Trainloader y first 10 entries of channel 0: {y[:10, 0]}") 
-            print(f"cond_labels_npy first 10 entries of channel 0: {nondl_y[:10, 0]}") 
-            raise ValueError("Trainloader may not be working as anticipated")
-        #assert(sum(sum(x[:5]-self.cond_labels_npy[self.update_ix[self.current_update]:self.update_ix[self.current_update+1]][:5]))==0) 
-
-
-    # def get_next_train_batch(self):
-    #     try:
-    #         # Samples a new batch for persionalizing
-    #         (x, y) = next(self.iter_trainloader)
-    #     except StopIteration:
-    #         # restart the generator if the previous generator is exhausted.
-    #         self.iter_trainloader = iter(self.trainloader)
-    #         (x, y) = next(self.iter_trainloader)
-
-    #     if type(x) == type([]):
-    #         x = x[0]
-    #     x = x.to(self.device)
-    #     y = y.to(self.device)
-
-    #     return x, y
 
 
     def save_item(self, item, item_name, item_path=None):

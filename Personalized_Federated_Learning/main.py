@@ -211,10 +211,10 @@ def parse_args():
     parser.add_argument('-m', "--model_str", type=str, default="LinearRegression")  
     parser.add_argument('-lbs', "--batch_size", type=int, default=600)
     # For non-deep keep 1202: --> Idk if this is necessary actually, I think it will work regardless
-    parser.add_argument('-lr', "--local_learning_rate", type=float, default=0.001,
+    parser.add_argument('-lr', "--local_learning_rate", type=float, default=0.01,
                         help="Local learning rate")
     parser.add_argument('-gr', "--global_rounds", type=int, default=20)  # KAI: Originally was 2000 --> That's way too much for cross val lol
-    parser.add_argument('-optimizer_str', "--optimizer_str", type=str, default="ADAM")
+    parser.add_argument('-optimizer_str', "--optimizer_str", type=str, default="SGD")
     parser.add_argument('-stup', "--starting_update", type=int, default=10,
                         help="Which update to start on (for CPHS Simulation). Use 0 or 10.")
     parser.add_argument('-save_mdls', "--save_models", type=bool, default=False) # Uhhh what does this do...
