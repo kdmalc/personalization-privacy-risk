@@ -211,9 +211,10 @@ def parse_args():
     parser.add_argument('-m', "--model_str", type=str, default="LinearRegression")  
     parser.add_argument('-lbs', "--batch_size", type=int, default=600)
     # For non-deep keep 1202: --> Idk if this is necessary actually, I think it will work regardless
-    parser.add_argument('-lr', "--local_learning_rate", type=float, default=0.1,
+    parser.add_argument('-lr', "--local_learning_rate", type=float, default=0.001,
                         help="Local learning rate")
-    parser.add_argument('-gr', "--global_rounds", type=int, default=10)  # KAI: Originally was 2000 --> That's way too much for cross val lol
+    parser.add_argument('-gr', "--global_rounds", type=int, default=20)  # KAI: Originally was 2000 --> That's way too much for cross val lol
+    parser.add_argument('-optimizer_str', "--optimizer_str", type=str, default="ADAM")
     parser.add_argument('-stup', "--starting_update", type=int, default=10,
                         help="Which update to start on (for CPHS Simulation). Use 0 or 10.")
     parser.add_argument('-save_mdls', "--save_models", type=bool, default=False) # Uhhh what does this do...
@@ -221,7 +222,6 @@ def parse_args():
     # CONTINUAL LEARNING
     parser.add_argument('-ewc_bool', "--ewc_bool", type=bool, default=False)
     parser.add_argument('-fisher_mult', "--fisher_mult", type=int, default=1e3)
-    parser.add_argument('-optimizer_str', "--optimizer_str", type=str, default="ADAM")
 
     # THESE ARE NOT CHANGING FREQUENTLY:
     ##################################################################################################################################
@@ -238,7 +238,7 @@ def parse_args():
     parser.add_argument('-con_num', "--condition_number_lst", type=str, default='[3]', # Use 3 and/or 7
                         help="Which condition number (trial) to train on. Must be a list. By default, will iterate through all train_subjs for each cond (eg each cond_num gets its own client even for the same subject)")
     parser.add_argument('-ld', "--learning_rate_decay", type=bool, default=False)
-    parser.add_argument('-ls', "--local_epochs", type=int, default=3, 
+    parser.add_argument('-ls', "--local_epochs", type=int, default=1, 
                         help="How many times a client should iterate through their current update dataset.")  
     parser.add_argument('-ngradsteps', "--num_gradient_steps", type=int, default=1, 
                         help="How many gradient steps in one local epoch.")  
@@ -248,7 +248,7 @@ def parse_args():
     parser.add_argument('-test_split_fraction', "--test_split_fraction", type=float, default=0.2, 
                         help="Fraction of data to use for testing")
     ## ^ Is this x% of the TOTAL data or of the [starting_update:final_idx] data? ...
-    parser.add_argument('-kfcv', "--use_kfold_crossval", type=bool, default=False,
+    parser.add_argument('-kfcv', "--use_kfold_crossval", type=bool, default=True,
                         help="Split testing data by holding out some users (fraction held out determined by test_split_fraction)")
     parser.add_argument('-test_split_each_update', "--test_split_each_update", type=bool, default=False,
                         help="Implement train/test split within each update or on the entire dataset")
