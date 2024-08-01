@@ -38,7 +38,7 @@ torch.manual_seed(0)
 
 
 def create_user_folds(users, n_splits=5):
-    kf = KFold(n_splits=n_splits, shuffle=True, random_state=42)
+    kf = KFold(n_splits=n_splits, shuffle=True, random_state=1)
     user_folds = list(kf.split(users))
     return user_folds
 
@@ -211,10 +211,10 @@ def parse_args():
     parser.add_argument('-m', "--model_str", type=str, default="LinearRegression")  
     parser.add_argument('-lbs', "--batch_size", type=int, default=600)
     # For non-deep keep 1202: --> Idk if this is necessary actually, I think it will work regardless
-    parser.add_argument('-lr', "--local_learning_rate", type=float, default=0.001,
+    parser.add_argument('-lr', "--local_learning_rate", type=float, default=0.01,
                         help="Local learning rate")
-    parser.add_argument('-gr', "--global_rounds", type=int, default=20)  # KAI: Originally was 2000 --> That's way too much for cross val lol
-    parser.add_argument('-optimizer_str', "--optimizer_str", type=str, default="ADAM")
+    parser.add_argument('-gr', "--global_rounds", type=int, default=50)  # KAI: Originally was 2000 --> That's way too much for cross val lol
+    parser.add_argument('-optimizer_str', "--optimizer_str", type=str, default="SGD")
     parser.add_argument('-stup', "--starting_update", type=int, default=10,
                         help="Which update to start on (for CPHS Simulation). Use 0 or 10.")
     parser.add_argument('-save_mdls', "--save_models", type=bool, default=False) # Uhhh what does this do...
@@ -351,7 +351,7 @@ def parse_args():
                         help="Number of recording channels with the used EMG device")
     parser.add_argument('-dt', "--dt", type=float, default=1/60,
                         help="Delta time, amount of time (sec?) between measurements")
-    parser.add_argument('-normalize_data', "--normalize_data", type=bool, default=True,
+    parser.add_argument('-normalize_data', "--normalize_data", type=bool, default=False,
                         help="Normalize (actually scales...) the input EMG signals and its labels. This is good practice.")
     parser.add_argument('-debug_mode', "--debug_mode", type=bool, default=False,
                         help="Will do additional checks on loss magnitudes and such (check_loss_for_nan_inf, etc).")
@@ -361,7 +361,7 @@ def parse_args():
                         help="Control whether or not to have ANY slow clients")
     parser.add_argument('-return_cost_func_comps', "--return_cost_func_comps", type=bool, default=True,  # They're basically returned by default now
                         help="Return Loss, Error, DTerm, FTerm from loss class")
-    parser.add_argument('-lm_bias', "--linear_model_bias", type=bool, default=True,
+    parser.add_argument('-lm_bias', "--linear_model_bias", type=bool, default=False,
                         help="Boolean determining whether to use an additive bias. Note that previous 599 approach had no additive bias.")
     # Idk if this will work actually? :0.self.ndpf won't work, I don't think...
     parser.add_argument('-ndp', "--num_decimal_points", type=int, default=5,
