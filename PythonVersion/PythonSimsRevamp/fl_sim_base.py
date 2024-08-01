@@ -9,7 +9,7 @@ from cost_funcs import *
 
 
 class ModelBase:
-    def __init__(self, ID, w, method, smoothbatch=1, verbose=False, PCA_comps=7, current_round=0, num_participants=14, log_init=0):
+    def __init__(self, ID, w, opt_method, smoothbatch=1, verbose=False, PCA_comps=7, current_round=0, num_participants=14, log_init=0):
         # Not input
         self.num_updates = 19
         self.cphs_starting_update = 10
@@ -32,13 +32,16 @@ class ModelBase:
         self.w_prev = copy.deepcopy(self.w)
         self.num_participants = num_participants
         self.log_init = log_init
+
         self.local_error_log = [] #[log_init]*num_participants
         self.global_error_log = [] #[log_init]*num_participants
         self.pers_error_log = [] #[log_init]*num_participants
+
         self.local_test_error_log = [] #[log_init]*num_participants
         self.global_test_error_log = [] #[log_init]*num_participants
         self.pers_test_error_log = [] #[log_init]*num_participants
-        self.method = method
+        
+        self.opt_method = opt_method.upper()
         self.current_round = current_round
         self.verbose = verbose
         self.smoothbatch = smoothbatch
@@ -47,7 +50,7 @@ class ModelBase:
         return f"{self.type}{self.ID}"
     
     def display_info(self): 
-        return f"{self.type} model: {self.ID}\nCurrent Round: {self.current_round}\nTraining Method: {self.method}"
+        return f"{self.type} model: {self.ID}\nCurrent Round: {self.current_round}\nOptimization Method: {self.opt_method}"
 
 
 # Add this as a static method?

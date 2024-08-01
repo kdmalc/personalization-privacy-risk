@@ -15,10 +15,10 @@ from fl_sim_base import *
         
         
 class Server(ModelBase):
-    def __init__(self, ID, D0, method, all_clients, smoothbatch=1, C=0.35, normalize_dec=True, test_split_type='end', 
-                 use_up16_for_test=True, test_split_frac=0.3, current_round=0, PCA_comps=10, verbose=False, 
+    def __init__(self, ID, D0, opt_method, global_method, all_clients, smoothbatch=0.75, C=0.35, normalize_dec=False, test_split_type='end', 
+                 use_up16_for_test=True, test_split_frac=0.3, current_round=0, PCA_comps=64, verbose=False, 
                  copy_type='deep', validate_memory_IDs=True):
-        super().__init__(ID, D0, method, smoothbatch=smoothbatch, current_round=current_round, PCA_comps=PCA_comps, 
+        super().__init__(ID, D0, opt_method, smoothbatch=smoothbatch, current_round=current_round, PCA_comps=PCA_comps, 
                          verbose=verbose, num_participants=14, log_init=0)
         self.type = 'Server'
         self.num_avail_clients = 0
@@ -30,12 +30,14 @@ class Server(ModelBase):
         self.experimental_inclusion_round = [0]
         self.init_lst = [self.log_init]*self.num_participants
         self.normalize_dec = normalize_dec
-        self.set_available_clients_list(init=True)
         self.validate_memory_IDs = validate_memory_IDs
         self.copy_type = copy_type
         self.test_split_type = test_split_type
         self.test_split_frac = test_split_frac
         self.use_up16_for_test = use_up16_for_test
+        self.global_method = global_method.upper()
+        print(f"Running the {self.global_method} algorithm as the global method!")
+        self.set_available_clients_list(init=True)
 
                 
     # 0: Main Loop
@@ -43,8 +45,8 @@ class Server(ModelBase):
         # Update global round number
         self.current_round += 1
         
-        # TODO: This is supposed to include PerFedAvg...
-        if 'FedAvg' in self.method:  # OR EQUIVALENTLY: if self.method in ['FedAvg', 'FedAvgSB']:
+        # TODO: This is supposed to include PerFedAvg I'm assuming...
+        if self.global_method=='FEDAVG' or 'PFA' in self.global_method:
             # Choose fraction C of available clients
             self.set_available_clients_list()
             self.choose_clients()
@@ -56,10 +58,10 @@ class Server(ModelBase):
             # GLOBAL SmoothBatch
             #W_new = alpha*D[-1] + ((1 - alpha) * W_hat)
             #^ Note when self.smoothbatch=1 (default), we just keep the new self.w (no mixing)
-            if self.method=='FedAvg':
+            if self.global_method=='FEDAVG' or 'PFA' in self.global_method:
                 self.w = self.smoothbatch*self.w + ((1 - self.smoothbatch)*self.w_prev)
                 # Eg don't do a global-global smoothbatch for the other cases
-        elif self.method=='NoFL':
+        elif self.global_method=='NOFL':
             # TODO: Is NoFL just supposed to be the Local CPHS sims...
             self.train_client_and_log(client_set=self.all_clients)
         else:
@@ -74,10 +76,11 @@ class Server(ModelBase):
                 raise TypeError("All my clients are all integers...")
             my_client.chosen_status = 0
             # test_metrics for all clients
-            if self.method=='FedAvg':
+            if self.global_method=='FEDAVG':
+                # TODO: What about PFA?
                 global_test_loss, global_test_pred = my_client.test_metrics(self.w, 'global')
                 local_test_loss, local_test_pred = my_client.test_metrics(my_client.w, 'local')
-            elif self.method=='NoFL':
+            elif self.global_method=='NOFL':
                 global_test_loss = 0
                 local_test_loss, local_test_pred = my_client.test_metrics(my_client.w, 'local') 
             #
@@ -87,10 +90,11 @@ class Server(ModelBase):
             else:
                 running_global_test_loss = np.array(global_test_loss)
                 running_local_test_loss = np.array(local_test_loss)
-        if self.method=='FedAvg':
+        if self.global_method=='FEDAVG':
+            # TODO: What about PFA?
             self.global_test_error_log = running_global_test_loss / len(self.all_clients)
             self.local_test_error_log = running_local_test_loss / len(self.all_clients)
-        elif self.method=='NoFL':
+        elif self.global_method=='NOFL':
             self.local_test_error_log = running_local_test_loss / len(self.all_clients)
             
     # 1.1
@@ -103,7 +107,7 @@ class Server(ModelBase):
                 self.num_avail_clients += 1
                 if init:
                     # Pass down the global METHOD (NOT THE WEIGHTS!!)
-                    my_client.global_method = self.method
+                    my_client.global_method = self.global_method
     
     # 1.2
     def choose_clients(self):
@@ -138,9 +142,9 @@ class Server(ModelBase):
                 pers_init_carry_val = 0
             else:
                 local_init_carry_val = self.local_error_log[-1][my_client.ID][2]#[0]
-                if self.method != 'NoFL':
+                if self.global_method != 'NOFL':
                     global_init_carry_val = self.global_error_log[-1][my_client.ID][2]#[0]
-                if self.method in self.pers_methods:
+                if self.global_method in self.pers_methods:
                     pers_init_carry_val = self.pers_error_log[-1][my_client.ID][2]#[0]
                     
             if my_client in client_set:
@@ -162,19 +166,19 @@ class Server(ModelBase):
                 
                 current_local_lst.append((my_client.ID, self.current_round, 
                                           my_client.eval_model(which='local')))
-                if self.method != 'NoFL':
+                if self.global_method != 'NOFL':
                     current_global_lst.append((my_client.ID, self.current_round, 
                                                my_client.eval_model(which='global')))
-                if self.method in self.pers_methods:
+                if self.global_method in self.pers_methods:
                     current_pers_lst.append((my_client.ID, self.current_round, 
                                                my_client.eval_model(which='pers')))
             else:
                 current_local_lst.append((my_client.ID, self.current_round, 
                                           local_init_carry_val))
-                if self.method != 'NoFL':
+                if self.global_method != 'NOFL':
                     current_global_lst.append((my_client.ID, self.current_round,
                                                global_init_carry_val))
-                if self.method in self.pers_methods:
+                if self.global_method in self.pers_methods:
                     current_pers_lst.append((my_client.ID, self.current_round,
                                                pers_init_carry_val))
         # Append (ID, COST) to SERVER'S error log.  
@@ -185,14 +189,14 @@ class Server(ModelBase):
             self.local_error_log.append(current_local_lst)
         else:
             self.local_error_log.append(current_local_lst)
-        if self.method != 'NoFL':
+        if self.global_method != 'NOFL':
             # NoFL case has no global model since there's... no FL
             if self.global_error_log==self.init_lst:
                 self.global_error_log = []
                 self.global_error_log.append(current_global_lst)
             else:
                 self.global_error_log.append(current_global_lst)
-        if self.method in self.pers_methods:
+        if self.global_method in self.pers_methods:
             if self.pers_error_log==self.init_lst:
                 self.pers_error_log = []
                 self.pers_error_log.append(current_pers_lst)

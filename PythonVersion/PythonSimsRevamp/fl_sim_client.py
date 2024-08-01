@@ -7,29 +7,29 @@ from cost_funcs import *
 import time
 from sklearn.decomposition import PCA
 
-import pickle
-from matplotlib import pyplot as plt
 from scipy.optimize import minimize
-import pandas as pd
 
 from fl_sim_base import *
 
 
 class Client(ModelBase):
-    def __init__(self, ID, w, method, local_data, data_stream, smoothbatch=0.75, current_round=0, PCA_comps=10, 
-                availability=1, global_method='FedAvg', normalize_dec=False, normalize_EMG=True, starting_update=0, 
-                track_cost_components=True, track_lr_comps=True, use_real_hess=True, gradient_clipping=False, log_decs=True, 
-                clipping_threshold=100, tol=1e-10, adaptive=True, lr=1, track_gradient=True, wprev_global=False, 
-                num_steps=1, use_zvel=False,  safe_lr_factor=False, set_alphaF_zero=False, 
-                mix_in_each_steps=False, mix_mixed_SB=False, delay_scaling=5, random_delays=False, download_delay=1, 
-                upload_delay=1, copy_type='deep', validate_memory_IDs=True, local_round_threshold=50, condition_number=1, 
+    def __init__(self, ID, w, opt_method, local_data, data_stream, smoothbatch=0.75, current_round=0, PCA_comps=64, 
+                availability=1, global_method='FedAvg', max_iter=1, normalize_dec=False, normalize_EMG=True, starting_update=10, 
+                track_cost_components=True, gradient_clipping=False, log_decs=True, 
+                clipping_threshold=100, tol=1e-10, lr=1, track_gradient=True, wprev_global=False, 
+                num_steps=1, use_zvel=False, 
+                mix_in_each_steps=False, mix_mixed_SB=False, delay_scaling=0, random_delays=False, download_delay=1, 
+                upload_delay=1, copy_type='deep', validate_memory_IDs=True, local_round_threshold=50, condition_number=3, 
                 verbose=False, test_split_type='end', test_split_frac=0.3, use_up16_for_test=True):
-        super().__init__(ID, w, method, smoothbatch=smoothbatch, current_round=current_round, PCA_comps=PCA_comps, 
+        super().__init__(ID, w, opt_method, smoothbatch=smoothbatch, current_round=current_round, PCA_comps=PCA_comps, 
                          verbose=verbose, num_participants=14, log_init=0)
         '''
         Note self.smoothbatch gets overwritten according to the condition number!  
         If you want NO smoothbatch then set it to 'off'
         '''
+
+        #
+        self.global_method = global_method.upper()
 
         self.validate_memory_IDs = validate_memory_IDs
         self.copy_type = copy_type
@@ -53,14 +53,15 @@ class Client(ModelBase):
         self.test_split_frac = test_split_frac
         test_split_product_index = local_data['training'].shape[0]*test_split_frac
         # Convert this value to the cloest update_ix value
-        train_test_update_number_split = min(ModelBase.update_ix, key=lambda x:abs(x-test_split_product_index))
-        self.test_split_idx = ModelBase.update_ix.index(train_test_update_number_split)
+        train_test_update_number_split = min(self.update_ix, key=lambda x:abs(x-test_split_product_index))
+        self.test_split_idx = self.update_ix.index(train_test_update_number_split)
         self.training_data = local_data['training']#[:self.test_split_idx, :]
         self.labels = local_data['labels']#[:self.test_split_idx, :]
         #self.testing_data = local_data['training'][self.test_split_idx:, :]
         #self.testing_labels = local_data['labels'][self.test_split_idx:, :]
         # Round minimization output to the nearest int or keep as a float?  Don't need arbitrary precision
         self.round2int = False
+        self.max_iter = max_iter
         self.normalize_dec = normalize_dec
         ####################################################################
         # Maneeshika Code:
@@ -109,10 +110,7 @@ class Client(ModelBase):
             self.smoothbatch=smoothbatch
             #print()
         self.alphaE = 1e-6
-        if set_alphaF_zero:
-            self.alphaF = 0
-        else:
-            self.alphaF = 1e-7
+        self.alphaF = 0
         #
         self.gradient_clipping = gradient_clipping
         self.clipping_threshold = clipping_threshold
@@ -142,8 +140,8 @@ class Client(ModelBase):
         
         # SET TESTING DATA AND METRICS
         if self.use_up16_for_test==True:
-            lower_bound = (ModelBase.update_ix[15])//2  #Use only the second half of each update
-            upper_bound = ModelBase.update_ix[16]
+            lower_bound = (self.update_ix[15])//2  #Use only the second half of each update
+            upper_bound = self.update_ix[16]
         else:
             raise ValueError("use_up16_for_test must be True, it is the only testing supported currently")
         self.test_learning_batch = upper_bound - lower_bound
@@ -170,7 +168,7 @@ class Client(ModelBase):
         # Log decs
         if self.log_decs:
             self.dec_log.append(self.w)
-            if self.global_method=="FedAvg":
+            if self.global_method=="FEDAVG":
                 self.global_dec_log.append(copy.deepcopy(self.global_w))
             elif self.global_method in self.pers_methods:
                 self.global_dec_log.append(copy.deepcopy(self.global_w))
@@ -178,26 +176,15 @@ class Client(ModelBase):
         # Log Error
         self.local_error_log.append(self.eval_model(which='local'))
         # Yes these should both be ifs not elif, they may both need to run
-        if self.global_method!="NoFL":
+        if self.global_method!="NOFL":
             self.global_error_log.append(self.eval_model(which='global'))
         if self.global_method in self.pers_methods:
             self.pers_error_log.append(self.eval_model(which='pers'))
         # Log Cost Comp
         if self.track_cost_components:
-            if self.global_method=='APFL':
-                # It is using self.V here for vplus, Vminus... not sure if that is correct
-                self.performance_log.append(self.alphaE*(np.linalg.norm((self.mixed_w@self.F - self.V[:,1:]))**2))
-                self.Dnorm_log.append(self.alphaD*(np.linalg.norm(self.mixed_w)**2))
-                self.Fnorm_log.append(self.alphaF*(np.linalg.norm(self.F)**2))
-            else:
-                self.performance_log.append(self.alphaE*(np.linalg.norm((self.w@self.F - self.V[:,1:]))**2))
-                self.Dnorm_log.append(self.alphaD*(np.linalg.norm(self.w)**2))
-                self.Fnorm_log.append(self.alphaF*(np.linalg.norm(self.F)**2))
-        # Log For APFL Gradient... why have this be separate from the rest...
-        # Wouldn't I also want to try and log the global and pers gradients?
-        if self.track_gradient==True and self.global_method!="APFL":
-            # The gradient is a vector... So let's just save the L2 norm?
-            self.gradient_log.append(np.linalg.norm(gradient_cost_l2(self.F, self.w, self.V, self.learning_batch, self.alphaF, self.alphaD, Ne=self.PCA_comps)))
+            self.performance_log.append(self.alphaE*(np.linalg.norm((self.w@self.F - self.V[:,1:]))**2))
+            self.Dnorm_log.append(self.alphaD*(np.linalg.norm(self.w)**2))
+            self.Fnorm_log.append(self.alphaF*(np.linalg.norm(self.F)**2))
 
         
     def simulate_delay(self, incoming):
@@ -216,12 +203,12 @@ class Client(ModelBase):
             #print("Maxxed out your update (you are on update 18), continuing training on last update only")
             # Probably ought to track that we maxed out --> LOG SYSTEM
             # We are stopping an update early, so use -3/-2 and not -2/-1 (the last update)
-            lower_bound = (ModelBase.update_ix[-3] + ModelBase.update_ix[-2])//2  #Use only the second half of each update
-            upper_bound = ModelBase.update_ix[-2]
+            lower_bound = (self.update_ix[-3] + self.update_ix[-2])//2  #Use only the second half of each update
+            upper_bound = self.update_ix[-2]
             self.learning_batch = upper_bound - lower_bound
         elif streaming_method=='full_data':
-            lower_bound = ModelBase.update_ix[0]  # Starts at 0 and not update 10, for now
-            upper_bound = ModelBase.update_ix[-1]
+            lower_bound = self.update_ix[0]  # Starts at 0 and not update 10, for now
+            upper_bound = self.update_ix[-1]
             self.learning_batch = upper_bound - lower_bound
         elif streaming_method=='streaming':
             # If we pass threshold, move on to the next update
@@ -234,8 +221,8 @@ class Client(ModelBase):
                     print()
                     
                 # Using only the second half of each update for co-adaptivity reasons
-                lower_bound = (ModelBase.update_ix[self.current_update] + ModelBase.update_ix[self.current_update+1])//2  
-                upper_bound = ModelBase.update_ix[self.current_update+1]
+                lower_bound = (self.update_ix[self.current_update] + self.update_ix[self.current_update+1])//2  
+                upper_bound = self.update_ix[self.current_update+1]
                 self.learning_batch = upper_bound - lower_bound
             elif self.current_round>2:
                 # This is the base case
@@ -244,12 +231,12 @@ class Client(ModelBase):
             else:
                 # This is for the init case (current round is 0 or 1)
                 # need_to_advance is true, so we overwrite s and such... this is fine 
-                lower_bound = (ModelBase.update_ix[self.current_update] + ModelBase.update_ix[self.current_update+1])//2  
-                upper_bound = ModelBase.update_ix[self.current_update+1]
+                lower_bound = (self.update_ix[self.current_update] + self.update_ix[self.current_update+1])//2  
+                upper_bound = self.update_ix[self.current_update+1]
                 self.learning_batch = upper_bound - lower_bound
         elif streaming_method=='advance_each_iter':
-            lower_bound = (ModelBase.update_ix[self.current_update] + ModelBase.update_ix[self.current_update+1])//2  
-            upper_bound = ModelBase.update_ix[self.current_update+1]
+            lower_bound = (self.update_ix[self.current_update] + self.update_ix[self.current_update+1])//2  
+            upper_bound = self.update_ix[self.current_update+1]
             self.learning_batch = upper_bound - lower_bound
             
             self.current_update += 1
@@ -332,163 +319,91 @@ class Client(ModelBase):
 
     def train_given_model_1_comm_round(self, model, which):
         '''This can be used for training the in ML pipeline but principally is for local-finetuning (eg training a model after it as completed its global training pipeline).'''
-        
-        D0 = copy.deepcopy(self.w_prev)
-        # Set the w_prev equal to the current w:
-        self.w_prev = copy.deepcopy(model)
-        if self.global_method in ["FedAvg", "NoFL", "FedAvgSB", "Per-FedAvg", "Per-FedAvg FO", "Per-FedAvg HF"]:
-            for i in range(self.num_steps):
-                if self.normalize_dec:
-                    model /= np.amax(model)
-
-                if self.method=='GD':
-                    # This one blows up to NAN/overflow... not sure why
-                    grad_cost = np.reshape(gradient_cost_l2(self.F, self.w, self.V, alphaE=self.alphaE, alphaD=self.alphaD, Ne=self.PCA_comps), 
-                                           (2, self.PCA_comps))
-                    # TODO: should I be using self.w or a copy...
-                    model = self.w - self.lr*grad_cost
-                elif self.method=='MaxIterScipyMin':
-                    out = minimize(
-                        lambda D: cost_l2(self.F, D, self.V, alphaD=self.alphaD, alphaE=self.alphaE, Ne=self.PCA_comps), 
-                        D0, method='BFGS', 
-                        jac=lambda D: gradient_cost_l2(self.F, D, self.V, alphaE=self.alphaE, alphaD=self.alphaD, Ne=self.PCA_comps))
-                    model = np.reshape(out.x,(2, self.PCA_comps))
-                elif self.method=='FullScipyMin':
-                    out = minimize(
-                        lambda D: cost_l2(self.F, D, self.V, alphaD=self.alphaD, alphaE=self.alphaE, Ne=self.PCA_comps), 
-                        D0, method='BFGS', 
-                        jac=lambda D: gradient_cost_l2(self.F, D, self.V, alphaE=self.alphaE, alphaD=self.alphaD, Ne=self.PCA_comps), 
-                        options={'maxiter':self.max_iter})
-                    model = np.reshape(out.x,(2, self.PCA_comps))
-                else:
-                    raise ValueError("Unsupported method")
-                    
-                #if self.mix_in_each_steps:
-                #    raise("mix_in_each_steps=True: Functionality not yet supported")
-                #    self.mixed_w = self.smoothbatch*self.w + ((1 - self.smoothbatch)*self.mixed_w)
-            
-            if self.normalize_dec:
-                model /= np.amax(model)
-            
-            # Do SmoothBatch
-            #if self.global_method in ["FedAvg", "NoFL"]:  # Maybe should add Per-FedAvg here...
-            #    model = self.smoothbatch*model + ((1 - self.smoothbatch)*self.w_prev)
-            #elif self.global_method=="FedAvgSB":
-            #    global_local_SB = self.smoothbatch*model + ((1 - self.smoothbatch)*self.global_w)
-            #    if self.mix_mixed_SB:
-            #        self.mixed_w = self.smoothbatch*self.mixed_w + ((1 - self.smoothbatch)*global_local_SB)
-            #    else:
-            #        self.mixed_w = global_local_SB
-        
-        if which!=None:
-            return model, self.eval_model(which)
-        else:
-            return model
+        raise ValueError("train_given_model_1_comm_round is not implemented yet.")
     
     
     def train_model(self):
-        D0 = copy.deepcopy(self.w_prev)
-        # Set the w_prev equal to the current w:
+        ## Set the w_prev equal to the current w:
         self.w_prev = copy.deepcopy(self.w)
 
-        if self.global_method in ["FedAvg", "NoFL", "FedAvgSB", "Per-FedAvg", "Per-FedAvg FO", "Per-FedAvg HF"]:
-            if self.global_method!="NoFL":
-                # Overwrite local model with the new global model
-                if self.copy_type == 'deep':
-                    self.w = copy.deepcopy(self.global_w)
-                elif self.copy_type == 'shallow':
-                    self.w = copy.copy(self.global_w)
-                elif self.copy_type == 'none':
-                    self.w = self.global_w
-                else:
-                    raise ValueError("copy_type must be set to either deep, shallow, or none")
-            
-            # I think this ought to be on but it makes the global model and gradient diverge...
-            if self.wprev_global==True and ('Per-FedAvg' in self.method):
-                if self.copy_type == 'deep':
-                    self.w_prev = copy.deepcopy(self.global_w)
-                elif self.copy_type == 'shallow':
-                    self.w_prev = copy.copy(self.global_w)
-                elif self.copy_type == 'none':
-                    self.w_prev = self.global_w
-                else:
-                    raise ValueError("copy_type must be set to either deep, shallow, or none")
-            
-            for i in range(self.num_steps):
-                ########################################
-                # Should I normalize the dec here?  
-                # I think this will prevent it from blowing up if I norm it every time
-                if self.normalize_dec:
-                    self.w /= np.amax(self.w)
-                ########################################
+        if self.global_method!="NOFL":
+            # Overwrite local model with the new global model
+            # Is this the equivalent of recieving the global model I'm assuming?
+            ## So... this should be D0 and such right...
+            self.w_new = copy.deepcopy(self.global_w)
+        else:
+            # w_new is just the same model it has been
+            self.w_new = copy.deepcopy(self.w)
+        
+        # I think this ought to be on but it makes the global model and gradient diverge...
+        if self.wprev_global==True and ('PFA' in self.opt_method):
+            # TODO: What is wprev_global...
+            self.w_prev = copy.deepcopy(self.global_w)
+        
+        for i in range(self.num_steps):
+            D0 = copy.deepcopy(self.w_new)  
+            # ^ Was self.w_prev for some reason...
+            ## But it should be the current model at the start
 
+            if self.opt_method=='GD':
+                grad_cost = np.reshape(gradient_cost_l2(self.F, self.w_new, self.V, alphaE=self.alphaE, alphaD=self.alphaD, Ne=self.PCA_comps), 
+                                        (2, self.PCA_comps))
+                self.w_new -= self.lr*grad_cost
+            elif self.opt_method=='FULLSCIPYMIN':
+                out = minimize(
+                    lambda D: cost_l2(self.F, D, self.V, alphaD=self.alphaD, alphaE=self.alphaE, Ne=self.PCA_comps), 
+                    D0, method='BFGS', 
+                    jac=lambda D: gradient_cost_l2(self.F, D, self.V, alphaE=self.alphaE, alphaD=self.alphaD, Ne=self.PCA_comps))
+                self.w_new = np.reshape(out.x,(2, self.PCA_comps))
+            elif self.opt_method=='MAXITERSCIPYMIN':
+                out = minimize(
+                    lambda D: cost_l2(self.F, D, self.V, alphaD=self.alphaD, alphaE=self.alphaE, Ne=self.PCA_comps), 
+                    D0, method='BFGS', 
+                    jac=lambda D: gradient_cost_l2(self.F, D, self.V, alphaE=self.alphaE, alphaD=self.alphaD, Ne=self.PCA_comps), 
+                    options={'maxiter':self.max_iter})
+                self.w_new = np.reshape(out.x,(2, self.PCA_comps))
+            ##################################################################################
+            ##################################################################################
+            ##################################################################################
+            ##################################################################################
+            ##################################################################################
+            ##################################################################################
+            ##################################################################################
+            ##################################################################################
+            ##################################################################################
+            elif self.opt_method=='PFAFO':
+                # TODO
+                raise ValueError('Per-FedAvg FO NOT FINISHED YET')
+            elif self.opt_method=='PFAHF':
+                # TODO
+                raise ValueError('Per-FedAvg HF NOT FINISHED YET')
+            else:
+                raise ValueError("Unrecognized method")
+            ##################################################################################
+            ##################################################################################
+            ##################################################################################
+            ##################################################################################
+            ##################################################################################
+            ##################################################################################
+            ##################################################################################
+            ##################################################################################
+            ##################################################################################
 
+            if self.validate_memory_IDs:
+                # TODO: Idek what this is doing. This is stupid to have
+                assert(id(self.w)!=id(self.global_w))
+                assert(id(self.w_prev)!=id(self.global_w))
+                
+            if self.mix_in_each_steps:
+                # TODO: mixed_w appears to not be used // is used as the personalized model?...
+                self.mixed_w = self.smoothbatch*self.w_new + ((1 - self.smoothbatch)*self.mixed_w)
 
+        # Do SmoothBatch
+        #W_new = alpha*D[-1] + ((1 - alpha) * W_hat)
+        # TODO: Add a smoothbatch toggle here
+        self.w = self.smoothbatch*self.w_new + ((1 - self.smoothbatch)*self.w_prev)
 
-
-
-
-
-
-
-
-
-
-
-
-                ##################################################################################
-                ##################################################################################
-                ##################################################################################
-                if self.method=='GD':
-                    # This one blows up to NAN/overflow... not sure why
-                    grad_cost = np.reshape(gradient_cost_l2(self.F, self.w, self.V, alphaE=self.alphaE, alphaD=self.alphaD, Ne=self.PCA_comps), 
-                                           (2, self.PCA_comps))
-                    self.w = self.w - self.lr*grad_cost
-                elif self.method=='MaxIterScipyMin':
-                    out = minimize(
-                        lambda D: cost_l2(self.F, D, self.V, alphaD=self.alphaD, alphaE=self.alphaE, Ne=self.PCA_comps), 
-                        D0, method='BFGS', 
-                        jac=lambda D: gradient_cost_l2(self.F, D, self.V, alphaE=self.alphaE, alphaD=self.alphaD, Ne=self.PCA_comps))
-                    self.w = np.reshape(out.x,(2, self.PCA_comps))
-                elif self.method=='FullScipyMin':
-                    out = minimize(
-                        lambda D: cost_l2(self.F, D, self.V, alphaD=self.alphaD, alphaE=self.alphaE, Ne=self.PCA_comps), 
-                        D0, method='BFGS', 
-                        jac=lambda D: gradient_cost_l2(self.F, D, self.V, alphaE=self.alphaE, alphaD=self.alphaD, Ne=self.PCA_comps), 
-                        options={'maxiter':self.max_iter})
-                    self.w = np.reshape(out.x,(2, self.PCA_comps))
-                elif self.method=='Per-FedAvg FO':
-                    # TODO
-                    raise ValueError('Per-FedAvg FO NOT FINISHED YET')
-                elif self.method=='Per-FedAvg HF':
-                    # TODO
-                    raise ValueError('Per-FedAvg HF NOT FINISHED YET')
-                else:
-                    raise ValueError("Unrecognized method")
-
-                if self.validate_memory_IDs:
-                    assert(id(self.w)!=id(self.global_w))
-                    assert(id(self.w_prev)!=id(self.global_w))
-                    
-                if self.mix_in_each_steps:
-                    self.mixed_w = self.smoothbatch*self.w + ((1 - self.smoothbatch)*self.mixed_w)
-            ########################################
-            # Or should I normalize the dec here?  I'll also turn this on since idc about computational speed rn
-            if self.normalize_dec:
-                self.w /= np.amax(self.w)
-            ########################################
-            # Do SmoothBatch
-            # Maybe move this to only happen after each update? Does it really need to happen every iter?
-            # I'd have to add weird flags just for this in various places... put on hold for now
-            #W_new = alpha*D[-1] + ((1 - alpha) * W_hat)
-            if self.global_method in ["FedAvg", "NoFL"]:  # Maybe should add Per-FedAvg here...
-                self.w = self.smoothbatch*self.w + ((1 - self.smoothbatch)*self.w_prev)
-            elif self.global_method=="FedAvgSB":
-                global_local_SB = self.smoothbatch*self.w + ((1 - self.smoothbatch)*self.global_w)
-                if self.mix_mixed_SB:
-                    self.mixed_w = self.smoothbatch*self.mixed_w + ((1 - self.smoothbatch)*global_local_SB)
-                else:
-                    self.mixed_w = global_local_SB
+        # TODO: What is this doing here? Does this get logged elsewhere or what?
         # Save the new decoder to the log
         #self.dec_log.append(self.w)
         #if self.global_method in self.pers_methods:
@@ -512,12 +427,12 @@ class Client(ModelBase):
             raise ValueError("Please set <which> to either local or global")
         # Just did this so we wouldn't have the 14 decimals points it always tries to give
         if self.round2int:
-            temp = np.ceil(cost_l2(self.F, my_dec, self.H, my_V, self.learning_batch, self.alphaF, self.alphaD))
+            temp = np.ceil(cost_l2(self.F, my_dec, my_V, alphaE=self.alphaE, alphaD=self.alphaD, Ne=self.PCA_comps))
             # Setting to int is just to catch overflow errors
             # For RT considerations, ints are also generally ints cheaper than floats...
             out = int(temp)
         else:
-            temp = cost_l2(self.F, my_dec, self.H, my_V, self.learning_batch, self.alphaF, self.alphaD, Ne=self.PCA_comps)
+            temp = cost_l2(self.F, my_dec, my_V, alphaE=self.alphaE, alphaD=self.alphaD, Ne=self.PCA_comps)
             out = round(temp, 7)
         return out
         
@@ -534,8 +449,8 @@ class Client(ModelBase):
             raise ValueError('test_metrics which does not exist. Must be local, global, or pers')
             
         if self.use_up16_for_test==True and final_eval==True:
-            lower_bound = (ModelBase.update_ix[16])//2  #Use only the second half of each update
-            upper_bound = ModelBase.update_ix[17]
+            lower_bound = (self.update_ix[16])//2  #Use only the second half of each update
+            upper_bound = self.update_ix[17]
             
             self.test_learning_batch = upper_bound - lower_bound
             # THIS NEEDS TO BE FIXED...
@@ -560,7 +475,7 @@ class Client(ModelBase):
         p_actual = np.cumsum(v_actual, axis=1)*self.dt  # Numerical integration of v_actual to get p_actual
         self.V_test = (self.p_test_reference - p_actual)*self.dt
         
-        test_loss = cost_l2(self.F_test, model, self.H, self.V_test, self.test_learning_batch, self.alphaF, self.alphaD, Ne=self.PCA_comps)
+        test_loss = cost_l2(self.F_test, model, self.V_test, alphaE=self.alphaE, alphaD=self.alphaD, Ne=self.PCA_comps)
         test_log.append(test_loss)
         
         return test_loss, self.V_test
