@@ -1,0 +1,3 @@
+# PyTorch Version Is Broken!
+
+> I wasnt able to debug this code, the train and test errors are the same / sometimes test is better than train. I could never figure out what the issue was. Thus, I switched back to the simpler Python implementation.
