@@ -15,8 +15,11 @@ from fl_sim_base import *
         
         
 class Server(ModelBase):
-    def __init__(self, ID, D0, method, all_clients, smoothbatch=1, C=0.35, normalize_dec=True, test_split_type='end', use_up16_for_test=True, test_split_frac=0.3, current_round=0, PCA_comps=10, verbose=False, APFL_Tau=10, copy_type='deep', validate_memory_IDs=True):
-        super().__init__(ID, D0, method, smoothbatch=smoothbatch, current_round=current_round, PCA_comps=PCA_comps, verbose=verbose, num_participants=14, log_init=0)
+    def __init__(self, ID, D0, method, all_clients, smoothbatch=1, C=0.35, normalize_dec=True, test_split_type='end', 
+                 use_up16_for_test=True, test_split_frac=0.3, current_round=0, PCA_comps=10, verbose=False, 
+                 copy_type='deep', validate_memory_IDs=True):
+        super().__init__(ID, D0, method, smoothbatch=smoothbatch, current_round=current_round, PCA_comps=PCA_comps, 
+                         verbose=verbose, num_participants=14, log_init=0)
         self.type = 'Server'
         self.num_avail_clients = 0
         self.available_clients_lst = [0]*len(all_clients)
@@ -30,11 +33,6 @@ class Server(ModelBase):
         self.set_available_clients_list(init=True)
         self.validate_memory_IDs = validate_memory_IDs
         self.copy_type = copy_type
-        if self.method=='APFL':
-            self.set_available_clients_list()
-            self.choose_clients()
-            self.K = len(self.chosen_clients_lst)
-            self.tau = APFL_Tau
         self.test_split_type = test_split_type
         self.test_split_frac = test_split_frac
         self.use_up16_for_test = use_up16_for_test
@@ -45,6 +43,7 @@ class Server(ModelBase):
         # Update global round number
         self.current_round += 1
         
+        # TODO: This is supposed to include PerFedAvg...
         if 'FedAvg' in self.method:  # OR EQUIVALENTLY: if self.method in ['FedAvg', 'FedAvgSB']:
             # Choose fraction C of available clients
             self.set_available_clients_list()
@@ -61,47 +60,8 @@ class Server(ModelBase):
                 self.w = self.smoothbatch*self.w + ((1 - self.smoothbatch)*self.w_prev)
                 # Eg don't do a global-global smoothbatch for the other cases
         elif self.method=='NoFL':
+            # TODO: Is NoFL just supposed to be the Local CPHS sims...
             self.train_client_and_log(client_set=self.all_clients)
-        elif self.method=='APFL':
-            t = self.current_round
-            # They wrote: "if t not devices Tau then" but that seem like it would only run 1 update per t, 
-            # AKA 50 t's to select new clients.  I'll write it like they did ig...
-            if t%self.tau!=0:
-                self.train_client_and_log(client_set=self.chosen_clients_lst)
-                for my_client in list(set(self.available_clients_lst) ^ set(self.chosen_clients_lst)):
-                    # Otherwise indices will break when calculating finalized running terms
-                    my_client.p.append(my_client.p[-1])
-            else:
-                # Carry forward the existing costs in the logs so the update/indices still match
-                for my_client in self.all_clients:
-                    # This should do no training but log everything we need I think?
-                    self.train_client_and_log([])
-                #    # Do I need to go in and edit the current round or can I just leave it? I think just leave it
-                #    my_client.local_error_log.append(self.local_error_log[-1])
-                #    my_client.global_error_log.append(self.global_error_log[-1])
-                #    my_client.pers_error_log.append(self.pers_error_log[-1])
-                
-                # Aggregate global dec every tau iters
-                running_global_dec = np.zeros((2, self.PCA_comps))
-                for my_client in self.chosen_clients_lst:
-                    running_global_dec += my_client.global_w
-                self.w = (1/self.K)*running_global_dec
-                self.set_available_clients_list()
-                self.choose_clients()
-                self.K = len(self.chosen_clients_lst)
-                # Presumably len(self.chosen_clients_lst) will always be the same (same C)... 
-                # otherwise would need to re-set K as so:
-                #self.K = len(self.chosen_clients_lst)
-
-                for my_client in self.chosen_clients_lst:
-                    if self.copy_type == 'deep':
-                        self.global_w = copy.deepcopy(self.w)
-                    elif self.copy_type == 'shallow':
-                        self.global_w = copy.copy(self.w)
-                    elif self.copy_type == 'none':
-                        self.global_w = self.w
-                    else:
-                        raise ValueError("copy_type must be set to either deep, shallow, or none")
         else:
             raise('Method not currently supported, please reset method to FedAvg')
         
@@ -133,7 +93,6 @@ class Server(ModelBase):
         elif self.method=='NoFL':
             self.local_test_error_log = running_local_test_loss / len(self.all_clients)
             
-        
     # 1.1
     def set_available_clients_list(self, init=False):
         self.num_avail_clients = 0
@@ -270,21 +229,3 @@ class Server(ModelBase):
         #assert(np.sum(self.w-aggr_w) != 0)
         self.w = aggr_w
         
-    # Function for getting the finalized personalized and global model 
-    def set_finalized_APFL_models(self):
-        # Defining params used in the next section
-        for t in range(T):
-            summed_chosen_globals = np.sum([chosen_client.global_w for chosen_client in self.chosen_clients_lst])
-            for my_client in self.available_clients_lst:
-                my_client.running_pers_term += my_client.p[t]*(my_client.adap_alpha*my_client.local_w + (1-my_client.adap_alpha)*(1/K)*summed_chosen_globals) 
-                my_client.running_global_term += my_client.p[t]*summed_chosen_globals
-        # The actual models                                                    
-        # "tin for i=1,...,n"
-        for my_client in self.available_clients_lst:
-            S_T = np.sum(my_client.p)
-            # All these random params are defined in theorem 2 on Page 10
-            # "Output" --> lol and do what with
-            # Personalized model: v^hat AKA personalized_w = (1/S_T)*\sum_1^T(p_t(alpha_i*v_i^t + (1-alpha_i)*(1/K)*(\sum_{j in chosen clients} w_j^t)))
-            my_client.final_personalized_w = (1/S_T)*my_client.running_pers_term
-            # Global model: w^hat = 1/(K*S_T)*(\sum_1^T p_t*(\sum_j w_j^t))
-            my_client.final_global_w = (1/K*S_T)*my_client.running_global_term

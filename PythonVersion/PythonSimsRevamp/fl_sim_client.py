@@ -387,7 +387,7 @@ class Client(ModelBase):
     
     
     def train_model(self):
-        D_0 = copy.deepcopy(self.w_prev)
+        D0 = copy.deepcopy(self.w_prev)
         # Set the w_prev equal to the current w:
         self.w_prev = copy.deepcopy(self.w)
 
@@ -439,62 +439,33 @@ class Client(ModelBase):
                 ##################################################################################
                 ##################################################################################
                 ##################################################################################
-                if self.method=='EtaGradStep':
-                    self.w = self.train_eta_gradstep(self.w, self.eta, self.F, self.w, self.H, self.V, self.learning_batch, self.alphaF, self.alphaD, PCA_comps=self.PCA_comps)
-                elif self.method=='EtaScipyMinStep':
-                    self.w = self.train_eta_scipyminstep(self.w, self.eta, self.F, self.w, self.H, self.V, self.learning_batch, self.alphaF, self.alphaD, D_0, self.verbose, PCA_comps=self.PCA_comps)
-                elif self.method=='FullScipyMinStep':
-                    self.w = self.train_eta_scipyminstep(self.w, self.eta, self.F, self.w, self.H, self.V, self.learning_batch, self.alphaF, self.alphaD, D_0, self.verbose, PCA_comps=self.PCA_comps, full=True)
-                elif self.method=='Per-FedAvg':
-                    raise("Per-FedAvg uses the Hessian which is sus, choose the <Per-FedAvg FO> or <Per-FedAvg HF> approximations")
-                    self.w_tilde = self.w_prev - self.eta * gradient_cost_l2(self.F, self.w_prev, self.H, self.V, self.learning_batch, self.alphaF, self.alphaD, Ne=self.PCA_comps, flatten=False)
-                    self.w = self.w_prev - self.beta*(np.identity(1) - self.alpha*hessian_cost_l2(self.F, self.alphaD)) * gradient_cost_l2(self.F, self.w_prev, self.H, self.V, self.learning_batch, self.alphaF, self.alphaD, Ne=self.PCA_comps, flatten=False)
+                if self.method=='GD':
+                    # This one blows up to NAN/overflow... not sure why
+                    grad_cost = np.reshape(gradient_cost_l2(self.F, self.w, self.V, alphaE=self.alphaE, alphaD=self.alphaD, Ne=self.PCA_comps), 
+                                           (2, self.PCA_comps))
+                    self.w = self.w - self.lr*grad_cost
+                elif self.method=='MaxIterScipyMin':
+                    out = minimize(
+                        lambda D: cost_l2(self.F, D, self.V, alphaD=self.alphaD, alphaE=self.alphaE, Ne=self.PCA_comps), 
+                        D0, method='BFGS', 
+                        jac=lambda D: gradient_cost_l2(self.F, D, self.V, alphaE=self.alphaE, alphaD=self.alphaD, Ne=self.PCA_comps))
+                    self.w = np.reshape(out.x,(2, self.PCA_comps))
+                elif self.method=='FullScipyMin':
+                    out = minimize(
+                        lambda D: cost_l2(self.F, D, self.V, alphaD=self.alphaD, alphaE=self.alphaE, Ne=self.PCA_comps), 
+                        D0, method='BFGS', 
+                        jac=lambda D: gradient_cost_l2(self.F, D, self.V, alphaE=self.alphaE, alphaD=self.alphaD, Ne=self.PCA_comps), 
+                        options={'maxiter':self.max_iter})
+                    self.w = np.reshape(out.x,(2, self.PCA_comps))
                 elif self.method=='Per-FedAvg FO':
-                    self.w_tilde = self.w_prev - self.eta * gradient_cost_l2(self.F, self.w_prev, self.H, self.V, self.learning_batch, self.alphaF, self.alphaD, Ne=self.PCA_comps, flatten=False)
-                    self.w = gradient_cost_l2(self.F, self.w_tilde, self.H, self.V, self.learning_batch, self.alphaF, self.alphaD, Ne=self.PCA_comps, flatten=False)
+                    # TODO
+                    raise ValueError('Per-FedAvg FO NOT FINISHED YET')
                 elif self.method=='Per-FedAvg HF':
-                    # Difference of gradients method
-                    alpha = self.eta  # Yes
-                    delta = self.eta  # Not sure... value not listed in paper
-                    # w inside original gradient for MAML
-                    w_tilde = self.w_prev - alpha * gradient_cost_l2(self.F, self.w_prev, self.H, self.V, self.learning_batch, self.alphaF, self.alphaD, Ne=self.PCA_comps, flatten=False)
-                    # First gradient term (+)
-                    grad1 = gradient_cost_l2(self.F, (self.w_prev + delta*gradient_cost_l2(self.F, (self.w_prev - alpha*gradient_cost_l2(self.F, self.w_prev, self.H, self.V, self.learning_batch, self.alphaF, self.alphaD, Ne=self.PCA_comps, flatten=False)), self.H, self.V, self.learning_batch, self.alphaF, self.alphaD, Ne=self.PCA_comps, flatten=False)), self.H, self.V, self.learning_batch, self.alphaF, self.alphaD, Ne=self.PCA_comps, flatten=False)
-                    # Second gradient term (flipped to -)
-                    grad2 = gradient_cost_l2(self.F, (self.w_prev - delta*gradient_cost_l2(self.F, (self.w_prev - alpha*gradient_cost_l2(self.F, self.w_prev, self.H, self.V, self.learning_batch, self.alphaF, self.alphaD, Ne=self.PCA_comps, flatten=False)), self.H, self.V, self.learning_batch, self.alphaF, self.alphaD, Ne=self.PCA_comps, flatten=False)), self.H, self.V, self.learning_batch, self.alphaF, self.alphaD, Ne=self.PCA_comps, flatten=False)
-                    # Computing d_i(w)
-                    d = (grad1 - grad2)/(2*delta)
-                    # Set current weight based on the above
-                    self.w = gradient_cost_l2(self.F, w_tilde, self.H, self.V, self.learning_batch, self.alphaF, self.alphaD, Ne=self.PCA_comps, flatten=False) - alpha*d
+                    # TODO
+                    raise ValueError('Per-FedAvg HF NOT FINISHED YET')
                 else:
                     raise ValueError("Unrecognized method")
-                ##################################################################################
-                ##################################################################################
-                ##################################################################################
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-                
                 if self.validate_memory_IDs:
                     assert(id(self.w)!=id(self.global_w))
                     assert(id(self.w_prev)!=id(self.global_w))
