@@ -62,7 +62,7 @@ class Server(ModelBase):
                 self.w = self.smoothbatch*self.w + ((1 - self.smoothbatch)*self.w_prev)
                 # Eg don't do a global-global smoothbatch for the other cases
         elif self.global_method=='NOFL':
-            # TODO: Is NoFL just supposed to be the Local CPHS sims...
+            # TODO: Is NoFL just supposed to be the Local CPHS sims... if so this is fine I think 
             self.train_client_and_log(client_set=self.all_clients)
         else:
             raise('Method not currently supported, please reset method to FedAvg')
@@ -76,22 +76,24 @@ class Server(ModelBase):
                 raise TypeError("All my clients are all integers...")
             my_client.chosen_status = 0
             # test_metrics for all clients
-            if self.global_method=='FEDAVG':
-                # TODO: What about PFA?
+            if self.global_method=='FEDAVG' or 'PFA' in self.global_method:
                 global_test_loss, global_test_pred = my_client.test_metrics(self.w, 'global')
                 local_test_loss, local_test_pred = my_client.test_metrics(my_client.w, 'local')
             elif self.global_method=='NOFL':
                 global_test_loss = 0
                 local_test_loss, local_test_pred = my_client.test_metrics(my_client.w, 'local') 
-            #
+            
+            # TODO: Why are these arrays and not just adding the sums? ...
             if client_idx!=0:
                 running_global_test_loss += np.array(global_test_loss)
                 running_local_test_loss += np.array(local_test_loss)
             else:
                 running_global_test_loss = np.array(global_test_loss)
                 running_local_test_loss = np.array(local_test_loss)
-        if self.global_method=='FEDAVG':
-            # TODO: What about PFA?
+
+        if self.global_method=='FEDAVG' or 'PFA' in self.global_method:
+            # TODO: I think this is averaged incorrectly... loss should be averaged over num_samples not num_clients I think?
+            # TODO: THIS IS TEST METRICS which i called on all_clients so I think self.all_clients is fine?
             self.global_test_error_log = running_global_test_loss / len(self.all_clients)
             self.local_test_error_log = running_local_test_loss / len(self.all_clients)
         elif self.global_method=='NOFL':

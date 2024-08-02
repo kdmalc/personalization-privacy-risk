@@ -13,8 +13,8 @@ from fl_sim_base import *
 
 
 class Client(ModelBase):
-    def __init__(self, ID, w, opt_method, local_data, data_stream, smoothbatch=0.75, current_round=0, PCA_comps=64, 
-                availability=1, global_method='FedAvg', max_iter=1, normalize_dec=False, normalize_EMG=True, starting_update=10, 
+    def __init__(self, ID, w, opt_method, full_client_dataset, data_stream, smoothbatch=0.75, current_round=0, PCA_comps=64, 
+                availability=1, final_update_ix=17, global_method='FedAvg', max_iter=1, normalize_EMG=True, starting_update=10, 
                 track_cost_components=True, gradient_clipping=False, log_decs=True, 
                 clipping_threshold=100, tol=1e-10, lr=1, track_gradient=True, wprev_global=False, 
                 num_steps=1, use_zvel=False, 
@@ -28,9 +28,11 @@ class Client(ModelBase):
         If you want NO smoothbatch then set it to 'off'
         '''
 
-        #
-        self.global_method = global_method.upper()
+        assert(full_client_dataset.shape[0]==64)
+        # Don't use anything past update 17 since they are different (update 17 is the short one, only like 300 datapoints)
+        local_data = full_client_dataset[:, :self.update_ix[final_update_ix]]
 
+        self.global_method = global_method.upper()
         self.validate_memory_IDs = validate_memory_IDs
         self.copy_type = copy_type
         # NOT INPUT
@@ -43,31 +45,17 @@ class Client(ModelBase):
         self.F = None
         self.V = None
         self.learning_batch = None
+
         self.dt = 1.0/60.0
         self.lr = lr  # Learning rate
-        # TRAIN TEST DATA SPLIT
-        self.use_up16_for_test = use_up16_for_test
-        #if use_up16_for_test:
-        #print("USE UPDATE 16 FOR TEST")
-        self.test_split_type = test_split_type
-        self.test_split_frac = test_split_frac
-        test_split_product_index = local_data['training'].shape[0]*test_split_frac
-        # Convert this value to the cloest update_ix value
-        train_test_update_number_split = min(self.update_ix, key=lambda x:abs(x-test_split_product_index))
-        self.test_split_idx = self.update_ix.index(train_test_update_number_split)
-        self.training_data = local_data['training']#[:self.test_split_idx, :]
-        self.labels = local_data['labels']#[:self.test_split_idx, :]
-        #self.testing_data = local_data['training'][self.test_split_idx:, :]
-        #self.testing_labels = local_data['labels'][self.test_split_idx:, :]
         # Round minimization output to the nearest int or keep as a float?  Don't need arbitrary precision
         self.round2int = False
         self.max_iter = max_iter
-        self.normalize_dec = normalize_dec
-        ####################################################################
+        
         # Maneeshika Code:
         self.use_zvel = use_zvel
         self.hit_bound = 0
-        ####################################################################
+        
         # FL CLASS STUFF
         # Availability for training
         self.availability = availability
@@ -76,14 +64,16 @@ class Client(ModelBase):
         #  After 1 iteration, move to the next update}
         self.data_stream = data_stream  # {'full_data', 'streaming', 'advance_each_iter'} 
         # Number of gradient steps to take when training (eg amount of local computation)
+        ## This is Tau in PFA!
         self.num_steps = num_steps
-        self.wprev_global = wprev_global
+        self.wprev_global = wprev_global # Not sure what this is honestly
         # GLOBAL STUFF
         self.global_method = global_method
         # UPDATE STUFF
         self.current_update = starting_update
         self.local_round_threshold = local_round_threshold
-        #
+
+        # PRACTICAL / REAL WORLD
         # Not even using the delay stuff right now
         # Boolean setting whether or not up/download delays should be random or predefined
         self.random_delays = random_delays
@@ -96,8 +86,8 @@ class Client(ModelBase):
         else:
             self.download_delay = download_delay
             self.upload_delay = upload_delay
-        #
-        # ML Parameters / Conditions        
+        
+        # ML Parameters / Conditions
         cond_dict = {1:(0.25, 1e-3, 1), 2:(0.25, 1e-4, 1), 3:(0.75, 1e-3, 1), 4:(0.75, 1e-4, 1), 5:(0.25, 1e-4, -1), 6:(0.25, 1e-4, -1), 7:(0.75, 1e-3, -1), 8:(0.75, 1e-4, -1)}
         cond_smoothbatch, self.alphaD, self.init_dec_sign = cond_dict[condition_number]
         if type(smoothbatch)==str and smoothbatch.upper()=='OFF':
@@ -111,16 +101,14 @@ class Client(ModelBase):
             #print()
         self.alphaE = 1e-6
         self.alphaF = 0
-        #
+        # This is probably not used...
         self.gradient_clipping = gradient_clipping
         self.clipping_threshold = clipping_threshold
-        # PLOTTING
+        # LOGS
         self.log_decs = log_decs
         self.pers_dec_log = [np.zeros((2,self.PCA_comps))]
         self.global_dec_log = [np.zeros((2,self.PCA_comps))]
         # Overwrite the logs since global and local track in slightly different ways
-        
-        #
         self.track_cost_components = track_cost_components
         self.performance_log = []
         self.Dnorm_log = []
@@ -129,24 +117,64 @@ class Client(ModelBase):
         self.gradient_log = []
         self.pers_gradient_log = []
         self.global_gradient_log = []
+
         # FedAvgSB Stuff
         self.mix_in_each_steps = mix_in_each_steps
         self.mix_mixed_SB = mix_mixed_SB
+
         # These are general personalization things
+        ## Not sure if any of these are even used...
         self.running_pers_term = 0
         self.running_global_term = 0
         self.global_w = copy.deepcopy(self.w)
         self.mixed_w = copy.deepcopy(self.w)
-        
-        # SET TESTING DATA AND METRICS
-        if self.use_up16_for_test==True:
-            lower_bound = (self.update_ix[15])//2  #Use only the second half of each update
+
+        #train_cli.set_testset(testing_datasets_lst)
+        #test_cli.get_testing_dataset()
+        # TRAIN TEST DATA SPLIT
+        self.use_up16_for_test = use_up16_for_test
+        self.use_kfoldcv = use_kfoldv
+        self.test_split_type = test_split_type.upper()
+        self.test_split_frac = test_split_frac
+
+        if self.use_kfoldcv==True:
+            self.test_split_idx = -1
+            # Setting the testing set to the whole dataset so that it can be extracted
+            ## If this is a training cliet this will be overwritten by other client's testing dataset
+            ## I guess I could set this to 
+            # TODO: Confirm shape/orientation is correct
+            upper_bound = local_data['training'].shape[0]
+            lower_bound = 0
+            self.testing_data = local_data['training']
+            self.testing_labels = local_data['labels']
+        elif self.use_up16_for_test==True:
+            lower_bound = self.update_ix[15]
+            #//2  #Use only the second half of each update
             upper_bound = self.update_ix[16]
+            self.test_split_idx = lower_bound
+            self.testing_data = local_data['training'][self.test_split_idx:upper_bound, :]
+            self.testing_labels = local_data['labels'][self.test_split_idx:upper_bound, :]
+        elif self.test_split_type=="END":
+            test_split_product_index = local_data['training'].shape[0]*test_split_frac
+            # Convert this value to the cloest update_ix value
+            train_test_update_number_split = min(self.update_ix, key=lambda x:abs(x-test_split_product_index))
+            if train_test_update_number_split<17:
+                print(f"train_test_update_number_split is {train_test_update_number_split}, so subtracting 1")
+                train_test_update_number_split -= 1
+            self.test_split_idx = self.update_ix.index(train_test_update_number_split)
+            lower_bound = self.test_split_idx
+            # TODO: Ensure pper bound is correct
+            upper_bound = local_data['training'].shape[0]
+            self.testing_data = local_data['training'][self.test_split_idx:, :]
+            self.testing_labels = local_data['labels'][self.test_split_idx:, :]
         else:
-            raise ValueError("use_up16_for_test must be True, it is the only testing supported currently")
+            raise ValueError("use_up16_for_test or use_kfoldcv must be True or test_split_type must be END, they are the only 3 testing schemes supported currently")
+        
+        self.training_data = local_data['training'][:self.test_split_idx, :]
+        self.labels = local_data['labels'][:self.test_split_idx, :]
         self.test_learning_batch = upper_bound - lower_bound
-        # THIS NEEDS TO BE FIXED...
-        s_temp = self.training_data[lower_bound:upper_bound,:]
+        # THIS NEEDS TO BE FIXED... --> Why? This is an old comment, idk the problem
+        s_temp = self.testing_data
         if self.normalize_EMG:
             s_normed = s_temp/np.amax(s_temp)
         else:
@@ -156,8 +184,8 @@ class Client(ModelBase):
             s_normed = pca.fit_transform(s_normed)
         self.s_test = np.transpose(s_normed)
         self.F_test = self.s_test[:,:-1] # note: truncate F for estimate_decoder
-        self.p_test_reference = np.transpose(self.labels[lower_bound:upper_bound,:])
-
+        self.p_test_reference = np.transpose(self.testing_labels)
+        
             
     # 0: Main Loop
     def execute_training_loop(self):
