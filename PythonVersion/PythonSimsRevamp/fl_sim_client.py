@@ -372,8 +372,14 @@ class Client(ModelBase):
             ##################################################################################
             ##################################################################################
             elif self.opt_method=='PFAFO':
-                # TODO
-                raise ValueError('Per-FedAvg FO NOT FINISHED YET')
+                stochastic_grad = np.reshape(gradient_cost_l2(self.F, D0, self.V, alphaE=self.alphaE, alphaD=self.alphaD, Ne=self.PCA_comps), 
+                                        (2, self.PCA_comps))
+                w_tilde = D0 - self.lr * stochastic_grad
+                # ^ D0 is w_new from the previous iteration, eg w_{t-1}
+                # TODO: Decide what to do about F and V... split in half? Use batches? ...
+                new_stoch_grad = np.reshape(gradient_cost_l2(self.F, w_tilde, self.V, alphaE=self.alphaE, alphaD=self.alphaD, Ne=self.PCA_comps), 
+                                        (2, self.PCA_comps))
+                self.w_new = D0 - self.beta * new_stoch_grad
             elif self.opt_method=='PFAHF':
                 # TODO
                 raise ValueError('Per-FedAvg HF NOT FINISHED YET')
