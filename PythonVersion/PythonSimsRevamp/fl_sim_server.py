@@ -77,11 +77,11 @@ class Server(ModelBase):
             my_client.chosen_status = 0
             # test_metrics for all clients
             if self.global_method=='FEDAVG' or 'PFA' in self.global_method:
-                global_test_loss, global_test_pred = my_client.test_metrics(self.w, 'global')
-                local_test_loss, local_test_pred = my_client.test_metrics(my_client.w, 'local')
+                global_test_loss, _ = my_client.test_metrics(self.w, 'global')
+                local_test_loss, _ = my_client.test_metrics(my_client.w, 'local')
             elif self.global_method=='NOFL':
                 global_test_loss = 0
-                local_test_loss, local_test_pred = my_client.test_metrics(my_client.w, 'local') 
+                local_test_loss, _ = my_client.test_metrics(my_client.w, 'local') 
             
             # TODO: Why are these arrays and not just adding the sums? ...
             if client_idx!=0:

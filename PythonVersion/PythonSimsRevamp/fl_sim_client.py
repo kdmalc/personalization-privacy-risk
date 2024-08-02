@@ -129,8 +129,6 @@ class Client(ModelBase):
         self.global_w = copy.deepcopy(self.w)
         self.mixed_w = copy.deepcopy(self.w)
 
-        #train_cli.set_testset(testing_datasets_lst)
-        #test_cli.get_testing_dataset()
         # TRAIN TEST DATA SPLIT
         self.use_up16_for_test = use_up16_for_test
         self.use_kfoldcv = use_kfoldv
@@ -173,7 +171,6 @@ class Client(ModelBase):
         self.training_data = local_data['training'][:self.test_split_idx, :]
         self.labels = local_data['labels'][:self.test_split_idx, :]
         self.test_learning_batch = upper_bound - lower_bound
-        # THIS NEEDS TO BE FIXED... --> Why? This is an old comment, idk the problem
         s_temp = self.testing_data
         if self.normalize_EMG:
             s_normed = s_temp/np.amax(s_temp)
@@ -213,6 +210,36 @@ class Client(ModelBase):
             self.performance_log.append(self.alphaE*(np.linalg.norm((self.w@self.F - self.V[:,1:]))**2))
             self.Dnorm_log.append(self.alphaD*(np.linalg.norm(self.w)**2))
             self.Fnorm_log.append(self.alphaF*(np.linalg.norm(self.F)**2))
+
+
+    def set_testset(test_dataset_obj):
+        if type(test_dataset_obj) is List:
+            running_num_test_samples = 0
+            for test_dset in test_dataset_obj:
+                # TODO: Verify that shape index is correct
+                running_num_test_samples += test_dset.shape[0]
+            upper_bound = running_num_test_samples
+        else:
+            # TODO: Verify that shape index is correct
+            upper_bound = test_dataset_obj.shape[0]
+        lower_bound = 0
+        self.test_learning_batch = upper_bound - lower_bound
+
+        s_temp = self.testing_data
+        if self.normalize_EMG:
+            s_normed = s_temp/np.amax(s_temp)
+        else:
+            s_normed = s_temp
+        if self.PCA_comps!=self.pca_channel_default:  
+            pca = PCA(n_components=self.PCA_comps)
+            s_normed = pca.fit_transform(s_normed)
+        self.s_test = np.transpose(s_normed)
+        self.F_test = self.s_test[:,:-1] # note: truncate F for estimate_decoder
+        self.p_test_reference = np.transpose(self.testing_labels)
+    
+    
+    def get_testing_dataset(self):
+        pass
 
         
     def simulate_delay(self, incoming):
@@ -482,34 +509,55 @@ class Client(ModelBase):
         else:
             raise ValueError('test_metrics which does not exist. Must be local, global, or pers')
             
-        if self.use_up16_for_test==True and final_eval==True:
-            lower_bound = (self.update_ix[16])//2  #Use only the second half of each update
-            upper_bound = self.update_ix[17]
+        # Idk what this is doing at all... wasn't this already done in the init func...
+        #if self.use_up16_for_test==True and final_eval==True:
+        #    lower_bound = (self.update_ix[16])//2  #Use only the second half of each update
+        #    upper_bound = self.update_ix[17]
+        #    
+        #    self.test_learning_batch = upper_bound - lower_bound
+        #    # THIS NEEDS TO BE FIXED...
+        #    s_temp = self.training_data[lower_bound:upper_bound,:]
+        #    if self.normalize_EMG:
+        #        s_normed = s_temp/np.amax(s_temp)
+        #    else:
+        #        s_normed = s_temp
+        #    if self.PCA_comps!=self.pca_channel_default:  
+        #        pca = PCA(n_components=self.PCA_comps)
+        #        s_normed = pca.fit_transform(s_normed)
+        #    self.s_test = np.transpose(s_normed)
+        #    self.F_test = self.s_test[:,:-1] # note: truncate F for estimate_decoder
+        #    self.p_test_reference = np.transpose(self.labels[lower_bound:upper_bound,:])
+        #elif self.use_up16_for_test==True and final_eval==False:
+        #    # Can reuse the test values already set earlier in the init func
+        #    pass
+        #else:
+        #    raise ValueError("use_up16_for_test must be True, it is the only testing supported currently")
             
-            self.test_learning_batch = upper_bound - lower_bound
-            # THIS NEEDS TO BE FIXED...
-            s_temp = self.training_data[lower_bound:upper_bound,:]
-            if self.normalize_EMG:
-                s_normed = s_temp/np.amax(s_temp)
-            else:
-                s_normed = s_temp
-            if self.PCA_comps!=self.pca_channel_default:  
-                pca = PCA(n_components=self.PCA_comps)
-                s_normed = pca.fit_transform(s_normed)
-            self.s_test = np.transpose(s_normed)
-            self.F_test = self.s_test[:,:-1] # note: truncate F for estimate_decoder
-            self.p_test_reference = np.transpose(self.labels[lower_bound:upper_bound,:])
-        elif self.use_up16_for_test==True and final_eval==False:
-            # Can reuse the test values already set earlier in the init func
-            pass
+        if type(self.F_test) is List:
+            running_test_loss = 0
+            running_num_samples = 0
+            for i in range(len(self.F_test)):
+                # TODO: Ensure that this is supposed to be D@s and not D@F...
+                v_actual = model@self.s_test[i]
+                p_actual = np.cumsum(v_actual, axis=1)*self.dt  # Numerical integration of v_actual to get p_actual
+                V_test = (self.p_test_reference[i] - p_actual)*self.dt
+                batch_loss = cost_l2(self.F_test[i], model, V_test, alphaE=self.alphaE, alphaD=self.alphaD, Ne=self.PCA_comps)
+                batch_samples = self.F_test[i].shape[0]
+                running_test_loss += batch_loss * batch_samples  # Accumulate weighted loss by number of samples in batch
+                running_num_samples += batch_samples
+            normalized_test_loss = running_test_loss / running_num_samples  # Normalize by total number of samples
+            test_log.append(normalized_test_loss)
         else:
-            raise ValueError("use_up16_for_test must be True, it is the only testing supported currently")
-            
-        v_actual = model@self.s_test
-        p_actual = np.cumsum(v_actual, axis=1)*self.dt  # Numerical integration of v_actual to get p_actual
-        self.V_test = (self.p_test_reference - p_actual)*self.dt
+            # TODO: Ensure that this is supposed to be D@s and not D@F...
+            v_actual = model@self.s_test
+            p_actual = np.cumsum(v_actual, axis=1)*self.dt  # Numerical integration of v_actual to get p_actual
+            V_test = (self.p_test_reference - p_actual)*self.dt
+            test_loss = cost_l2(self.F_test, model, V_test, alphaE=self.alphaE, alphaD=self.alphaD, Ne=self.PCA_comps)
+            # TODO: Verify this is correct
+            total_samples = self.F_test.shape[0]
+            normalized_test_loss = test_loss / total_samples  # Normalize by the number of samples
+            test_log.append(normalized_test_loss)
         
-        test_loss = cost_l2(self.F_test, model, self.V_test, alphaE=self.alphaE, alphaD=self.alphaD, Ne=self.PCA_comps)
-        test_log.append(test_loss)
-        
-        return test_loss, self.V_test
+        # This was returning self.V_test for some reason
+        ## I have None as a placeholder for now, maybe I'll return testing samples? But it already has access to that...
+        return normalized_test_loss, None
