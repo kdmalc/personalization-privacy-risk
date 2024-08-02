@@ -14,12 +14,12 @@ from fl_sim_base import *
 
 class Client(ModelBase):
     def __init__(self, ID, w, opt_method, full_client_dataset, data_stream, smoothbatch=0.75, current_round=0, PCA_comps=64, 
-                availability=1, final_update_ix=17, global_method='FedAvg', max_iter=1, normalize_EMG=True, starting_update=10, 
+                availability=1, final_usable_update_ix=17, global_method='FedAvg', max_iter=1, normalize_EMG=True, starting_update=10, 
                 track_cost_components=True, gradient_clipping=False, log_decs=True, 
                 clipping_threshold=100, tol=1e-10, lr=1, track_gradient=True, wprev_global=False, 
                 num_steps=1, use_zvel=False, use_kfoldv=False, 
                 mix_in_each_steps=False, mix_mixed_SB=False, delay_scaling=0, random_delays=False, download_delay=1, 
-                upload_delay=1, copy_type='deep', validate_memory_IDs=True, local_round_threshold=50, condition_number=3, 
+                upload_delay=1, validate_memory_IDs=True, local_round_threshold=50, condition_number=3, 
                 verbose=False, test_split_type='end', test_split_frac=0.3, use_up16_for_test=True):
         super().__init__(ID, w, opt_method, smoothbatch=smoothbatch, current_round=current_round, PCA_comps=PCA_comps, 
                          verbose=verbose, num_participants=14, log_init=0)
@@ -28,14 +28,13 @@ class Client(ModelBase):
         If you want NO smoothbatch then set it to 'off'
         '''
 
-        assert(full_client_dataset['training'].shape[0]==64)
+        assert(full_client_dataset['training'].shape[1]==64) # --> Shape is (20770, 64)
         # Don't use anything past update 17 since they are different (update 17 is the short one, only like 300 datapoints)
-        self.local_training_data = full_client_dataset['training'][:, :self.update_ix[final_update_ix]]
-        self.local_training_labels = full_client_dataset['labels'][:, :self.update_ix[final_update_ix]]
+        self.local_training_data = full_client_dataset['training'][:self.update_ix[final_usable_update_ix], :]
+        self.local_training_labels = full_client_dataset['labels'][:self.update_ix[final_usable_update_ix], :]
 
         self.global_method = global_method.upper()
         self.validate_memory_IDs = validate_memory_IDs
-        self.copy_type = copy_type
         # NOT INPUT
         self.type = 'Client'
         self.chosen_status = 0
@@ -556,8 +555,7 @@ class Client(ModelBase):
             p_actual = np.cumsum(v_actual, axis=1)*self.dt  # Numerical integration of v_actual to get p_actual
             V_test = (self.p_test_reference - p_actual)*self.dt
             test_loss = cost_l2(self.F_test, model, V_test, alphaE=self.alphaE, alphaD=self.alphaD, Ne=self.PCA_comps)
-            # TODO: Verify this is correct
-            total_samples = self.F_test.shape[0]
+            total_samples = self.F_test.shape[1]  # Shape is (64, 1201)
             normalized_test_loss = test_loss / total_samples  # Normalize by the number of samples
             test_log.append(normalized_test_loss)
         
