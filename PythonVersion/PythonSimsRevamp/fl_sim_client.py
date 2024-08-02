@@ -17,7 +17,7 @@ class Client(ModelBase):
                 availability=1, final_update_ix=17, global_method='FedAvg', max_iter=1, normalize_EMG=True, starting_update=10, 
                 track_cost_components=True, gradient_clipping=False, log_decs=True, 
                 clipping_threshold=100, tol=1e-10, lr=1, track_gradient=True, wprev_global=False, 
-                num_steps=1, use_zvel=False, 
+                num_steps=1, use_zvel=False, use_kfoldv=False, 
                 mix_in_each_steps=False, mix_mixed_SB=False, delay_scaling=0, random_delays=False, download_delay=1, 
                 upload_delay=1, copy_type='deep', validate_memory_IDs=True, local_round_threshold=50, condition_number=3, 
                 verbose=False, test_split_type='end', test_split_frac=0.3, use_up16_for_test=True):
@@ -28,9 +28,10 @@ class Client(ModelBase):
         If you want NO smoothbatch then set it to 'off'
         '''
 
-        assert(full_client_dataset.shape[0]==64)
+        assert(full_client_dataset['training'].shape[0]==64)
         # Don't use anything past update 17 since they are different (update 17 is the short one, only like 300 datapoints)
-        local_data = full_client_dataset[:, :self.update_ix[final_update_ix]]
+        self.local_training_data = full_client_dataset['training'][:, :self.update_ix[final_update_ix]]
+        self.local_training_labels = full_client_dataset['labels'][:, :self.update_ix[final_update_ix]]
 
         self.global_method = global_method.upper()
         self.validate_memory_IDs = validate_memory_IDs
@@ -141,19 +142,21 @@ class Client(ModelBase):
             ## If this is a training cliet this will be overwritten by other client's testing dataset
             ## I guess I could set this to 
             # TODO: Confirm shape/orientation is correct
-            upper_bound = local_data['training'].shape[0]
+            upper_bound = self.local_training_data.shape[0]
             lower_bound = 0
-            self.testing_data = local_data['training']
-            self.testing_labels = local_data['labels']
+            self.testing_data = self.local_training_data
+            self.testing_labels = self.local_training_labels
         elif self.use_up16_for_test==True:
             lower_bound = self.update_ix[15]
             #//2  #Use only the second half of each update
             upper_bound = self.update_ix[16]
             self.test_split_idx = lower_bound
-            self.testing_data = local_data['training'][self.test_split_idx:upper_bound, :]
-            self.testing_labels = local_data['labels'][self.test_split_idx:upper_bound, :]
+            self.testing_data = self.local_training_data[self.test_split_idx:upper_bound, :]
+            self.testing_labels = self.local_training_labels[self.test_split_idx:upper_bound, :]
+            # TODO: There ought to be some assert here to make sure that self.testing_XYZ doesnt have a shape of zero...
         elif self.test_split_type=="END":
-            test_split_product_index = local_data['training'].shape[0]*test_split_frac
+            # TODO: Check that shape is correct here...
+            test_split_product_index = self.local_training_data.shape[0]*test_split_frac
             # Convert this value to the cloest update_ix value
             train_test_update_number_split = min(self.update_ix, key=lambda x:abs(x-test_split_product_index))
             if train_test_update_number_split<17:
@@ -162,14 +165,14 @@ class Client(ModelBase):
             self.test_split_idx = self.update_ix.index(train_test_update_number_split)
             lower_bound = self.test_split_idx
             # TODO: Ensure pper bound is correct
-            upper_bound = local_data['training'].shape[0]
-            self.testing_data = local_data['training'][self.test_split_idx:, :]
-            self.testing_labels = local_data['labels'][self.test_split_idx:, :]
+            upper_bound = self.local_training_data.shape[0]
+            self.testing_data = self.local_training_data[self.test_split_idx:, :]
+            self.testing_labels = self.local_training_labels[self.test_split_idx:, :]
         else:
             raise ValueError("use_up16_for_test or use_kfoldcv must be True or test_split_type must be END, they are the only 3 testing schemes supported currently")
         
-        self.training_data = local_data['training'][:self.test_split_idx, :]
-        self.labels = local_data['labels'][:self.test_split_idx, :]
+        self.training_data = self.local_training_data[:self.test_split_idx, :]
+        self.labels = self.local_training_labels[:self.test_split_idx, :]
         self.test_learning_batch = upper_bound - lower_bound
         s_temp = self.testing_data
         if self.normalize_EMG:
@@ -212,8 +215,8 @@ class Client(ModelBase):
             self.Fnorm_log.append(self.alphaF*(np.linalg.norm(self.F)**2))
 
 
-    def set_testset(test_dataset_obj):
-        if type(test_dataset_obj) is List:
+    def set_testset(self, test_dataset_obj):
+        if type(test_dataset_obj) is type([]):
             running_num_test_samples = 0
             for test_dset in test_dataset_obj:
                 # TODO: Verify that shape index is correct
@@ -436,7 +439,7 @@ class Client(ModelBase):
                                         (2, self.PCA_comps))
                 self.w_new = D0 - self.beta * new_stoch_grad
             elif self.opt_method=='PFAHF':
-                # TODO
+                # TODO: Implement. Is the hessian-vector product between the hessian and the gradient? ...
                 raise ValueError('Per-FedAvg HF NOT FINISHED YET')
             else:
                 raise ValueError("Unrecognized method")
@@ -533,7 +536,7 @@ class Client(ModelBase):
         #else:
         #    raise ValueError("use_up16_for_test must be True, it is the only testing supported currently")
             
-        if type(self.F_test) is List:
+        if type(self.F_test) is type([]):
             running_test_loss = 0
             running_num_samples = 0
             for i in range(len(self.F_test)):
