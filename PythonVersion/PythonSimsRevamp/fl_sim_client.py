@@ -20,7 +20,7 @@ class Client(ModelBase):
                 num_steps=1, use_zvel=False, use_kfoldv=False, 
                 mix_in_each_steps=False, mix_mixed_SB=False, delay_scaling=0, random_delays=False, download_delay=1, 
                 upload_delay=1, validate_memory_IDs=True, local_round_threshold=50, condition_number=3, 
-                verbose=False, test_split_type='end', test_split_frac=0.3, use_up16_for_test=True):
+                verbose=False, test_split_type='end', test_split_frac=0.3, use_up16_for_test=False):
         super().__init__(ID, w, opt_method, smoothbatch=smoothbatch, current_round=current_round, PCA_comps=PCA_comps, 
                          verbose=verbose, num_participants=14, log_init=0)
         '''
@@ -140,7 +140,6 @@ class Client(ModelBase):
             # Setting the testing set to the whole dataset so that it can be extracted
             ## If this is a training cliet this will be overwritten by other client's testing dataset
             ## I guess I could set this to 
-            # TODO: Confirm shape/orientation is correct
             upper_bound = self.local_training_data.shape[0]
             lower_bound = 0
             self.testing_data = self.local_training_data
@@ -154,7 +153,6 @@ class Client(ModelBase):
             self.testing_labels = self.local_training_labels[self.test_split_idx:upper_bound, :]
             # TODO: There ought to be some assert here to make sure that self.testing_XYZ doesnt have a shape of zero...
         elif self.test_split_type=="END":
-            # TODO: Check that shape is correct here...
             test_split_product_index = self.local_training_data.shape[0]*test_split_frac
             # Convert this value to the cloest update_ix value
             train_test_update_number_split = min(self.update_ix, key=lambda x:abs(x-test_split_product_index))
@@ -163,7 +161,6 @@ class Client(ModelBase):
                 train_test_update_number_split -= 1
             self.test_split_idx = self.update_ix.index(train_test_update_number_split)
             lower_bound = self.test_split_idx
-            # TODO: Ensure pper bound is correct
             upper_bound = self.local_training_data.shape[0]
             self.testing_data = self.local_training_data[self.test_split_idx:, :]
             self.testing_labels = self.local_training_labels[self.test_split_idx:, :]

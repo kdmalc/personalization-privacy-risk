@@ -47,12 +47,13 @@ step_indices = list(range(num_updates))
 #            clipping_threshold=100, tol=1e-10, lr=1, track_gradient=True, wprev_global=False, 
 #            num_steps=1, use_zvel=False, use_kfoldv=False, 
 #            mix_in_each_steps=False, mix_mixed_SB=False, delay_scaling=0, random_delays=False, download_delay=1, 
-#            upload_delay=1, copy_type='deep', validate_memory_IDs=True, local_round_threshold=50, condition_number=3, 
-#            verbose=False, test_split_type='end', test_split_frac=0.3, use_up16_for_test=True)
+#            upload_delay=1, validate_memory_IDs=True, local_round_threshold=50, condition_number=3, 
+#            verbose=False, test_split_type='end', test_split_frac=0.3, use_up16_for_test=False)
 
 # Need to be integrated!
-# num_steps=1, use_zvel=False, use_kfoldv=False,
-user_c0_1ScipyStep = [Client(i, copy.deepcopy(D_0), 'MaxiterScipyMin', cond0_training_and_labels_lst[i], 'streaming', starting_update=10, global_method='FedAvg', max_iter=1) for i in range(14)]
+# num_steps=1, use_zvel=False, use_kfoldv=True,
+# test_split_type='end', use_up16_for_test=False
+user_c0_1ScipyStep = [Client(i, copy.deepcopy(D_0), 'MaxiterScipyMin', cond0_training_and_labels_lst[i], 'streaming', starting_update=10, use_kfoldv=True, global_method='FedAvg', max_iter=1) for i in range(14)]
 global_model_1scipystep = Server(1, copy.deepcopy(D_0), opt_method='MaxiterScipyMin', global_method='FedAvg', all_clients=user_c0_1ScipyStep)
 
 big_loop_iters = 100

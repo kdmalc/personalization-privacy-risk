@@ -16,8 +16,7 @@ from fl_sim_base import *
         
 class Server(ModelBase):
     def __init__(self, ID, D0, opt_method, global_method, all_clients, smoothbatch=0.75, C=0.35, normalize_dec=False, test_split_type='end', 
-                 use_up16_for_test=True, test_split_frac=0.3, current_round=0, PCA_comps=64, verbose=False, 
-                 validate_memory_IDs=True):
+                 test_split_frac=0.3, current_round=0, PCA_comps=64, verbose=False, validate_memory_IDs=True):
         super().__init__(ID, D0, opt_method, smoothbatch=smoothbatch, current_round=current_round, PCA_comps=PCA_comps, 
                          verbose=verbose, num_participants=14, log_init=0)
         self.type = 'Server'
@@ -33,7 +32,6 @@ class Server(ModelBase):
         self.validate_memory_IDs = validate_memory_IDs
         self.test_split_type = test_split_type
         self.test_split_frac = test_split_frac
-        self.use_up16_for_test = use_up16_for_test
         self.global_method = global_method.upper()
         print(f"Running the {self.global_method} algorithm as the global method!")
         self.set_available_clients_list(init=True)
