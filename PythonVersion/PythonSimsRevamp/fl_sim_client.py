@@ -212,33 +212,60 @@ class Client(ModelBase):
 
 
     def set_testset(self, test_dataset_obj):
+        lower_bound = 0
+
         if type(test_dataset_obj) is type([]):
             running_num_test_samples = 0
+            self.s_test = []
+            self.F_test = []
+            self.p_test_reference = []
             for test_dset in test_dataset_obj:
-                # TODO: Verify that shape index is correct
-                running_num_test_samples += test_dset.shape[0]
-            upper_bound = running_num_test_samples
-        else:
-            # TODO: Verify that shape index is correct
-            upper_bound = test_dataset_obj.shape[0]
-        lower_bound = 0
-        self.test_learning_batch = upper_bound - lower_bound
+                self.testing_data = test_dset[0]
+                self.testing_labels = test_dset[1]
 
-        s_temp = self.testing_data
-        if self.normalize_EMG:
-            s_normed = s_temp/np.amax(s_temp)
+                # TODO: Verify that shape index is correct
+                running_num_test_samples += self.testing_data.shape[0]
+
+                s_temp = self.testing_data
+                if self.normalize_EMG:
+                    s_normed = s_temp/np.amax(s_temp)
+                else:
+                    s_normed = s_temp
+                if self.PCA_comps!=self.pca_channel_default:  
+                    pca = PCA(n_components=self.PCA_comps)
+                    s_normed = pca.fit_transform(s_normed)
+                self.s_test.append(np.transpose(s_normed))
+                self.F_test.append(np.transpose(s_normed)[:,:-1]) # note: truncate F for estimate_decoder
+                self.p_test_reference.append(np.transpose(self.testing_labels))
+
+            upper_bound = running_num_test_samples
+            # TODO: This might be incorrect... it is calculated differently than the below branch...
+            ## Eg maybe this should be a list of each upper-lower? Not sure...
+            ## Probably doesn't matter? Not even sure if this is used
+            self.test_learning_batch = upper_bound - lower_bound
         else:
-            s_normed = s_temp
-        if self.PCA_comps!=self.pca_channel_default:  
-            pca = PCA(n_components=self.PCA_comps)
-            s_normed = pca.fit_transform(s_normed)
-        self.s_test = np.transpose(s_normed)
-        self.F_test = self.s_test[:,:-1] # note: truncate F for estimate_decoder
-        self.p_test_reference = np.transpose(self.testing_labels)
+            self.testing_data = test_dataset_obj[0]
+            self.testing_labels = test_dataset_obj[1]
+            # TODO: Verify that shape index is correct
+            upper_bound = self.testing_data.shape[0]
+
+            self.test_learning_batch = upper_bound - lower_bound
+
+            s_temp = self.testing_data
+            if self.normalize_EMG:
+                s_normed = s_temp/np.amax(s_temp)
+            else:
+                s_normed = s_temp
+            if self.PCA_comps!=self.pca_channel_default:  
+                pca = PCA(n_components=self.PCA_comps)
+                s_normed = pca.fit_transform(s_normed)
+            self.s_test = np.transpose(s_normed)
+            self.F_test = self.s_test[:,:-1] # note: truncate F for estimate_decoder
+            self.p_test_reference = np.transpose(self.testing_labels)
     
     
     def get_testing_dataset(self):
-        pass
+        return self.testing_data, self.testing_labels
 
         
     def simulate_delay(self, incoming):

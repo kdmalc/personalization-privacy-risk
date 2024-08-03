@@ -1,16 +1,12 @@
 import numpy as np
-import pandas as pd
 import random
-from scipy.optimize import minimize
 import copy
-from matplotlib import pyplot as plt
+#from matplotlib import pyplot as plt
+#import time
+#import pickle
 
 from experiment_params import *
 from cost_funcs import *
-import time
-import pickle
-from sklearn.decomposition import PCA
-
 from fl_sim_base import *
         
         
@@ -34,7 +30,7 @@ class Server(ModelBase):
         self.test_split_frac = test_split_frac
         self.global_method = global_method.upper()
         print(f"Running the {self.global_method} algorithm as the global method!")
-        self.set_available_clients_list(init=True)
+        self.set_available_clients_list()
 
                 
     # 0: Main Loop
@@ -48,7 +44,7 @@ class Server(ModelBase):
             self.set_available_clients_list()
             self.choose_clients()
             # Let those clients train (this autoselects the chosen_client_lst to use)
-            self.train_client_and_log(client_set=self.chosen_clients_lst)
+            self.train_client_and_log(training_client_set=self.chosen_clients_lst)
             # AGGREGATION
             self.w_prev = copy.deepcopy(self.w)
             self.agg_local_weights()  # This func sets self.w, eg the new decoder
@@ -67,7 +63,7 @@ class Server(ModelBase):
         # Save the new decoder to the log
         self.dec_log.append(copy.deepcopy(self.w))
         # Run test_metrics to generate performance on testing data
-        for client_idx, my_client in enumerate(self.all_clients):
+        for client_idx, my_client in enumerate(self.available_clients_lst):
             # Reset all clients so no one is chosen for the next round
             if type(my_client)==int:
                 raise TypeError("All my clients are all integers...")
@@ -90,23 +86,21 @@ class Server(ModelBase):
 
         if self.global_method=='FEDAVG' or 'PFA' in self.global_method:
             # TODO: I think this is averaged incorrectly... loss should be averaged over num_samples not num_clients I think?
-            # TODO: THIS IS TEST METRICS which i called on all_clients so I think self.all_clients is fine?
-            self.global_test_error_log = running_global_test_loss / len(self.all_clients)
-            self.local_test_error_log = running_local_test_loss / len(self.all_clients)
+            # TODO: THIS IS TEST METRICS which i called on available_clients_lst so I think self.all_cavailable_clients_lstlients is fine?
+            self.global_test_error_log = running_global_test_loss / len(self.available_clients_lst)
+            self.local_test_error_log = running_local_test_loss / len(self.available_clients_lst)
         elif self.global_method=='NOFL':
-            self.local_test_error_log = running_local_test_loss / len(self.all_clients)
+            self.local_test_error_log = running_local_test_loss / len(self.available_clients_lst)
             
     # 1.1
-    def set_available_clients_list(self, init=False):
+    def set_available_clients_list(self):
         self.num_avail_clients = 0
-        self.available_clients_lst = [0]*len(self.all_clients)
+        self.available_clients_full_idx_lst = [0]*len(self.all_clients)
         for idx, my_client in enumerate(self.all_clients):
             if my_client.availability:
-                self.available_clients_lst[idx] = my_client
+                self.available_clients_full_idx_lst[idx] = my_client
                 self.num_avail_clients += 1
-                if init:
-                    # Pass down the global METHOD (NOT THE WEIGHTS!!)
-                    my_client.global_method = self.global_method
+        self.available_clients_lst = [val for val in self.available_clients_full_idx_lst if val != 0]
     
     # 1.2
     def choose_clients(self):
@@ -125,13 +119,29 @@ class Server(ModelBase):
             raise(f"ERROR: Number of available clients must be greater than 0: {self.num_avail_clients}")
             
     # 2
-    def train_client_and_log(self, client_set):
+    def train_client_and_log(self, training_client_set):
         current_local_lst = []
         current_global_lst = []
         current_pers_lst = []
-        for my_client in self.available_clients_lst:  # Implications of using this instead of all_clients?
+        for my_client in self.all_clients:  
+            if my_client.availability==False:
+                # If this doesnt append here then current_local_lst size doesnt change (from train_clients)
+                ## Which is why local_error_log[-1] size doesn't change (eg is still train_clients)
+                # TODO: Make sure that any averaging does not take these into account...
+                ## Make sure that only available clients are plotted or whatever...
+                ## Sounds like a pain for sequential.......
+                current_local_lst.append((my_client.ID, self.current_round, 0))
+                if self.global_method != 'NOFL':
+                    current_global_lst.append((my_client.ID, self.current_round, global_init_carry_val))
+                if self.global_method in self.pers_methods:
+                    current_pers_lst.append((my_client.ID, self.current_round, pers_init_carry_val))
+                continue
+
+            # ^ Implications of using available_clients_lst instead of all_clients?
+            # ... Or should it be training_clients for cross_val...
             my_client.latest_global_round = self.current_round
-            #^ Need to overwrite client with the curernt global round, for t later
+            #^ Need to overwrite client with the current global round, for t later
+            # ^ Idk what this comment is about...
             
             # This isn't great code because it checks the init every single time it runs
             #  Maybe move this to be before this loop?
@@ -146,7 +156,7 @@ class Server(ModelBase):
                 if self.global_method in self.pers_methods:
                     pers_init_carry_val = self.pers_error_log[-1][my_client.ID][2]#[0]
                     
-            if my_client in client_set:
+            if my_client in training_client_set:
                 # Send those clients the current global model
                 my_client.global_w = copy.deepcopy(self.w)
 
@@ -161,6 +171,7 @@ class Server(ModelBase):
                 if self.global_method != 'NOFL':
                     current_global_lst.append((my_client.ID, self.current_round, 
                                                my_client.eval_model(which='global')))
+                # TODO: Does this do anything... how is this different from the local model...
                 if self.global_method in self.pers_methods:
                     current_pers_lst.append((my_client.ID, self.current_round, 
                                                my_client.eval_model(which='pers')))
@@ -176,8 +187,9 @@ class Server(ModelBase):
         # Append (ID, COST) to SERVER'S error log.  
         #  Note that round is implicit, it is just the index of the error log
         if self.local_error_log==self.init_lst:
+            # TODO: Remove this code? ...
             # Overwrite the [(0,0)] hold... why not just init to this then...
-            self.local_error_log = []
+            #self.local_error_log = []
             self.local_error_log.append(current_local_lst)
         else:
             self.local_error_log.append(current_local_lst)
