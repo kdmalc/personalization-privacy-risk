@@ -16,38 +16,19 @@ from experiment_params import *
 from cost_funcs import *
 from fl_sim_client import *
 from fl_sim_server import *
+from shared_globals import *
 
 
-path = r'C:\Users\kdmen\Desktop\Research\Data\CPHS_EMG'
-cond0_filename = r'\cond0_dict_list.p'
-all_decs_init_filename = r'\all_decs_init.p'
-nofl_decs_filename = r'\nofl_decs.p'
-id2color = {0:'lightcoral', 1:'maroon', 2:'chocolate', 3:'darkorange', 4:'gold', 5:'olive', 6:'olivedrab', 
-            7:'lawngreen', 8:'aquamarine', 9:'deepskyblue', 10:'steelblue', 11:'violet', 12:'darkorchid', 13:'deeppink'}
-implemented_client_training_methods = ['GD', 'FullScipyMin', 'MaxIterScipyMin']
-num_participants = 14
-# For exclusion when plotting later on
-#bad_nodes = [] #[1,3,13]
-D_0 = np.random.rand(2,64)
-num_updates = 18
-step_indices = list(range(num_updates))
 # GLOBALS
 USE_KFOLDCV = True
-SCENARIO = 'CROSS-SUBJECT' # "INTRA-SUBJECT"
 GLOBAL_METHOD = "FedAvg"
 OPT_METHOD = 'MaxiterScipyMin'
-'streaming'
-STARTING_UPDATE=10
-DATA_STREAM='streaming'
 GLOBAL_ROUNDS = 50
-NUM_KFOLDS=5
 LR=0.1
 MAX_ITER=1  # For scipy. Set to -1 for full, otherwise stay with 1
 # ^ Do I need to pass this in? Is that not controlled by OPT_METHOD? ...
 NUM_STEPS=1  # This is also basically just local_epochs, since I don't batch. Num_grad_steps
-USE_HITBOUNDS=False
 TEST_SPLIT_TYPE='kfoldcv'
-PLOT_EACH_FOLD = False
 
 with open(path+cond0_filename, 'rb') as fp:
     cond0_training_and_labels_lst = pickle.load(fp)
@@ -70,21 +51,9 @@ for fold_idx, (train_ids, test_ids) in enumerate(folds):
     print(f"{len(test_ids)} Test_IDs: {test_ids}")
     
     # Initialize clients for training
-    train_clients = [Client(i, copy.deepcopy(D_0), OPT_METHOD, cond0_training_and_labels_lst[i],
-                            DATA_STREAM, current_fold=fold_idx, num_kfolds=NUM_KFOLDS, global_method=GLOBAL_METHOD, max_iter=MAX_ITER, 
+    full_client_lst = [Client(i, copy.deepcopy(D_0), OPT_METHOD, cond0_training_and_labels_lst[i],
+                            DATA_STREAM, current_fold=fold_idx, global_method=GLOBAL_METHOD, max_iter=MAX_ITER, 
                             num_steps=NUM_STEPS, use_zvel=USE_HITBOUNDS, test_split_type=TEST_SPLIT_TYPE) for i in train_ids]
-    # Initialize clients for testing
-    test_clients = [Client(i, copy.deepcopy(D_0), OPT_METHOD, cond0_training_and_labels_lst[i], 
-                           DATA_STREAM, current_fold=fold_idx, availability=False, val_set=True, num_kfolds=NUM_KFOLDS, global_method=GLOBAL_METHOD, max_iter=MAX_ITER, 
-                           num_steps=NUM_STEPS, use_zvel=USE_HITBOUNDS, test_split_type=TEST_SPLIT_TYPE) for i in test_ids]
-
-    testing_datasets_lst = []
-    for test_cli in test_clients:
-        testing_datasets_lst.append(test_cli.get_testing_dataset())
-    for train_cli in train_clients:
-        train_cli.set_testset(testing_datasets_lst)
-
-    full_client_lst = train_clients+test_clients
 
     server_obj = Server(1, copy.deepcopy(D_0), opt_method=OPT_METHOD, global_method=GLOBAL_METHOD, all_clients=full_client_lst)
     server_obj.current_fold = fold_idx
