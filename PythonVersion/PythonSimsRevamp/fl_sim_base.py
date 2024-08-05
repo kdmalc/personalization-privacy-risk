@@ -1,6 +1,5 @@
 import numpy as np
 import pandas as pd
-from scipy.optimize import minimize
 import copy
 from matplotlib import pyplot as plt
 
@@ -9,14 +8,14 @@ from cost_funcs import *
 
 
 class ModelBase:
-    def __init__(self, ID, w, opt_method, smoothbatch=1, verbose=False, PCA_comps=7, current_round=0, num_participants=14, log_init=0):
+    def __init__(self, ID, w, opt_method, smoothbatch_lr=1, alphaF=0.0, alphaE=1e-6, alphaD=1e-4, verbose=False, starting_update=10, PCA_comps=64, current_round=0, num_clients=14, log_init=0):
         # Not input
         self.num_updates = 19
-        self.cphs_starting_update = 10
+        self.starting_update=starting_update
         self.update_ix = [0,  1200,  2402,  3604,  4806,  6008,  7210,  8412,  9614, 10816, 12018, 13220, 14422, 15624, 16826, 18028, 19230, 20432, 20769]
         self.id2color = {0:'lightcoral', 1:'maroon', 2:'chocolate', 3:'darkorange', 4:'gold', 5:'olive', 6:'olivedrab', 
                 7:'lawngreen', 8:'aquamarine', 9:'deepskyblue', 10:'steelblue', 11:'violet', 12:'darkorchid', 13:'deeppink'}
-        self.pers_methods = ['FedAvgSB', 'Per-FedAvg FO', 'Per-FedAvg HF']
+        #self.pers_methods = ['FedAvgSB', 'Per-FedAvg FO', 'Per-FedAvg HF']
         
         self.type = 'BaseClass'
         self.ID = ID
@@ -30,21 +29,25 @@ class ModelBase:
         self.w_prev = copy.deepcopy(self.w)
         self.dec_log = [copy.deepcopy(self.w)]
         self.w_prev = copy.deepcopy(self.w)
-        self.num_participants = num_participants
+        self.num_clients = num_clients
         self.log_init = log_init
 
-        self.local_error_log = [] #[log_init]*num_participants
-        self.global_error_log = [] #[log_init]*num_participants
-        self.pers_error_log = [] #[log_init]*num_participants
+        self.alphaF = alphaF
+        self.alphaE = alphaE
+        self.alphaD = alphaD
 
-        self.local_test_error_log = [] #[log_init]*num_participants
-        self.global_test_error_log = [] #[log_init]*num_participants
-        self.pers_test_error_log = [] #[log_init]*num_participants
+        self.local_train_error_log = [] #[log_init]*num_clients
+        self.global_train_error_log = [] #[log_init]*num_clients
+        #self.pers_train_error_log = [] #[log_init]*num_clients
+
+        self.local_test_error_log = [] #[log_init]*num_clients
+        self.global_test_error_log = [] #[log_init]*num_clients
+        #self.pers_test_error_log = [] #[log_init]*num_clients
         
         self.opt_method = opt_method.upper()
         self.current_round = current_round
         self.verbose = verbose
-        self.smoothbatch = smoothbatch
+        self.smoothbatch_lr = smoothbatch_lr
 
     def __repr__(self): 
         return f"{self.type}{self.ID}"
@@ -54,7 +57,7 @@ class ModelBase:
 
 
 # Add this as a static method?
-def condensed_external_plotting(input_data, version, exclusion_ID_lst=[], dim_reduc_factor=1, plot_gradient=False, plot_pers_gradient=False, plot_this_ID_only=-1, plot_global_gradient=False, global_error=True, local_error=True, pers_error=False, different_local_round_thresh_per_client=False, legend_on=False, plot_performance=False, plot_Dnorm=False, plot_Fnorm=False, num_participants=14, show_update_change=True, custom_title="", axes_off_list=[], ylim_max=None, ylim_min=None, my_legend_loc='best', global_alpha=1, local_alpha=1, pers_alpha=1, global_linewidth=1, local_linewidth=1, pers_linewidth=1, global_linestyle='dashed', local_linestyle='solid', pers_linestyle='dotted'):
+def condensed_external_plotting(input_data, version, exclusion_ID_lst=[], dim_reduc_factor=1, plot_gradient=False, plot_pers_gradient=False, plot_this_ID_only=-1, plot_global_gradient=False, global_error=True, local_error=True, pers_error=False, different_local_round_thresh_per_client=False, legend_on=False, plot_performance=False, plot_Dnorm=False, plot_Fnorm=False, num_clients=14, show_update_change=True, custom_title="", axes_off_list=[], ylim_max=None, ylim_min=None, my_legend_loc='best', global_alpha=1, local_alpha=1, pers_alpha=1, global_linewidth=1, local_linewidth=1, pers_linewidth=1, global_linestyle='dashed', local_linestyle='solid', pers_linestyle='dotted'):
     
     id2color = {0:'lightcoral', 1:'maroon', 2:'chocolate', 3:'darkorange', 4:'gold', 5:'olive', 6:'olivedrab', 
             7:'lawngreen', 8:'aquamarine', 9:'deepskyblue', 10:'steelblue', 11:'violet', 12:'darkorchid', 13:'deeppink'}
@@ -97,27 +100,27 @@ def condensed_external_plotting(input_data, version, exclusion_ID_lst=[], dim_re
             continue 
         elif plot_this_ID_only!=-1 and i!=plot_this_ID_only:
             continue
-        elif len(user_database[i].local_error_log)<2:
+        elif len(user_database[i].local_train_error_log)<2:
             # This node never trained so just skip it so it doesn't break the plotting
             continue 
         else: 
             # This is used for plotting later
-            if len(user_database[i].local_error_log) > max_local_iters:
-                max_local_iters = len(user_database[i].local_error_log)
+            if len(user_database[i].local_train_error_log) > max_local_iters:
+                max_local_iters = len(user_database[i].local_train_error_log)
 
             if version.upper()=='LOCAL':
                 if global_error:
-                    df = pd.DataFrame(user_database[i].global_error_log)
+                    df = pd.DataFrame(user_database[i].global_train_error_log)
                     df.reset_index(inplace=True)
                     df10 = df.groupby(df.index//dim_reduc_factor, axis=0).mean()
                     plt.plot(df10.values[:, 0], df10.values[:, 1], color=id2color[user_database[i].ID], linewidth=global_linewidth, alpha=global_alpha, linestyle=global_linestyle)
                 if local_error:
-                    df = pd.DataFrame(user_database[i].local_error_log)
+                    df = pd.DataFrame(user_database[i].local_train_error_log)
                     df.reset_index(inplace=True)
                     df10 = df.groupby(df.index//dim_reduc_factor, axis=0).mean()
                     plt.plot(df10.values[:, 0], df10.values[:, 1], color=id2color[user_database[i].ID], linewidth=local_linewidth, alpha=local_alpha, linestyle=local_linestyle)
                 if pers_error:
-                    df = pd.DataFrame(user_database[i].pers_error_log)
+                    df = pd.DataFrame(user_database[i].pers_train_error_log)
                     df.reset_index(inplace=True)
                     df10 = df.groupby(df.index//dim_reduc_factor, axis=0).mean()
                     plt.plot(df10.values[:, 0], df10.values[:, 1], color=id2color[user_database[i].ID], linewidth=pers_linewidth, alpha=pers_alpha, linestyle=pers_linestyle)
@@ -160,9 +163,9 @@ def condensed_external_plotting(input_data, version, exclusion_ID_lst=[], dim_re
                     client_loss = []
                     client_global_round = []
                     for j in range(input_data.current_round):
-                        client_loss.append(input_data.global_error_log[j][i][2])
+                        client_loss.append(input_data.global_train_error_log[j][i][2])
                         # This is actually the client local round
-                        client_global_round.append(input_data.global_error_log[j][i][1])
+                        client_global_round.append(input_data.global_train_error_log[j][i][1])
                     # Why is the [1:] here?  What happens when dim_reduc=1? 
                     # Verify that this is the same as my envelope code...
                     plt.plot(moving_average(client_global_round, dim_reduc_factor)[1:], moving_average(client_loss, dim_reduc_factor)[1:], color=id2color[user_database[i].ID], linewidth=global_linewidth, alpha=global_alpha, linestyle=global_linestyle)
@@ -171,16 +174,16 @@ def condensed_external_plotting(input_data, version, exclusion_ID_lst=[], dim_re
                     client_loss = []
                     client_global_round = []
                     for j in range(input_data.current_round):
-                        client_loss.append(input_data.local_error_log[j][i][2])
-                        client_global_round.append(input_data.local_error_log[j][i][1])
+                        client_loss.append(input_data.local_train_error_log[j][i][2])
+                        client_global_round.append(input_data.local_train_error_log[j][i][1])
                     plt.plot(moving_average(client_global_round, dim_reduc_factor)[1:], moving_average(client_loss, dim_reduc_factor)[1:], color=id2color[user_database[i].ID], linewidth=local_linewidth, alpha=local_alpha, linestyle=local_linestyle)
                
                 if pers_error:
                     client_loss = []
                     client_global_round = []
                     for j in range(input_data.current_round):
-                        client_loss.append(input_data.pers_error_log[j][i][2])
-                        client_global_round.append(input_data.pers_error_log[j][i][1])
+                        client_loss.append(input_data.pers_train_error_log[j][i][2])
+                        client_global_round.append(input_data.pers_train_error_log[j][i][1])
                     plt.plot(moving_average(client_global_round, dim_reduc_factor)[1:], moving_average(client_loss, dim_reduc_factor)[1:], color=id2color[user_database[i].ID], linewidth=pers_linewidth, alpha=pers_alpha, linestyle=pers_linestyle)
 
                 if show_update_change:
@@ -216,7 +219,7 @@ def condensed_external_plotting(input_data, version, exclusion_ID_lst=[], dim_re
     plt.show()
     
 
-def central_tendency_plotting(all_user_input, highlight_default=False, default_local=False, default_global=False, default_pers=False, plot_mean=True, plot_median=False, exclusion_ID_lst=[], dim_reduc_factor=1, plot_gradient=False, plot_pers_gradient=False, plot_this_ID_only=-1, plot_global_gradient=False, global_error=True, local_error=True, pers_error=False, different_local_round_thresh_per_client=False, legend_on=True, plot_performance=False, plot_Dnorm=False, plot_Fnorm=False, num_participants=14, show_update_change=True, custom_title="", axes_off_list=[], xlim_max=None, xlim_min=None, ylim_max=None, ylim_min=None, input_linewidth=1, my_legend_loc='best', iterable_labels=[], iterable_colors=[]):
+def central_tendency_plotting(all_user_input, highlight_default=False, default_local=False, default_global=False, default_pers=False, plot_mean=True, plot_median=False, exclusion_ID_lst=[], dim_reduc_factor=1, plot_gradient=False, plot_pers_gradient=False, plot_this_ID_only=-1, plot_global_gradient=False, global_error=True, local_error=True, pers_error=False, different_local_round_thresh_per_client=False, legend_on=True, plot_performance=False, plot_Dnorm=False, plot_Fnorm=False, num_clients=14, show_update_change=True, custom_title="", axes_off_list=[], xlim_max=None, xlim_min=None, ylim_max=None, ylim_min=None, input_linewidth=1, my_legend_loc='best', iterable_labels=[], iterable_colors=[]):
     
     id2color = {0:'lightcoral', 1:'maroon', 2:'chocolate', 3:'darkorange', 4:'gold', 5:'olive', 6:'olivedrab', 
             7:'lawngreen', 8:'aquamarine', 9:'deepskyblue', 10:'steelblue', 11:'violet', 12:'darkorchid', 13:'deeppink'}
@@ -276,13 +279,13 @@ def central_tendency_plotting(all_user_input, highlight_default=False, default_l
             # Skip over users that distort the scale
             if user_database[i].ID in exclusion_ID_lst:
                 continue 
-            elif len(user_database[i].local_error_log)<2:
+            elif len(user_database[i].local_train_error_log)<2:
                 # This node never trained so just skip it so it doesn't break the plotting
                 continue 
             else: 
                 # This is used for plotting later
-                if len(user_database[i].local_error_log) > max_local_iters:
-                    max_local_iters = len(user_database[i].local_error_log)
+                if len(user_database[i].local_train_error_log) > max_local_iters:
+                    max_local_iters = len(user_database[i].local_train_error_log)
 
                 # This is how it would be supposed to work
                 # Append needs to change to concat
@@ -290,7 +293,7 @@ def central_tendency_plotting(all_user_input, highlight_default=False, default_l
                 # So I would have to build each df (do concat and have some base init...)
                 #for flag_idx, plotting_flag in enumerate(param_list):
                 #    if plotting_flag:
-                #        df = pd.DataFrame(user_database[i].global_error_log)
+                #        df = pd.DataFrame(user_database[i].global_train_error_log)
                 #         df.reset_index(inplace=True)
                 #        global_df.append(df.groupby(df.index//dim_reduc_factor, axis=0).mean())
                 #        all_dfs_dict[flag_idx]
@@ -300,13 +303,13 @@ def central_tendency_plotting(all_user_input, highlight_default=False, default_l
                 #            if 'MEDIAN' in central_tendency.upper():
                 #                all_vecs_dict[flag_idx].append(pd.DataFrame(my_df.median(axis=0)))
                 if global_error or (user_idx==0 and default_global==True):
-                    df = pd.DataFrame(user_database[i].global_error_log)
+                    df = pd.DataFrame(user_database[i].global_train_error_log)
                     global_df = pd.concat([global_df, (df.groupby(df.index//dim_reduc_factor, axis=0).mean()).T])
                 if local_error or (user_idx==0 and default_local==True):
-                    df = pd.DataFrame(user_database[i].local_error_log)
+                    df = pd.DataFrame(user_database[i].local_train_error_log)
                     local_df = pd.concat([local_df, (df.groupby(df.index//dim_reduc_factor, axis=0).mean()).T])
                 if pers_error or (user_idx==0 and default_pers==True):
-                    df = pd.DataFrame(user_database[i].pers_error_log)
+                    df = pd.DataFrame(user_database[i].pers_train_error_log)
                     pers_df = pd.concat([pers_df, (df.groupby(df.index//dim_reduc_factor, axis=0).mean()).T])
                 if plot_performance:
                     df = pd.DataFrame(user_database[i].performance_log)

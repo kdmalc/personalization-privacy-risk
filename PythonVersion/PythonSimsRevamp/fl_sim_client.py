@@ -13,16 +13,16 @@ from fl_sim_base import *
 
 
 class Client(ModelBase):
-    def __init__(self, ID, w, opt_method, full_client_dataset, data_stream, smoothbatch=0.75, current_round=0, PCA_comps=64, 
+    def __init__(self, ID, w, opt_method, full_client_dataset, data_stream, smoothbatch_lr=0.75, current_round=0, PCA_comps=64, 
                 availability=1, final_usable_update_ix=17, global_method='FedAvg', max_iter=1, normalize_EMG=True, starting_update=10, 
-                track_cost_components=True, gradient_clipping=False, log_decs=True, 
+                track_cost_components=True, gradient_clipping=False, log_decs=True, val_set=False,
                 clipping_threshold=100, tol=1e-10, lr=1, track_gradient=True, wprev_global=False, 
-                num_steps=1, use_zvel=False, use_kfoldv=False, 
+                num_steps=1, use_zvel=False, current_fold=0, 
                 mix_in_each_steps=False, mix_mixed_SB=False, delay_scaling=0, random_delays=False, download_delay=1, 
                 upload_delay=1, validate_memory_IDs=True, local_round_threshold=50, condition_number=3, 
-                verbose=False, test_split_type='end', test_split_frac=0.3, use_up16_for_test=False):
-        super().__init__(ID, w, opt_method, smoothbatch=smoothbatch, current_round=current_round, PCA_comps=PCA_comps, 
-                         verbose=verbose, num_participants=14, log_init=0)
+                verbose=False, test_split_type='kfoldcv', num_kfolds=5, test_split_frac=0.3):
+        super().__init__(ID, w, opt_method, smoothbatch_lr=smoothbatch_lr, current_round=current_round, PCA_comps=PCA_comps, 
+                         verbose=verbose, num_clients=14, log_init=0)
         '''
         Note self.smoothbatch gets overwritten according to the condition number!  
         If you want NO smoothbatch then set it to 'off'
@@ -41,6 +41,7 @@ class Client(ModelBase):
         self.latest_global_round = 0
         self.update_transition_log = []
         self.normalize_EMG = normalize_EMG
+
         # Sentinel Values
         self.F = None
         self.V = None
@@ -51,6 +52,7 @@ class Client(ModelBase):
         # Round minimization output to the nearest int or keep as a float?  Don't need arbitrary precision
         self.round2int = False
         self.max_iter = max_iter
+        self.current_fold = current_fold
         
         # Maneeshika Code:
         self.use_zvel = use_zvel
@@ -90,17 +92,15 @@ class Client(ModelBase):
         # ML Parameters / Conditions
         cond_dict = {1:(0.25, 1e-3, 1), 2:(0.25, 1e-4, 1), 3:(0.75, 1e-3, 1), 4:(0.75, 1e-4, 1), 5:(0.25, 1e-4, -1), 6:(0.25, 1e-4, -1), 7:(0.75, 1e-3, -1), 8:(0.75, 1e-4, -1)}
         cond_smoothbatch, self.alphaD, self.init_dec_sign = cond_dict[condition_number]
-        if type(smoothbatch)==str and smoothbatch.upper()=='OFF':
-            self.smoothbatch = 1  # AKA Use only the new dec, no mixing
-        elif smoothbatch==1:  # This is the default
+        if type(smoothbatch_lr)==str and smoothbatch_lr.upper()=='OFF':
+            self.smoothbatch_lr = 1  # AKA Use only the new dec, no mixing
+        elif smoothbatch_lr==1:  # This is the default
             # If it is default, then let the condition number set smoothbatch
-            self.smoothbatch = cond_smoothbatch
+            self.smoothbatch_lr = cond_smoothbatch
         else:
             # Set smoothbatch to whatever you manually entered
-            self.smoothbatch=smoothbatch
+            self.smoothbatch_lr=smoothbatch_lr
             #print()
-        self.alphaE = 1e-6
-        self.alphaF = 0
         # This is probably not used...
         self.gradient_clipping = gradient_clipping
         self.clipping_threshold = clipping_threshold
@@ -130,12 +130,12 @@ class Client(ModelBase):
         self.mixed_w = copy.deepcopy(self.w)
 
         # TRAIN TEST DATA SPLIT
-        self.use_up16_for_test = use_up16_for_test
-        self.use_kfoldcv = use_kfoldv
-        self.test_split_type = test_split_type.upper()
+        self.test_split_type = test_split_type.upper() # "KFOLDCV" "UPDATE16" "ENDFRACTION"
         self.test_split_frac = test_split_frac
+        self.num_kfolds = num_kfolds
+        self.val_set = val_set
 
-        if self.use_kfoldcv==True:
+        if self.test_split_type=="KFOLDCV":
             self.test_split_idx = -1
             # Setting the testing set to the whole dataset so that it can be extracted
             ## If this is a training cliet this will be overwritten by other client's testing dataset
@@ -144,7 +144,7 @@ class Client(ModelBase):
             lower_bound = 0
             self.testing_data = self.local_training_data
             self.testing_labels = self.local_training_labels
-        elif self.use_up16_for_test==True:
+        elif self.test_split_type=="UPDATE16":
             lower_bound = self.update_ix[15]
             #//2  #Use only the second half of each update
             upper_bound = self.update_ix[16]
@@ -152,7 +152,7 @@ class Client(ModelBase):
             self.testing_data = self.local_training_data[self.test_split_idx:upper_bound, :]
             self.testing_labels = self.local_training_labels[self.test_split_idx:upper_bound, :]
             # TODO: There ought to be some assert here to make sure that self.testing_XYZ doesnt have a shape of zero...
-        elif self.test_split_type=="END":
+        elif self.test_split_type=="ENDFRACTION":
             test_split_product_index = self.local_training_data.shape[0]*test_split_frac
             # Convert this value to the cloest update_ix value
             train_test_update_number_split = min(self.update_ix, key=lambda x:abs(x-test_split_product_index))
@@ -165,7 +165,7 @@ class Client(ModelBase):
             self.testing_data = self.local_training_data[self.test_split_idx:, :]
             self.testing_labels = self.local_training_labels[self.test_split_idx:, :]
         else:
-            raise ValueError("use_up16_for_test or use_kfoldcv must be True or test_split_type must be END, they are the only 3 testing schemes supported currently")
+            raise ValueError("test_split_type not working as expected")
         
         self.training_data = self.local_training_data[:self.test_split_idx, :]
         self.labels = self.local_training_labels[:self.test_split_idx, :]
@@ -194,16 +194,18 @@ class Client(ModelBase):
             self.dec_log.append(self.w)
             if self.global_method=="FEDAVG":
                 self.global_dec_log.append(copy.deepcopy(self.global_w))
-            elif self.global_method in self.pers_methods:
+            # TODO: Remove this? I don't think there's a need for an additional pers log...
+            elif "PFA" in self.global_method:
                 self.global_dec_log.append(copy.deepcopy(self.global_w))
+                # TODO: What is mixed_w...
                 self.pers_dec_log.append(copy.deepcopy(self.mixed_w))
         # Log Error
-        self.local_error_log.append(self.eval_model(which='local'))
+        self.local_train_error_log.append(self.eval_model(which='local'))
         # Yes these should both be ifs not elif, they may both need to run
         if self.global_method!="NOFL":
-            self.global_error_log.append(self.eval_model(which='global'))
-        if self.global_method in self.pers_methods:
-            self.pers_error_log.append(self.eval_model(which='pers'))
+            self.global_train_error_log.append(self.eval_model(which='global'))
+        #if "PFA" in self.global_method:
+        #    self.pers_train_error_log.append(self.eval_model(which='pers'))
         # Log Cost Comp
         if self.track_cost_components:
             self.performance_log.append(self.alphaE*(np.linalg.norm((self.w@self.F - self.V[:,1:]))**2))
@@ -276,7 +278,7 @@ class Client(ModelBase):
             
             
     def simulate_data_stream(self, streaming_method=True):
-        if streaming_method:
+        if streaming_method: # What is this for LOL
             streaming_method = self.data_stream
         need_to_advance=True
         self.current_round += 1
@@ -338,11 +340,11 @@ class Client(ModelBase):
             if self.PCA_comps!=self.pca_channel_default:  
                 pca = PCA(n_components=self.PCA_comps)
                 s_normed = pca.fit_transform(s_normed)
-            s = np.transpose(s_normed)
-            self.F = s[:,:-1] # note: truncate F for estimate_decoder
-            v_actual = self.w@s
+            self.s = np.transpose(s_normed)
+            self.F = self.s[:,:-1] # note: truncate F for estimate_decoder
+            v_actual = self.w@self.s
             p_actual = np.cumsum(v_actual, axis=1)*self.dt  # Numerical integration of v_actual to get p_actual
-            p_reference = np.transpose(self.labels[lower_bound:upper_bound,:])
+            self.p_reference = np.transpose(self.labels[lower_bound:upper_bound,:])
             
             #####################################################################
             # Add the boundary conditions code here
@@ -353,7 +355,7 @@ class Client(ModelBase):
                     self.vel_est = np.zeros_like((p_ref_lim))
                     self.pos_est = np.zeros_like((p_ref_lim))
                     self.int_vel_est = np.zeros_like((p_ref_lim))
-                    self.vel_est[0] = self.w@s[:,0]  # Translated from: Ds_fixed@emg_tr[0]
+                    self.vel_est[0] = self.w@self.s[:,0]  # Translated from: Ds_fixed@emg_tr[0]
                     self.pos_est[0] = [0, 0]
                 else:
                     prev_vel_est = self.vel_est[-1]
@@ -365,9 +367,9 @@ class Client(ModelBase):
                     
                     self.vel_est[0] = prev_vel_est
                     self.pos_est[0] = prev_pos_est
-                for tt in range(1, s.shape[1]):
+                for tt in range(1, self.s.shape[1]):
                     # Note this does not keep track of actual updates, only the range of 1 to s.shape[1] (1202ish)
-                    vel_plus = self.w@s[:,tt]  # Translated from: Ds_fixed@emg_tr[tt]
+                    vel_plus = self.w@self.s[:,tt]  # Translated from: Ds_fixed@emg_tr[tt]
                     p_plus = self.pos_est[tt-1, :] + (self.vel_est[tt-1, :]*self.dt)
                     # These are just correctives, such that vel_plus can get bounded
                     # x-coordinate
@@ -391,11 +393,13 @@ class Client(ModelBase):
                     # calculate intended velocity
                     self.int_vel_est[tt] = calculate_intended_vels(p_ref_lim[tt], p_plus, 1/self.dt)
 
+                # self.V must be set ONLY WITHIN TRAINING
                 self.V = np.transpose(self.int_vel_est[:tt+1])
                 #print(f"V.shape: {self.V.shape}")
             else:
                 # Original code
-                self.V = (p_reference - p_actual)*self.dt
+                # self.V must be set ONLY WITHIN TRAINING
+                self.V = (self.p_reference - p_actual)*self.dt
             
 
     def train_given_model_1_comm_round(self, model, which):
@@ -452,7 +456,8 @@ class Client(ModelBase):
             ##################################################################################
             ##################################################################################
             ##################################################################################
-            elif self.opt_method=='PFAFO':
+            # IF GLOBAL METHOD IS ONE OF THE PFA METHODS, OPT METHOD GETS OVERWRITTEN WITH GD
+            elif self.global_method=='PFAFO':
                 stochastic_grad = np.reshape(gradient_cost_l2(self.F, D0, self.V, alphaE=self.alphaE, alphaD=self.alphaD, Ne=self.PCA_comps), 
                                         (2, self.PCA_comps))
                 w_tilde = D0 - self.lr * stochastic_grad
@@ -461,7 +466,7 @@ class Client(ModelBase):
                 new_stoch_grad = np.reshape(gradient_cost_l2(self.F, w_tilde, self.V, alphaE=self.alphaE, alphaD=self.alphaD, Ne=self.PCA_comps), 
                                         (2, self.PCA_comps))
                 self.w_new = D0 - self.beta * new_stoch_grad
-            elif self.opt_method=='PFAHF':
+            elif self.global_method=='PFAHF':
                 # TODO: Implement. Is the hessian-vector product between the hessian and the gradient? ...
                 raise ValueError('Per-FedAvg HF NOT FINISHED YET')
             else:
@@ -483,17 +488,17 @@ class Client(ModelBase):
                 
             if self.mix_in_each_steps:
                 # TODO: mixed_w appears to not be used // is used as the personalized model?...
-                self.mixed_w = self.smoothbatch*self.w_new + ((1 - self.smoothbatch)*self.mixed_w)
+                self.mixed_w = self.smoothbatch_lr*self.w_new + ((1 - self.smoothbatch_lr)*self.mixed_w)
 
         # Do SmoothBatch
         #W_new = alpha*D[-1] + ((1 - alpha) * W_hat)
         # TODO: Add a smoothbatch toggle here
-        self.w = self.smoothbatch*self.w_new + ((1 - self.smoothbatch)*self.w_prev)
+        self.w = self.smoothbatch_lr*self.w_new + ((1 - self.smoothbatch_lr)*self.w_prev)
 
         # TODO: What is this doing here? Does this get logged elsewhere or what?
         # Save the new decoder to the log
         #self.dec_log.append(self.w)
-        #if self.global_method in self.pers_methods:
+        #if "PFA" in self.global_method:
         #    self.pers_dec_log.append(self.mixed_w)
         #self.global_dec_log.append(self.global_w)
         
@@ -504,12 +509,10 @@ class Client(ModelBase):
             my_V = self.V
         elif which=='global':
             my_dec = self.global_w
-            # self.V for non APFL case, only APFL defines Vglobal, as of 3/21
-            my_V = self.Vglobal if self.global_method=='APFL' else self.V
-        elif which=='pers' and self.global_method in self.pers_methods:
-            my_dec = self.w if 'Per-FedAvg' in self.global_method else self.mixed_w
-            # self.V for non APFL case, only APFL defines Vmixed, as of 3/24
-            my_V = self.Vmixed if self.global_method=='APFL' else self.V
+            my_V = self.V
+        elif which=='pers' and "PFA" in self.global_method:
+            my_dec = self.w
+            my_V = self.V
         else:
             raise ValueError("Please set <which> to either local or global")
         # Just did this so we wouldn't have the 14 decimals points it always tries to give
@@ -523,8 +526,9 @@ class Client(ModelBase):
             out = round(temp, 7)
         return out
         
-    def test_metrics(self, model, which, final_eval=False):
-        ''' No training / optimization, this just tests the fed in dec '''
+    def test_metrics(self, model, which):
+        ''' No training, just evaluates the given model on the client's testing dataset (which may be the crossval set) '''
+        # NOTE: Hit bound code may be incompatible with this!
         
         if which=='local':
             test_log = self.local_test_error_log
@@ -535,30 +539,6 @@ class Client(ModelBase):
         else:
             raise ValueError('test_metrics which does not exist. Must be local, global, or pers')
             
-        # Idk what this is doing at all... wasn't this already done in the init func...
-        #if self.use_up16_for_test==True and final_eval==True:
-        #    lower_bound = (self.update_ix[16])//2  #Use only the second half of each update
-        #    upper_bound = self.update_ix[17]
-        #    
-        #    self.test_learning_batch = upper_bound - lower_bound
-        #    # THIS NEEDS TO BE FIXED...
-        #    s_temp = self.training_data[lower_bound:upper_bound,:]
-        #    if self.normalize_EMG:
-        #        s_normed = s_temp/np.amax(s_temp)
-        #    else:
-        #        s_normed = s_temp
-        #    if self.PCA_comps!=self.pca_channel_default:  
-        #        pca = PCA(n_components=self.PCA_comps)
-        #        s_normed = pca.fit_transform(s_normed)
-        #    self.s_test = np.transpose(s_normed)
-        #    self.F_test = self.s_test[:,:-1] # note: truncate F for estimate_decoder
-        #    self.p_test_reference = np.transpose(self.labels[lower_bound:upper_bound,:])
-        #elif self.use_up16_for_test==True and final_eval==False:
-        #    # Can reuse the test values already set earlier in the init func
-        #    pass
-        #else:
-        #    raise ValueError("use_up16_for_test must be True, it is the only testing supported currently")
-            
         if type(self.F_test) is type([]):
             running_test_loss = 0
             running_num_samples = 0
@@ -567,6 +547,7 @@ class Client(ModelBase):
                 v_actual = model@self.s_test[i]
                 p_actual = np.cumsum(v_actual, axis=1)*self.dt  # Numerical integration of v_actual to get p_actual
                 V_test = (self.p_test_reference[i] - p_actual)*self.dt
+
                 batch_loss = cost_l2(self.F_test[i], model, V_test, alphaE=self.alphaE, alphaD=self.alphaD, Ne=self.PCA_comps)
                 batch_samples = self.F_test[i].shape[0]
                 running_test_loss += batch_loss * batch_samples  # Accumulate weighted loss by number of samples in batch
@@ -578,11 +559,58 @@ class Client(ModelBase):
             v_actual = model@self.s_test
             p_actual = np.cumsum(v_actual, axis=1)*self.dt  # Numerical integration of v_actual to get p_actual
             V_test = (self.p_test_reference - p_actual)*self.dt
+
             test_loss = cost_l2(self.F_test, model, V_test, alphaE=self.alphaE, alphaD=self.alphaD, Ne=self.PCA_comps)
-            total_samples = self.F_test.shape[1]  # Shape is (64, 1201)
+            total_samples = self.F_test.shape[1]  # Shape is (64, 1201ish) AKA (self.PCA_comps, 1201ish)
+            assert(total_samples!=self.PCA_comps)
             normalized_test_loss = test_loss / total_samples  # Normalize by the number of samples
             test_log.append(normalized_test_loss)
         
-        # This was returning self.V_test for some reason
+        # This was returning V_test for some reason
         ## I have None as a placeholder for now, maybe I'll return testing samples? But it already has access to that...
         return normalized_test_loss, None
+    
+
+    def train_metrics(self, model, which):
+        ''' No training, just evaluates the given model on the client's training data '''
+        # NOTE: Hit bound code may be incompatible with this!
+        
+        if which=='local':
+            train_log = self.local_train_error_log
+        elif which=='global':
+            train_log = self.global_train_error_log
+        #elif which=='pers':
+        #    train_log = self.pers_train_error_log
+        else:
+            raise ValueError('train_metrics which does not exist. Must be local, global, or pers')
+            
+        if type(self.F) is type([]):
+            running_train_loss = 0
+            running_num_samples = 0
+            for i in range(len(self.F)):
+                # TODO: Ensure that this is supposed to be D@s and not D@F...
+                v_actual = model@self.s[i]
+                p_actual = np.cumsum(v_actual, axis=1)*self.dt  # Numerical integration of v_actual to get p_actual
+                V = (self.p_reference[i] - p_actual)*self.dt
+
+                batch_loss = cost_l2(self.F[i], model, V, alphaE=self.alphaE, alphaD=self.alphaD, Ne=self.PCA_comps)
+                batch_samples = self.F[i].shape[0]
+                running_train_loss += batch_loss * batch_samples  # Accumulate weighted loss by number of samples in batch
+                running_num_samples += batch_samples
+            normalized_train_loss = running_train_loss / running_num_samples  # Normalize by total number of samples
+            train_log.append(normalized_train_loss)
+        else:
+            # TODO: Ensure that this is supposed to be D@s and not D@F...
+            v_actual = model@self.s
+            p_actual = np.cumsum(v_actual, axis=1)*self.dt  # Numerical integration of v_actual to get p_actual
+            V = (self.p_reference - p_actual)*self.dt
+
+            train_loss = cost_l2(self.F, model, V, alphaE=self.alphaE, alphaD=self.alphaD, Ne=self.PCA_comps)
+            total_samples = self.F.shape[1]  # Shape is (64, 1201ish) AKA (self.PCA_comps, 1201ish)
+            assert(total_samples!=self.PCA_comps)
+            normalized_train_loss = train_loss / total_samples  # Normalize by the number of samples
+            train_log.append(normalized_train_loss)
+        
+        # This was returning V for some reason
+        ## I have None as a placeholder for now, maybe I'll return training samples? But it already has access to that...
+        return normalized_train_loss, None

@@ -17,7 +17,7 @@ from cost_funcs import *
 from fl_sim_client import *
 from fl_sim_server import *
 
-# GLOBALS
+
 path = r'C:\Users\kdmen\Desktop\Research\Data\CPHS_EMG'
 cond0_filename = r'\cond0_dict_list.p'
 all_decs_init_filename = r'\all_decs_init.p'
@@ -26,14 +26,27 @@ id2color = {0:'lightcoral', 1:'maroon', 2:'chocolate', 3:'darkorange', 4:'gold',
             7:'lawngreen', 8:'aquamarine', 9:'deepskyblue', 10:'steelblue', 11:'violet', 12:'darkorchid', 13:'deeppink'}
 implemented_client_training_methods = ['GD', 'FullScipyMin', 'MaxIterScipyMin']
 num_participants = 14
-USE_KFOLDCV = True
-SCENARIO = 'CROSS-SUBJECT' # "INTRA-SUBJECT"
-GLOBAL_METHOD = "FEDAVG"
 # For exclusion when plotting later on
-bad_nodes = [] #[1,3,13]
+#bad_nodes = [] #[1,3,13]
 D_0 = np.random.rand(2,64)
 num_updates = 18
 step_indices = list(range(num_updates))
+# GLOBALS
+USE_KFOLDCV = True
+SCENARIO = 'CROSS-SUBJECT' # "INTRA-SUBJECT"
+GLOBAL_METHOD = "FedAvg"
+OPT_METHOD = 'MaxiterScipyMin'
+'streaming'
+STARTING_UPDATE=10
+DATA_STREAM='streaming'
+GLOBAL_ROUNDS = 50
+NUM_KFOLDS=5
+LR=0.1
+MAX_ITER=1  # For scipy. Set to -1 for full, otherwise stay with 1
+# ^ Do I need to pass this in? Is that not controlled by OPT_METHOD? ...
+NUM_STEPS=1  # This is also basically just local_epochs, since I don't batch. Num_grad_steps
+USE_HITBOUNDS=False
+TEST_SPLIT_TYPE='kfoldcv'
 
 with open(path+cond0_filename, 'rb') as fp:
     cond0_training_and_labels_lst = pickle.load(fp)
@@ -42,14 +55,13 @@ with open(path+cond0_filename, 'rb') as fp:
 #cond0_init_decs = [dec[0, :, :] for dec in init_decoders]
 
 # THIS K FOLD SCHEME IS ONLY FOR CROSS-SUBJECT ANALYSIS!!!
-
 # Define number of folds
-k = 5
+k = NUM_KFOLDS
 kf = KFold(n_splits=k)
-
 # Assuming cond0_training_and_labels_lst is a list of labels for 14 clients
 user_ids = list(range(14))
 folds = list(kf.split(user_ids))
+cross_val_res_lst = [[0, 0]]*NUM_KFOLDS
 
 for fold_idx, (train_ids, test_ids) in enumerate(folds):
     print(f"Fold {fold_idx+1}/{k}")
@@ -57,10 +69,13 @@ for fold_idx, (train_ids, test_ids) in enumerate(folds):
     print(f"{len(test_ids)} Test_IDs: {test_ids}")
     
     # Initialize clients for training
-    train_clients = [Client(i, copy.deepcopy(D_0), 'MaxiterScipyMin', cond0_training_and_labels_lst[i], 'streaming', starting_update=10, use_kfoldv=True, global_method='FedAvg', max_iter=1, num_steps=1, use_zvel=False, test_split_type='end', use_up16_for_test=False) for i in train_ids]
-
+    train_clients = [Client(i, copy.deepcopy(D_0), OPT_METHOD, cond0_training_and_labels_lst[i],
+                            DATA_STREAM, current_fold=fold_idx, num_kfolds=NUM_KFOLDS, global_method=GLOBAL_METHOD, max_iter=MAX_ITER, 
+                            num_steps=NUM_STEPS, use_zvel=USE_HITBOUNDS, test_split_type=TEST_SPLIT_TYPE) for i in train_ids]
     # Initialize clients for testing
-    test_clients = [Client(i, copy.deepcopy(D_0), 'MaxiterScipyMin', cond0_training_and_labels_lst[i], 'streaming', starting_update=10, availability=False, use_kfoldv=True, global_method='FedAvg', max_iter=1, num_steps=1, use_zvel=False, test_split_type='end', use_up16_for_test=False) for i in test_ids]
+    test_clients = [Client(i, copy.deepcopy(D_0), OPT_METHOD, cond0_training_and_labels_lst[i], 
+                           DATA_STREAM, current_fold=fold_idx, availability=False, val_set=True, num_kfolds=NUM_KFOLDS, global_method=GLOBAL_METHOD, max_iter=MAX_ITER, 
+                           num_steps=NUM_STEPS, use_zvel=USE_HITBOUNDS, test_split_type=TEST_SPLIT_TYPE) for i in test_ids]
 
     testing_datasets_lst = []
     for test_cli in test_clients:
@@ -70,13 +85,54 @@ for fold_idx, (train_ids, test_ids) in enumerate(folds):
 
     full_client_lst = train_clients+test_clients
 
-    global_model_1scipystep = Server(1, copy.deepcopy(D_0), opt_method='FullScipyMin', global_method='FedAvg', all_clients=full_client_lst)
-    
-    big_loop_iters = 50
-    for i in range(big_loop_iters):
+    server_obj = Server(1, copy.deepcopy(D_0), opt_method=OPT_METHOD, global_method=GLOBAL_METHOD, all_clients=full_client_lst)
+    server_obj.current_fold = fold_idx,
+    server_obj.global_rounds = GLOBAL_ROUNDS
+    for i in range(GLOBAL_ROUNDS):
         if i % 10 == 0:
-            print(f"Round {i} of {big_loop_iters}")
+            print(f"Round {i} of {GLOBAL_ROUNDS}")
             # Ought to print the loss too...
-        global_model_1scipystep.execute_FL_loop()
+        server_obj.execute_FL_loop()
+
+    # Record results
+    cross_val_res_lst[fold_idx][0] = server_obj.local_train_error_log
+    cross_val_res_lst[fold_idx][1] = server_obj.local_test_error_log
+
+    #server_obj.save_results_h5(save_cost_func_comps=False, save_gradient=False)
+
+# Plot all results:
+running_train_loss = np.zeros(GLOBAL_ROUNDS)
+running_test_loss = np.zeros(GLOBAL_ROUNDS)
+for fold_idx in range(len(folds)):
+    train_loss = cross_val_res_lst[fold_idx][0]
+    test_loss = cross_val_res_lst[fold_idx][1]
+
+    plt.plot(train_loss,  label=f"Fold{fold_idx} Train")
+    plt.plot(test_loss,  label=f"Fold{fold_idx} Test")
+
+    running_train_loss += np.array(train_loss)
+    running_test_loss += np.array(test_loss)
+# Average to get cross val curve:
+avg_cv_train_loss = running_train_loss / len(folds)
+avg_cv_test_loss = running_test_loss / len(folds)
+plt.plot(avg_cv_train_loss,  label="Avg CrossVal Train")
+plt.plot(avg_cv_test_loss,  label="Avg CrossVal Test")
+plt.xlabel("Training Round")
+plt.ylabel("Loss")
+plt.title("Train/Test Local Error Curves")
+plt.legend()
+plt.savefig(server_obj.trial_result_path + '\\TrainTestLossCurves.png', format='png')
+plt.show()
     
+server_obj.save_header()
+with h5py.File(server_obj.h5_file_path + "_CrossValResults.h5", 'w') as hf:
+    for fold_idx in range(len(folds)):
+        #if server_obj.global_method!="NOFL":
+        #    hf.create_dataset('global_test_error_log', data=self.global_test_error_log)
+        #    hf.create_dataset('global_train_error_log', data=self.global_train_error_log)
+        hf.create_dataset(f'Fold{fold_idx}_local_test_error_log', data=cross_val_res_lst[fold_idx][1])
+        hf.create_dataset(f'Fold{fold_idx}_local_train_error_log', data=cross_val_res_lst[fold_idx][0])
+    # Save the averaged cv results
+    hf.create_dataset(f'AveragedCV_local_test_error_log', data=avg_cv_test_loss)
+    hf.create_dataset(f'AveragedCV_local_train_error_log', data=avg_cv_train_loss)
 
