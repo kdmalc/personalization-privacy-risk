@@ -47,6 +47,7 @@ MAX_ITER=1  # For scipy. Set to -1 for full, otherwise stay with 1
 NUM_STEPS=1  # This is also basically just local_epochs, since I don't batch. Num_grad_steps
 USE_HITBOUNDS=False
 TEST_SPLIT_TYPE='kfoldcv'
+PLOT_EACH_FOLD = False
 
 with open(path+cond0_filename, 'rb') as fp:
     cond0_training_and_labels_lst = pickle.load(fp)
@@ -86,29 +87,48 @@ for fold_idx, (train_ids, test_ids) in enumerate(folds):
     full_client_lst = train_clients+test_clients
 
     server_obj = Server(1, copy.deepcopy(D_0), opt_method=OPT_METHOD, global_method=GLOBAL_METHOD, all_clients=full_client_lst)
-    server_obj.current_fold = fold_idx,
+    server_obj.current_fold = fold_idx
     server_obj.global_rounds = GLOBAL_ROUNDS
     for i in range(GLOBAL_ROUNDS):
         if i % 10 == 0:
             print(f"Round {i} of {GLOBAL_ROUNDS}")
-            # Ought to print the loss too...
+
         server_obj.execute_FL_loop()
 
+        if i % 10 == 0:
+            print(f"Global test loss: {server_obj.global_test_error_log[-1]}")
+            print(f"Local test loss: {server_obj.local_test_error_log[-1]}")
+
+    if PLOT_EACH_FOLD:
+        plt.figure()  # Create a new figure
+        plt.plot(server_obj.local_train_error_log, label=f"f{fold_idx} local train")
+        plt.plot(server_obj.local_test_error_log, label=f"f{fold_idx} local test")
+        plt.plot(server_obj.global_train_error_log, label=f"f{fold_idx} global train")
+        plt.plot(server_obj.global_test_error_log, label=f"f{fold_idx} global test")
+        plt.xlabel("Training Round")
+        plt.ylabel("Loss")
+        plt.title(f"Train/Test Local/Global Error Curves For Fold {fold_idx}")
+        plt.legend()
+        plt.savefig(server_obj.trial_result_path + f'\\TrainTestLossCurvesf{fold_idx}.png', format='png')
+        plt.show()
+
     # Record results
-    cross_val_res_lst[fold_idx][0] = server_obj.local_train_error_log
-    cross_val_res_lst[fold_idx][1] = server_obj.local_test_error_log
+    # copy.deepcopy didn't fix it... must be upstream...
+    cross_val_res_lst[fold_idx][0] = copy.deepcopy(server_obj.local_train_error_log)
+    cross_val_res_lst[fold_idx][1] = copy.deepcopy(server_obj.local_test_error_log)
 
     #server_obj.save_results_h5(save_cost_func_comps=False, save_gradient=False)
 
 # Plot all results:
+plt.figure()  # Create a new figure
 running_train_loss = np.zeros(GLOBAL_ROUNDS)
 running_test_loss = np.zeros(GLOBAL_ROUNDS)
 for fold_idx in range(len(folds)):
     train_loss = cross_val_res_lst[fold_idx][0]
     test_loss = cross_val_res_lst[fold_idx][1]
 
-    plt.plot(train_loss,  label=f"Fold{fold_idx} Train")
-    plt.plot(test_loss,  label=f"Fold{fold_idx} Test")
+    plt.plot(train_loss, label=f"Fold{fold_idx} Train")
+    plt.plot(test_loss, label=f"Fold{fold_idx} Test")
 
     running_train_loss += np.array(train_loss)
     running_test_loss += np.array(test_loss)
