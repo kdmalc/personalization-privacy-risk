@@ -30,8 +30,8 @@ class Client(ModelBase):
 
         assert(full_client_dataset['training'].shape[1]==64) # --> Shape is (20770, 64)
         # Don't use anything past update 17 since they are different (update 17 is the short one, only like 300 datapoints)
-        self.local_training_data = full_client_dataset['training'][:self.update_ix[final_usable_update_ix], :]
-        self.local_training_labels = full_client_dataset['labels'][:self.update_ix[final_usable_update_ix], :]
+        self.local_dataset = full_client_dataset['training'][:self.update_ix[final_usable_update_ix], :]
+        self.local_labelset = full_client_dataset['labels'][:self.update_ix[final_usable_update_ix], :]
 
         self.global_method = global_method.upper()
         self.validate_memory_IDs = validate_memory_IDs
@@ -135,22 +135,22 @@ class Client(ModelBase):
         if self.test_split_type=="KFOLDCV":
             if self.global_method=="NOFL":  # AKA: Intra-subject... maybe should disambiguate these...
                 # Divide full dataset into folds according to self.num_kfolds
-                self.internal_fold_ix = self.local_training_data.shape[0] // self.num_kfolds - 1
-                assert(self.internal_fold_ix*self.num_kfolds <= self.local_training_data.shape[0])
+                self.internal_fold_ix = self.local_dataset.shape[0] // self.num_kfolds - 1
+                assert(self.internal_fold_ix*self.num_kfolds <= self.local_dataset.shape[0])
                 # Given self.current_fold, select the corresponding fold as the testing set
                 ## Double check how upper and lower bound are used in other places in the code
                 ## Eg make sure they aren't reused since this code isn't going to work that way
                 lower_bound = self.internal_fold_ix * self.current_fold
                 upper_bound = self.internal_fold_ix * self.current_fold + self.internal_fold_ix
                 self.test_split_idx = -1  # Does this get used outside this func...
-                self.testing_data = self.local_training_data[lower_bound:upper_bound, :]
-                self.testing_labels = self.local_training_labels[lower_bound:upper_bound, :]
+                self.testing_data = self.local_dataset[lower_bound:upper_bound, :]
+                self.testing_labels = self.local_labelset[lower_bound:upper_bound, :]
                 self.test_learning_batch = self.testing_data.shape[0]
                 # I think I need to rewrite the train-setting code, since it won't be a single clean split
 
                 # Setting the training data
-                self.training_data = np.concatenate((self.local_training_data[:lower_bound, :], self.local_training_data[upper_bound:, :]), axis=0)
-                self.labels = np.concatenate((self.local_training_labels[:lower_bound, :], self.local_training_labels[upper_bound:, :]), axis=0)
+                self.training_data = np.concatenate((self.local_dataset[:lower_bound, :], self.local_dataset[upper_bound:, :]), axis=0)
+                self.training_labels = np.concatenate((self.local_labelset[:lower_bound, :], self.local_labelset[upper_bound:, :]), axis=0)
                 # Overwrite self.update_ix since there is a discontinuity in the data which breaks it otherwise...
                 #self.update_ix
 
@@ -164,20 +164,20 @@ class Client(ModelBase):
                 # Setting the testing set to the whole dataset so that it can be extracted
                 ## If this is a training cliet this will be overwritten by other client's testing dataset
                 ## I guess I could set this to 
-                upper_bound = self.local_training_data.shape[0]
+                upper_bound = self.local_dataset.shape[0]
                 lower_bound = 0
-                self.testing_data = self.local_training_data
-                self.testing_labels = self.local_training_labels
+                self.testing_data = self.local_dataset
+                self.testing_labels = self.local_labelset
         elif self.test_split_type=="UPDATE16":
             lower_bound = self.update_ix[15]
             #//2  #Use only the second half of each update
             upper_bound = self.update_ix[16]
             self.test_split_idx = lower_bound
-            self.testing_data = self.local_training_data[self.test_split_idx:upper_bound, :]
-            self.testing_labels = self.local_training_labels[self.test_split_idx:upper_bound, :]
+            self.testing_data = self.local_dataset[self.test_split_idx:upper_bound, :]
+            self.testing_labels = self.local_labelset[self.test_split_idx:upper_bound, :]
             # TODO: There ought to be some assert here to make sure that self.testing_XYZ doesnt have a shape of zero...
         elif self.test_split_type=="ENDFRACTION":
-            test_split_product_index = self.local_training_data.shape[0]*self.test_split_frac
+            test_split_product_index = self.local_dataset.shape[0]*self.test_split_frac
             # Convert this value to the closest update_ix value
             train_test_update_number_split = min(self.update_ix, key=lambda x:abs(x-test_split_product_index))
             self.test_split_idx = self.update_ix.index(train_test_update_number_split)
@@ -186,9 +186,9 @@ class Client(ModelBase):
                 self.test_split_idx -= 1
             assert(self.test_split_idx > self.starting_update)
             lower_bound = self.test_split_idx
-            upper_bound = self.local_training_data.shape[0]
-            self.testing_data = self.local_training_data[self.test_split_idx:, :]
-            self.testing_labels = self.local_training_labels[self.test_split_idx:, :]
+            upper_bound = self.local_dataset.shape[0]
+            self.testing_data = self.local_dataset[self.test_split_idx:, :]
+            self.testing_labels = self.local_labelset[self.test_split_idx:, :]
         else:
             raise ValueError("test_split_type not working as expected")
         
@@ -196,8 +196,8 @@ class Client(ModelBase):
             # If so, then DONT overwrite the training data and labels!
             pass
         else:
-            self.training_data = self.local_training_data[:self.test_split_idx, :]
-            self.labels = self.local_training_labels[:self.test_split_idx, :]
+            self.training_data = self.local_dataset[:self.test_split_idx, :]
+            self.training_labels = self.local_labelset[:self.test_split_idx, :]
             self.test_learning_batch = upper_bound - lower_bound
         s_temp = self.testing_data
         if self.normalize_EMG:
@@ -380,13 +380,13 @@ class Client(ModelBase):
             self.F = self.s[:,:-1] # note: truncate F for estimate_decoder
             v_actual = self.w@self.s
             p_actual = np.cumsum(v_actual, axis=1)*self.dt  # Numerical integration of v_actual to get p_actual
-            self.p_reference = np.transpose(self.labels[lower_bound:upper_bound,:])
+            self.p_reference = np.transpose(self.training_labels[lower_bound:upper_bound,:])
             
             #####################################################################
             # Add the boundary conditions code here
             if self.use_zvel:
                 # Maneeshika code
-                p_ref_lim = self.labels[lower_bound:upper_bound,:]
+                p_ref_lim = self.training_labels[lower_bound:upper_bound,:]
                 if self.current_round<2:
                     self.vel_est = np.zeros_like((p_ref_lim))
                     self.pos_est = np.zeros_like((p_ref_lim))
