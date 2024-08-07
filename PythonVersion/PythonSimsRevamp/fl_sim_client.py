@@ -25,7 +25,7 @@ class Client(ModelBase):
                          verbose=verbose, num_clients=14, log_init=0)
         '''
         Note self.smoothbatch gets overwritten according to the condition number!  
-        If you want NO smoothbatch then set it to 'off'
+        If you want NO smoothbatch then set it to 0
         '''
 
         assert(full_client_dataset['training'].shape[1]==64) # --> Shape is (20770, 64)
@@ -65,12 +65,9 @@ class Client(ModelBase):
         #  Stream each update, moving to the next update after local_round_threshold iters have been run; 
         #  After 1 iteration, move to the next update}
         self.data_stream = data_stream  # {'full_data', 'streaming', 'advance_each_iter'} 
-        # Number of gradient steps to take when training (eg amount of local computation)
-        ## This is Tau in PFA!
-        self.num_steps = num_steps
+        # Number of gradient steps to take when training (eg amount of local computation):
+        self.num_steps = num_steps  # This is Tau in PFA!
         self.wprev_global = wprev_global # Not sure what this is honestly
-        # GLOBAL STUFF
-        self.global_method = global_method
         # UPDATE STUFF
         self.current_update = starting_update
         self.local_round_threshold = local_round_threshold
@@ -93,14 +90,13 @@ class Client(ModelBase):
         cond_dict = {1:(0.25, 1e-3, 1), 2:(0.25, 1e-4, 1), 3:(0.75, 1e-3, 1), 4:(0.75, 1e-4, 1), 5:(0.25, 1e-4, -1), 6:(0.25, 1e-4, -1), 7:(0.75, 1e-3, -1), 8:(0.75, 1e-4, -1)}
         cond_smoothbatch, self.alphaD, self.init_dec_sign = cond_dict[condition_number]
         if type(smoothbatch_lr)==str and smoothbatch_lr.upper()=='OFF':
-            self.smoothbatch_lr = 1  # AKA Use only the new dec, no mixing
-        elif smoothbatch_lr==1:  # This is the default
-            # If it is default, then let the condition number set smoothbatch
+            self.smoothbatch_lr = 0  # AKA Use only the new dec, no mixing
+        elif smoothbatch_lr==-1:  
+            # Let the condition number set smoothbatch
             self.smoothbatch_lr = cond_smoothbatch
         else:
             # Set smoothbatch to whatever you manually entered
             self.smoothbatch_lr=smoothbatch_lr
-            #print()
         # This is probably not used...
         self.gradient_clipping = gradient_clipping
         self.clipping_threshold = clipping_threshold
@@ -119,6 +115,7 @@ class Client(ModelBase):
         self.global_gradient_log = []
 
         # FedAvgSB Stuff
+        ## Not used AFAIK...
         self.mix_in_each_steps = mix_in_each_steps
         self.mix_mixed_SB = mix_mixed_SB
 
@@ -136,14 +133,41 @@ class Client(ModelBase):
         self.val_set = val_set
 
         if self.test_split_type=="KFOLDCV":
-            self.test_split_idx = -1
-            # Setting the testing set to the whole dataset so that it can be extracted
-            ## If this is a training cliet this will be overwritten by other client's testing dataset
-            ## I guess I could set this to 
-            upper_bound = self.local_training_data.shape[0]
-            lower_bound = 0
-            self.testing_data = self.local_training_data
-            self.testing_labels = self.local_training_labels
+            if self.global_method=="NOFL":  # AKA: Intra-subject... maybe should disambiguate these...
+                # Divide full dataset into folds according to self.num_kfolds
+                self.internal_fold_ix = self.local_training_data.shape[0] // self.num_kfolds - 1
+                assert(self.internal_fold_ix*self.num_kfolds <= self.local_training_data.shape[0])
+                # Given self.current_fold, select the corresponding fold as the testing set
+                ## Double check how upper and lower bound are used in other places in the code
+                ## Eg make sure they aren't reused since this code isn't going to work that way
+                lower_bound = self.internal_fold_ix * self.current_fold
+                upper_bound = self.internal_fold_ix * self.current_fold + self.internal_fold_ix
+                self.test_split_idx = -1  # Does this get used outside this func...
+                self.testing_data = self.local_training_data[lower_bound:upper_bound, :]
+                self.testing_labels = self.local_training_labels[lower_bound:upper_bound, :]
+                self.test_learning_batch = self.testing_data.shape[0]
+                # I think I need to rewrite the train-setting code, since it won't be a single clean split
+
+                # Setting the training data
+                self.training_data = np.concatenate((self.local_training_data[:lower_bound, :], self.local_training_data[upper_bound:, :]), axis=0)
+                self.labels = np.concatenate((self.local_training_labels[:lower_bound, :], self.local_training_labels[upper_bound:, :]), axis=0)
+                # Overwrite self.update_ix since there is a discontinuity in the data which breaks it otherwise...
+                #self.update_ix
+
+                if self.ID==1:
+                    print(f"KFold {self.current_fold}")
+                    print(f"self.testing_data bounds: ({lower_bound}, {upper_bound})")
+                    #print(f"self.training_data bounds: ({}, {})")
+                    print()
+            else:
+                self.test_split_idx = -1
+                # Setting the testing set to the whole dataset so that it can be extracted
+                ## If this is a training cliet this will be overwritten by other client's testing dataset
+                ## I guess I could set this to 
+                upper_bound = self.local_training_data.shape[0]
+                lower_bound = 0
+                self.testing_data = self.local_training_data
+                self.testing_labels = self.local_training_labels
         elif self.test_split_type=="UPDATE16":
             lower_bound = self.update_ix[15]
             #//2  #Use only the second half of each update
@@ -153,13 +177,14 @@ class Client(ModelBase):
             self.testing_labels = self.local_training_labels[self.test_split_idx:upper_bound, :]
             # TODO: There ought to be some assert here to make sure that self.testing_XYZ doesnt have a shape of zero...
         elif self.test_split_type=="ENDFRACTION":
-            test_split_product_index = self.local_training_data.shape[0]*test_split_frac
-            # Convert this value to the cloest update_ix value
+            test_split_product_index = self.local_training_data.shape[0]*self.test_split_frac
+            # Convert this value to the closest update_ix value
             train_test_update_number_split = min(self.update_ix, key=lambda x:abs(x-test_split_product_index))
-            if train_test_update_number_split<17:
-                print(f"train_test_update_number_split is {train_test_update_number_split}, so subtracting 1")
-                train_test_update_number_split -= 1
             self.test_split_idx = self.update_ix.index(train_test_update_number_split)
+            if self.test_split_idx<17:
+                print(f"self.test_split_idx is {self.test_split_idx}, so subtracting 1")
+                self.test_split_idx -= 1
+            assert(self.test_split_idx > self.starting_update)
             lower_bound = self.test_split_idx
             upper_bound = self.local_training_data.shape[0]
             self.testing_data = self.local_training_data[self.test_split_idx:, :]
@@ -167,9 +192,13 @@ class Client(ModelBase):
         else:
             raise ValueError("test_split_type not working as expected")
         
-        self.training_data = self.local_training_data[:self.test_split_idx, :]
-        self.labels = self.local_training_labels[:self.test_split_idx, :]
-        self.test_learning_batch = upper_bound - lower_bound
+        if self.test_split_type=="KFOLDCV" and self.global_method=="NOFL":
+            # If so, then DONT overwrite the training data and labels!
+            pass
+        else:
+            self.training_data = self.local_training_data[:self.test_split_idx, :]
+            self.labels = self.local_training_labels[:self.test_split_idx, :]
+            self.test_learning_batch = upper_bound - lower_bound
         s_temp = self.testing_data
         if self.normalize_EMG:
             s_normed = s_temp/np.amax(s_temp)
@@ -189,28 +218,19 @@ class Client(ModelBase):
         self.train_model()
         
         # LOG EVERYTHING
-        # Log decs
-        if self.log_decs:
-            self.dec_log.append(self.w)
-            if self.global_method=="FEDAVG":
-                self.global_dec_log.append(copy.deepcopy(self.global_w))
-            # TODO: Remove this? I don't think there's a need for an additional pers log...
-            elif "PFA" in self.global_method:
-                self.global_dec_log.append(copy.deepcopy(self.global_w))
-                # TODO: What is mixed_w...
-                self.pers_dec_log.append(copy.deepcopy(self.mixed_w))
-        # Log Error
+        ## I guess this is actually after train_model is called...
+        self.dec_log.append(self.w)
+        # TODO: Not sure why this would have higher error than global, given that global is right below...
         self.local_train_error_log.append(self.eval_model(which='local'))
-        # Yes these should both be ifs not elif, they may both need to run
         if self.global_method!="NOFL":
+            self.global_dec_log.append(copy.deepcopy(self.global_w))
+            # TODO: Still doesn't tell me what that global would be better than local...
             self.global_train_error_log.append(self.eval_model(which='global'))
-        #if "PFA" in self.global_method:
-        #    self.pers_train_error_log.append(self.eval_model(which='pers'))
         # Log Cost Comp
         if self.track_cost_components:
             self.performance_log.append(self.alphaE*(np.linalg.norm((self.w@self.F - self.V[:,1:]))**2))
-            self.Dnorm_log.append(self.alphaD*(np.linalg.norm(self.w)**2))
-            self.Fnorm_log.append(self.alphaF*(np.linalg.norm(self.F)**2))
+            self.Dnorm_log.append(self.alphaD*(np.linalg.norm(self.w)**2))  # This is the scaled norm...
+            self.Fnorm_log.append(np.linalg.norm(self.F)**2)  # This is FNorm, not the F in the cost func (which is 0 because of self.alphaF)
 
 
     def set_testset(self, test_dataset_obj):
@@ -281,7 +301,10 @@ class Client(ModelBase):
         if streaming_method: # What is this for LOL
             streaming_method = self.data_stream
         need_to_advance=True
+        # TODO: Idk if I want the current_round increment here......
+        ## This is sort of fine since it's just the round and doesn't matter that much 
         self.current_round += 1
+
         if self.current_update==16:  #17: previously 17 but the last update is super short so I cut it out
             #print("Maxxed out your update (you are on update 18), continuing training on last update only")
             # Probably ought to track that we maxed out --> LOG SYSTEM
@@ -289,13 +312,20 @@ class Client(ModelBase):
             lower_bound = (self.update_ix[-3] + self.update_ix[-2])//2  #Use only the second half of each update
             upper_bound = self.update_ix[-2]
             self.learning_batch = upper_bound - lower_bound
+            # TODO: Make sure the above update to lower_bound and upper_bound gets integrated first
+            ## Otherwise need_to_advance doesnt need to re-run everytime...
+            need_to_advance=False
+            # Use another var, like self.ran_before or something...
         elif streaming_method=='full_data':
             lower_bound = self.update_ix[0]  # Starts at 0 and not update 10, for now
             upper_bound = self.update_ix[-1]
             self.learning_batch = upper_bound - lower_bound
+            # TODO: need_to_advance shouldn't ever run, once lower_bound and upper_bound have been set once
+            need_to_advance=False
         elif streaming_method=='streaming':
             # If we pass threshold, move on to the next update
             if self.current_round%self.local_round_threshold==0:
+                # NOTE: This increments self.current_update, not self.current_round, which was updated above
                 self.current_update += 1
                 
                 self.update_transition_log.append(self.latest_global_round)
@@ -307,16 +337,20 @@ class Client(ModelBase):
                 lower_bound = (self.update_ix[self.current_update] + self.update_ix[self.current_update+1])//2  
                 upper_bound = self.update_ix[self.current_update+1]
                 self.learning_batch = upper_bound - lower_bound
-            elif self.current_round>2:
+            elif self.current_round>2:  # Should this be 2 or 10 (or 11)? Given we start on 10, allegedly
                 # This is the base case
                 # The update number didn't change so we don't need to overwrite everything with the same data
                 need_to_advance = False
             else:
+                # TODO: This actually doesn't run since current_update is 10...
                 # This is for the init case (current round is 0 or 1)
                 # need_to_advance is true, so we overwrite s and such... this is fine 
                 lower_bound = (self.update_ix[self.current_update] + self.update_ix[self.current_update+1])//2  
                 upper_bound = self.update_ix[self.current_update+1]
                 self.learning_batch = upper_bound - lower_bound
+
+            #if self.ID==1:
+            #    print(f"")
         elif streaming_method=='advance_each_iter':
             lower_bound = (self.update_ix[self.current_update] + self.update_ix[self.current_update+1])//2  
             upper_bound = self.update_ix[self.current_update+1]
@@ -328,6 +362,8 @@ class Client(ModelBase):
             
         if need_to_advance:
             s_temp = self.training_data[lower_bound:upper_bound,:]
+            #if self.ID==1:
+            #    print(f"NEED TO ADVANCE: s_temp.shape: {s_temp.shape}")
             ###########################################################################################################################
             # First, normalize the entire s matrix
             if self.normalize_EMG:
@@ -414,14 +450,14 @@ class Client(ModelBase):
         if self.global_method!="NOFL":
             # Overwrite local model with the new global model
             # Is this the equivalent of recieving the global model I'm assuming?
-            ## So... this should be D0 and such right...
+            ## So... this should be D0 and such right... at the start I think...
             self.w_new = copy.deepcopy(self.global_w)
         else:
             # w_new is just the same model it has been
             self.w_new = copy.deepcopy(self.w)
         
         # I think this ought to be on but it makes the global model and gradient diverge...
-        if self.wprev_global==True and ('PFA' in self.opt_method):
+        if self.wprev_global==True and ('PFA' in self.opt_method):  # TODO: In opt_method? I don't think that's an opt_method...
             # TODO: What is wprev_global...
             self.w_prev = copy.deepcopy(self.global_w)
         
@@ -430,7 +466,21 @@ class Client(ModelBase):
             # ^ Was self.w_prev for some reason...
             ## But it should be the current model at the start
 
-            if self.opt_method=='GD':
+            # IF GLOBAL METHOD IS ONE OF THE PFA METHODS, OPT METHOD GETS OVERWRITTEN WITH GD
+            ## This is a bad loop since it checks both global_method and opt_method...
+            if self.global_method=='PFAFO':
+                stochastic_grad = np.reshape(gradient_cost_l2(self.F, D0, self.V, alphaE=self.alphaE, alphaD=self.alphaD, Ne=self.PCA_comps), 
+                                        (2, self.PCA_comps))
+                w_tilde = D0 - self.lr * stochastic_grad
+                # ^ D0 is w_new from the previous iteration, eg w_{t-1}
+                # TODO: Decide what to do about F and V... split in half? Use batches? ...
+                new_stoch_grad = np.reshape(gradient_cost_l2(self.F, w_tilde, self.V, alphaE=self.alphaE, alphaD=self.alphaD, Ne=self.PCA_comps), 
+                                        (2, self.PCA_comps))
+                self.w_new = D0 - self.beta * new_stoch_grad
+            elif self.global_method=='PFAHF':
+                # TODO: Implement. Is the hessian-vector product between the hessian and the gradient? ...
+                raise ValueError('Per-FedAvg HF NOT FINISHED YET')
+            elif self.opt_method=='GD':
                 grad_cost = np.reshape(gradient_cost_l2(self.F, self.w_new, self.V, alphaE=self.alphaE, alphaD=self.alphaD, Ne=self.PCA_comps), 
                                         (2, self.PCA_comps))
                 self.w_new -= self.lr*grad_cost
@@ -447,55 +497,27 @@ class Client(ModelBase):
                     jac=lambda D: gradient_cost_l2(self.F, D, self.V, alphaE=self.alphaE, alphaD=self.alphaD, Ne=self.PCA_comps), 
                     options={'maxiter':self.max_iter})
                 self.w_new = np.reshape(out.x,(2, self.PCA_comps))
-            ##################################################################################
-            ##################################################################################
-            ##################################################################################
-            ##################################################################################
-            ##################################################################################
-            ##################################################################################
-            ##################################################################################
-            ##################################################################################
-            ##################################################################################
-            # IF GLOBAL METHOD IS ONE OF THE PFA METHODS, OPT METHOD GETS OVERWRITTEN WITH GD
-            elif self.global_method=='PFAFO':
-                stochastic_grad = np.reshape(gradient_cost_l2(self.F, D0, self.V, alphaE=self.alphaE, alphaD=self.alphaD, Ne=self.PCA_comps), 
-                                        (2, self.PCA_comps))
-                w_tilde = D0 - self.lr * stochastic_grad
-                # ^ D0 is w_new from the previous iteration, eg w_{t-1}
-                # TODO: Decide what to do about F and V... split in half? Use batches? ...
-                new_stoch_grad = np.reshape(gradient_cost_l2(self.F, w_tilde, self.V, alphaE=self.alphaE, alphaD=self.alphaD, Ne=self.PCA_comps), 
-                                        (2, self.PCA_comps))
-                self.w_new = D0 - self.beta * new_stoch_grad
-            elif self.global_method=='PFAHF':
-                # TODO: Implement. Is the hessian-vector product between the hessian and the gradient? ...
-                raise ValueError('Per-FedAvg HF NOT FINISHED YET')
             else:
                 raise ValueError("Unrecognized method")
-            ##################################################################################
-            ##################################################################################
-            ##################################################################################
-            ##################################################################################
-            ##################################################################################
-            ##################################################################################
-            ##################################################################################
-            ##################################################################################
-            ##################################################################################
-
-            if self.validate_memory_IDs:
-                # TODO: Idek what this is doing. This is stupid to have
-                assert(id(self.w)!=id(self.global_w))
-                assert(id(self.w_prev)!=id(self.global_w))
                 
             if self.mix_in_each_steps:
                 # TODO: mixed_w appears to not be used // is used as the personalized model?...
-                self.mixed_w = self.smoothbatch_lr*self.w_new + ((1 - self.smoothbatch_lr)*self.mixed_w)
+                self.mixed_w = self.smoothbatch_lr*self.mixed_w + ((1 - self.smoothbatch_lr)*self.w_new)
 
         # Do SmoothBatch
         #W_new = alpha*D[-1] + ((1 - alpha) * W_hat)
-        # TODO: Add a smoothbatch toggle here
-        self.w = self.smoothbatch_lr*self.w_new + ((1 - self.smoothbatch_lr)*self.w_prev)
+        self.w = self.smoothbatch_lr*self.w_prev + ((1 - self.smoothbatch_lr)*self.w_new)
 
-        # TODO: What is this doing here? Does this get logged elsewhere or what?
+        #if self.ID==1:
+        #    print(f"Gradient norm: {np.linalg.norm(gradient_cost_l2(self.F, self.w_prev, self.V, alphaE=self.alphaE, alphaD=self.alphaD, Ne=self.PCA_comps, flatten=False))}")
+        #    print(f"Cost func: {cost_l2(self.F, self.w_prev, self.V, alphaD=self.alphaD, alphaE=self.alphaE, Ne=self.PCA_comps)}")
+        #    print(f"self.w_prev norm: {np.linalg.norm(self.w_prev)}")
+        #    print(f"self.w_new norm: {np.linalg.norm(self.w_new)}")
+        #    print(f"self.w norm: {np.linalg.norm(self.w)}")
+        #    print("\n")
+
+
+        # TODO: I think I can delete this? This gets logged in the execute_FL main loop func
         # Save the new decoder to the log
         #self.dec_log.append(self.w)
         #if "PFA" in self.global_method:

@@ -108,7 +108,7 @@ class Server(ModelBase):
             # AGGREGATION
             self.agg_local_weights()  # This func sets self.w, eg the new decoder
             # GLOBAL SmoothBatch
-            self.w = self.smoothbatch_lr*self.w + ((1 - self.smoothbatch_lr)*self.w_prev)
+            self.w = self.smoothbatch_lr*self.w_prev + ((1 - self.smoothbatch_lr)*self.w)
         elif self.global_method=='NOFL':
             # TODO: Is NoFL just supposed to be the Local CPHS sims... if so this is fine I think 
             for my_client in self.all_clients:  
@@ -123,9 +123,6 @@ class Server(ModelBase):
                     ## Is this supposed to carry a value ()
                     ## Nonavail should still be train_metrics()'d over I think..., just not trained
                     raise ValueError("Sequential case not implemented yet")
-                elif my_client not in self.chosen_clients:
-                    # Just not getting trained this round
-                    continue
                 # THESE ARE THE CLIENTS WHICH ACTUALLY GET TRAINED!
                 my_client.latest_global_round = self.current_round          
                 my_client.execute_training_loop()

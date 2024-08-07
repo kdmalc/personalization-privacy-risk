@@ -104,7 +104,7 @@ for fold_idx, (train_ids, test_ids) in enumerate(folds):
 plt.figure()  # Create a new figure
 running_train_loss = np.zeros(GLOBAL_ROUNDS)
 running_test_loss = np.zeros(GLOBAL_ROUNDS)
-for fold_idx in range(len(folds)):
+for fold_idx in range(NUM_KFOLDS):
     train_loss = cross_val_res_lst[fold_idx][0]
     test_loss = cross_val_res_lst[fold_idx][1]
 
@@ -114,8 +114,8 @@ for fold_idx in range(len(folds)):
     running_train_loss += np.array(train_loss)
     running_test_loss += np.array(test_loss)
 # Average to get cross val curve:
-avg_cv_train_loss = running_train_loss / len(folds)
-avg_cv_test_loss = running_test_loss / len(folds)
+avg_cv_train_loss = running_train_loss / NUM_KFOLDS
+avg_cv_test_loss = running_test_loss / NUM_KFOLDS
 plt.plot(avg_cv_train_loss,  label="Avg CrossVal Train")
 plt.plot(avg_cv_test_loss,  label="Avg CrossVal Test")
 plt.xlabel("Training Round")
@@ -127,7 +127,7 @@ plt.show()
     
 server_obj.save_header()
 with h5py.File(server_obj.h5_file_path + "_CrossValResults.h5", 'w') as hf:
-    for fold_idx in range(len(folds)):
+    for fold_idx in range(NUM_KFOLDS):
         #if server_obj.global_method!="NOFL":
         #    hf.create_dataset('global_test_error_log', data=self.global_test_error_log)
         #    hf.create_dataset('global_train_error_log', data=self.global_train_error_log)
