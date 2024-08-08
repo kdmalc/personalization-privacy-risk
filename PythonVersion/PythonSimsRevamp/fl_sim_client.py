@@ -14,7 +14,7 @@ from fl_sim_base import *
 
 class Client(ModelBase):
     def __init__(self, ID, w, opt_method, full_client_dataset, data_stream, smoothbatch_lr=0.75, current_round=0, PCA_comps=64, 
-                availability=1, final_usable_update_ix=17, global_method='FedAvg', max_iter=1, normalize_EMG=True, starting_update=10, 
+                availability=1, final_usable_update_ix=17, global_method='FedAvg', max_iter=1, normalize_EMG=True, starting_update=9, 
                 track_cost_components=True, gradient_clipping=False, log_decs=True, val_set=False,
                 clipping_threshold=100, tol=1e-10, lr=1, track_gradient=True, wprev_global=False, 
                 num_steps=1, use_zvel=False, current_fold=0, 
@@ -30,8 +30,11 @@ class Client(ModelBase):
 
         assert(full_client_dataset['training'].shape[1]==64) # --> Shape is (20770, 64)
         # Don't use anything past update 17 since they are different (update 17 is the short one, only like 300 datapoints)
-        self.local_dataset = full_client_dataset['training'][:self.update_ix[final_usable_update_ix], :]
-        self.local_labelset = full_client_dataset['labels'][:self.update_ix[final_usable_update_ix], :]
+        self.current_update = starting_update
+        self.starting_update = starting_update
+        self.final_usable_update_ix = final_usable_update_ix
+        self.local_dataset = full_client_dataset['training'][self.update_ix[starting_update]:self.update_ix[final_usable_update_ix], :]
+        self.local_labelset = full_client_dataset['labels'][self.update_ix[starting_update]:self.update_ix[final_usable_update_ix], :]
 
         self.global_method = global_method.upper()
         self.validate_memory_IDs = validate_memory_IDs
@@ -69,7 +72,6 @@ class Client(ModelBase):
         self.num_steps = num_steps  # This is Tau in PFA!
         self.wprev_global = wprev_global # Not sure what this is honestly
         # UPDATE STUFF
-        self.current_update = starting_update
         self.local_round_threshold = local_round_threshold
 
         # PRACTICAL / REAL WORLD
@@ -134,29 +136,105 @@ class Client(ModelBase):
 
         if self.test_split_type=="KFOLDCV":
             if self.global_method=="NOFL":  # AKA: Intra-subject... maybe should disambiguate these...
+
+                # MY OLD CODE
+                '''
                 # Divide full dataset into folds according to self.num_kfolds
                 self.internal_fold_ix = self.local_dataset.shape[0] // self.num_kfolds - 1
                 assert(self.internal_fold_ix*self.num_kfolds <= self.local_dataset.shape[0])
                 # Given self.current_fold, select the corresponding fold as the testing set
                 ## Double check how upper and lower bound are used in other places in the code
                 ## Eg make sure they aren't reused since this code isn't going to work that way
-                lower_bound = self.internal_fold_ix * self.current_fold
-                upper_bound = self.internal_fold_ix * self.current_fold + self.internal_fold_ix
+                lower_bound_pre_idx = self.internal_fold_ix * self.current_fold
+                upper_bound_pre_idx = self.internal_fold_ix * self.current_fold + self.internal_fold_ix
+                # Convert the above to the nearest update_ix's
+                ## Could probably condense these lines into 1-2:
+                lower_bound_update_number = min(self.update_ix, key=lambda x:abs(x-lower_bound_pre_idx))
+                upper_bound_update_number = min(self.update_ix, key=lambda x:abs(x-upper_bound_pre_idx))
+                lower_bound = self.update_ix.index(lower_bound_update_number)
+                upper_bound = self.update_ix.index(upper_bound_update_number)
+                # Make sure that lower_bound and upper_bound are separate...
+                assert(lower_bound != upper_bound)
+                # Set testing data
                 self.test_split_idx = -1  # Does this get used outside this func...
                 self.testing_data = self.local_dataset[lower_bound:upper_bound, :]
                 self.testing_labels = self.local_labelset[lower_bound:upper_bound, :]
                 self.test_learning_batch = self.testing_data.shape[0]
-                # I think I need to rewrite the train-setting code, since it won't be a single clean split
-
                 # Setting the training data
                 self.training_data = np.concatenate((self.local_dataset[:lower_bound, :], self.local_dataset[upper_bound:, :]), axis=0)
                 self.training_labels = np.concatenate((self.local_labelset[:lower_bound, :], self.local_labelset[upper_bound:, :]), axis=0)
-                # Overwrite self.update_ix since there is a discontinuity in the data which breaks it otherwise...
+                # Overwrite self.update_ix since there is a discontinuity in the data which breaks it otherwise... ? Not sure if this is necessary...
                 #self.update_ix
+                '''
 
-                if self.ID==1:
+                # Include these in the init? ...
+                append_leftovers_to_last_fold = True
+                shift_leftovers_across_folds = False
+                # Filter update_ix to only include updates 9-16
+                valid_updates = [ix for ix in self.update_ix if starting_update <= self.update_ix.index(ix) < final_usable_update_ix]
+                if append_leftovers_to_last_fold:
+                    # Calculate the number of updates per fold
+                    updates_per_fold = len(valid_updates) // self.num_kfolds
+                    # Ensure we have enough updates for the specified number of folds
+                    assert updates_per_fold > 0, "Not enough valid updates for the specified number of folds"
+                    # Create folds
+                    self.folds = [valid_updates[i:i+updates_per_fold] for i in range(0, len(valid_updates), updates_per_fold)]
+                    # If there are leftover updates, add them to the last fold
+                    while len(self.folds) > self.num_kfolds:
+                        if self.ID==0:
+                            print(f"len(self.folds) {len(self.folds)} > self.num_kfolds {self.num_kfolds} --> Thus, popping and adding one to the last fold!")
+                        self.folds[-2].extend(self.folds[-1])
+                        self.folds.pop()
+                    assert len(self.folds) == self.num_kfolds, f"Expected {self.num_kfolds} folds, got {len(self.folds)}"
+                elif shift_leftovers_across_folds:
+                    # TODO: This has not been validated at all...
+                    # Calculate the total number of updates and the ideal number of updates per fold
+                    total_updates = len(valid_updates)
+                    ideal_updates_per_fold = total_updates / self.num_kfolds
+                    self.folds = []
+                    start_idx = 0
+                    for fold in range(self.num_kfolds):
+                        end_idx = int(round((fold + 1) * ideal_updates_per_fold))
+                        self.folds.append(valid_updates[start_idx:end_idx])
+                        start_idx = end_idx
+                    # Ensure all updates are included
+                    if start_idx < total_updates:
+                        self.folds[-1].extend(valid_updates[start_idx:])
+                    if hasattr(self, 'ID') and self.ID == 0:
+                        print(f"Created {len(self.folds)} folds:")
+                        for i, fold in enumerate(self.folds):
+                            print(f"Fold {i+1}: {len(fold)} updates, from index {self.update_ix.index(fold[0])} to {self.update_ix.index(fold[-1])}")
+                    assert len(self.folds) == self.num_kfolds, f"Expected {self.num_kfolds} folds, got {len(self.folds)}"
+                    assert sum(len(fold) for fold in self.folds) == total_updates, "Not all updates were included in the folds"
+                # SET THE TEST DATA
+                # Get the current fold's update indices
+                fold_updates = self.folds[self.current_fold]
+                # Find the start and end indices in the dataset
+                # TODO: Verify that this actually works when there are more than 
+                lower_bound_pre_idx = self.update_ix.index(fold_updates[0])
+                upper_bound_pre_idx = self.update_ix.index(fold_updates[-1]) + 1  # +1 to include the last update (eg otherwise this update num would be the upperbound, as opposed to included)
+                lower_bound = self.update_ix[lower_bound_pre_idx] - self.update_ix[starting_update]
+                upper_bound = self.update_ix[upper_bound_pre_idx] - self.update_ix[starting_update]
+                # Set testing data
+                self.testing_data = self.local_dataset[lower_bound:upper_bound, :]
+                self.testing_labels = self.local_labelset[lower_bound:upper_bound, :]
+                # SET THE TRAIN DATA
+                # Combine data before and after the test fold
+                # Dataset
+                train_data_before = self.local_dataset[:lower_bound, :]
+                train_data_after = self.local_dataset[upper_bound:, :]
+                self.training_data = np.vstack((train_data_before, train_data_after))
+                # Labels
+                train_labels_before = self.local_labelset[:lower_bound, :]
+                train_labels_after = self.local_labelset[upper_bound:, :]
+                self.training_labels = np.vstack((train_labels_before, train_labels_after))
+
+                if self.ID==0:
                     print(f"KFold {self.current_fold}")
-                    print(f"self.testing_data bounds: ({lower_bound}, {upper_bound})")
+                    print(f"Update ix's: ({lower_bound_pre_idx}, {upper_bound_pre_idx})")
+                    print(f"Actual lower and upper bound values: ({lower_bound}, {upper_bound})")
+                    print(f"self.testing_data.shape: ({self.testing_data.shape})")
+                    print(f"self.training_data.shape: ({self.training_data.shape})")
                     #print(f"self.training_data bounds: ({}, {})")
                     print()
             else:
@@ -169,9 +247,11 @@ class Client(ModelBase):
                 self.testing_data = self.local_dataset
                 self.testing_labels = self.local_labelset
         elif self.test_split_type=="UPDATE16":
-            lower_bound = self.update_ix[15]
+            # self.update_ix[17] and further is the short update, self.update_ix[18] is literally the last value
+            # This is technically update 17 but it doesnt matter, update 17 is the last usable update (17/19)
+            lower_bound = self.update_ix[16]
             #//2  #Use only the second half of each update
-            upper_bound = self.update_ix[16]
+            upper_bound = self.update_ix[17]
             self.test_split_idx = lower_bound
             self.testing_data = self.local_dataset[self.test_split_idx:upper_bound, :]
             self.testing_labels = self.local_labelset[self.test_split_idx:upper_bound, :]
@@ -297,20 +377,19 @@ class Client(ModelBase):
             time.sleep(self.upload_delay+random.random())
             
             
-    def simulate_data_stream(self, streaming_method=True):
-        if streaming_method: # What is this for LOL
-            streaming_method = self.data_stream
+    def simulate_data_stream(self):
+        streaming_method = self.data_stream
         need_to_advance=True
         # TODO: Idk if I want the current_round increment here......
         ## This is sort of fine since it's just the round and doesn't matter that much 
         self.current_round += 1
 
-        if self.current_update==16:  #17: previously 17 but the last update is super short so I cut it out
+        if self.current_update==self.final_usable_update_ix:  #17: previously 17 but the last update is super short so I cut it out
             #print("Maxxed out your update (you are on update 18), continuing training on last update only")
             # Probably ought to track that we maxed out --> LOG SYSTEM
             # We are stopping an update early, so use -3/-2 and not -2/-1 (the last update)
-            lower_bound = (self.update_ix[-3] + self.update_ix[-2])//2  #Use only the second half of each update
-            upper_bound = self.update_ix[-2]
+            lower_bound = (self.update_ix[16])#//2  #Use only the second half of each update
+            upper_bound = self.update_ix[17]
             self.learning_batch = upper_bound - lower_bound
             # TODO: Make sure the above update to lower_bound and upper_bound gets integrated first
             ## Otherwise need_to_advance doesnt need to re-run everytime...
@@ -329,30 +408,32 @@ class Client(ModelBase):
                 self.current_update += 1
                 
                 self.update_transition_log.append(self.latest_global_round)
-                if self.verbose==True and self.ID==1:
+                if self.verbose==True and self.ID==0:
                     print(f"Client {self.ID}: New update after lrt passed: (new update, current global round, current local round): {self.current_update, self.latest_global_round, self.current_round}")
                     print()
                     
                 # Using only the second half of each update for co-adaptivity reasons
-                lower_bound = (self.update_ix[self.current_update] + self.update_ix[self.current_update+1])//2  
+                #lower_bound = (self.update_ix[self.current_update] + self.update_ix[self.current_update+1])//2
+                lower_bound = (self.update_ix[self.current_update])
                 upper_bound = self.update_ix[self.current_update+1]
                 self.learning_batch = upper_bound - lower_bound
-            elif self.current_round>2:  # Should this be 2 or 10 (or 11)? Given we start on 10, allegedly
+            elif self.current_round>2: 
                 # This is the base case
                 # The update number didn't change so we don't need to overwrite everything with the same data
                 need_to_advance = False
             else:
-                # TODO: This actually doesn't run since current_update is 10...
                 # This is for the init case (current round is 0 or 1)
                 # need_to_advance is true, so we overwrite s and such... this is fine 
-                lower_bound = (self.update_ix[self.current_update] + self.update_ix[self.current_update+1])//2  
+
+                # TODO: This actually doesn't run since current_update is 10...
+
+                #lower_bound = (self.update_ix[self.current_update] + self.update_ix[self.current_update+1])//2
+                lower_bound = (self.update_ix[self.current_update])
                 upper_bound = self.update_ix[self.current_update+1]
                 self.learning_batch = upper_bound - lower_bound
-
-            #if self.ID==1:
-            #    print(f"")
         elif streaming_method=='advance_each_iter':
-            lower_bound = (self.update_ix[self.current_update] + self.update_ix[self.current_update+1])//2  
+            #lower_bound = (self.update_ix[self.current_update] + self.update_ix[self.current_update+1])//2 
+            lower_bound = (self.update_ix[self.current_update])
             upper_bound = self.update_ix[self.current_update+1]
             self.learning_batch = upper_bound - lower_bound
             
@@ -362,15 +443,13 @@ class Client(ModelBase):
             
         if need_to_advance:
             s_temp = self.training_data[lower_bound:upper_bound,:]
-            #if self.ID==1:
+            #if self.ID==0:
             #    print(f"NEED TO ADVANCE: s_temp.shape: {s_temp.shape}")
-            ###########################################################################################################################
             # First, normalize the entire s matrix
             if self.normalize_EMG:
                 s_normed = s_temp/np.amax(s_temp)
             else:
                 s_normed = s_temp
-            ###########################################################################################################################
             # Now do PCA unless it is set to 64 (AKA the default num channels i.e. no reduction)
             # Also probably ought to find a global transform if possible so I don't recompute it every time...
             if self.PCA_comps!=self.pca_channel_default:  
@@ -508,7 +587,7 @@ class Client(ModelBase):
         #W_new = alpha*D[-1] + ((1 - alpha) * W_hat)
         self.w = self.smoothbatch_lr*self.w_prev + ((1 - self.smoothbatch_lr)*self.w_new)
 
-        #if self.ID==1:
+        #if self.ID==0:
         #    print(f"Gradient norm: {np.linalg.norm(gradient_cost_l2(self.F, self.w_prev, self.V, alphaE=self.alphaE, alphaD=self.alphaD, Ne=self.PCA_comps, flatten=False))}")
         #    print(f"Cost func: {cost_l2(self.F, self.w_prev, self.V, alphaD=self.alphaD, alphaE=self.alphaE, Ne=self.PCA_comps)}")
         #    print(f"self.w_prev norm: {np.linalg.norm(self.w_prev)}")

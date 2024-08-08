@@ -8,7 +8,7 @@ from cost_funcs import *
 
 
 class ModelBase:
-    def __init__(self, ID, w, opt_method, smoothbatch_lr=1, alphaF=0.0, alphaE=1e-6, alphaD=1e-4, verbose=False, starting_update=10, PCA_comps=64, current_round=0, num_clients=14, log_init=0):
+    def __init__(self, ID, w, opt_method, smoothbatch_lr=1, alphaF=0.0, alphaE=1e-6, alphaD=1e-4, verbose=False, starting_update=9, PCA_comps=64, current_round=0, num_clients=14, log_init=0):
         # Not input
         self.num_updates = 19
         self.starting_update=starting_update
