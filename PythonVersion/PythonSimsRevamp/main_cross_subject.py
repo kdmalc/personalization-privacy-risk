@@ -7,7 +7,6 @@ import time
 import pickle
 from sklearn.model_selection import KFold
 import copy
-
 from matplotlib import pyplot as plt
 #import seaborn as sns
 #from presentation_sns_config import *
@@ -21,9 +20,10 @@ from shared_globals import *
 
 # GLOBALS
 USE_KFOLDCV = True
-GLOBAL_METHOD = "FedAvg"
-OPT_METHOD = 'MaxiterScipyMin'
+GLOBAL_METHOD = "PFAFO" #"FedAvg"
+OPT_METHOD = 'MaxiterScipyMin'  # I think this gets ignored completely when using PFA
 GLOBAL_ROUNDS = 50
+BETA=0.01
 LR=0.1
 MAX_ITER=1  # For scipy. Set to -1 for full, otherwise stay with 1
 # ^ Do I need to pass this in? Is that not controlled by OPT_METHOD? ...
@@ -51,12 +51,12 @@ for fold_idx, (train_ids, test_ids) in enumerate(folds):
     print(f"{len(test_ids)} Test_IDs: {test_ids}")
     
     # Initialize clients for training
-    train_clients = [Client(i, copy.deepcopy(D_0), OPT_METHOD, cond0_training_and_labels_lst[i],
-                            DATA_STREAM, current_fold=fold_idx, num_kfolds=NUM_KFOLDS, global_method=GLOBAL_METHOD, max_iter=MAX_ITER, 
+    train_clients = [Client(i, copy.deepcopy(D_0), OPT_METHOD, cond0_training_and_labels_lst[i], DATA_STREAM,
+                            beta=BETA, current_fold=fold_idx, num_kfolds=NUM_KFOLDS, global_method=GLOBAL_METHOD, max_iter=MAX_ITER, 
                             num_steps=NUM_STEPS, use_zvel=USE_HITBOUNDS, test_split_type=TEST_SPLIT_TYPE) for i in train_ids]
     # Initialize clients for testing
-    test_clients = [Client(i, copy.deepcopy(D_0), OPT_METHOD, cond0_training_and_labels_lst[i], 
-                           DATA_STREAM, current_fold=fold_idx, availability=False, val_set=True, num_kfolds=NUM_KFOLDS, global_method=GLOBAL_METHOD, max_iter=MAX_ITER, 
+    test_clients = [Client(i, copy.deepcopy(D_0), OPT_METHOD, cond0_training_and_labels_lst[i], DATA_STREAM,
+                           beta=BETA, current_fold=fold_idx, availability=False, val_set=True, num_kfolds=NUM_KFOLDS, global_method=GLOBAL_METHOD, max_iter=MAX_ITER, 
                            num_steps=NUM_STEPS, use_zvel=USE_HITBOUNDS, test_split_type=TEST_SPLIT_TYPE) for i in test_ids]
 
     testing_datasets_lst = []

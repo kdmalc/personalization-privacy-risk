@@ -1,22 +1,20 @@
 import numpy as np
 import random
 import copy
-
-from experiment_params import *
-from cost_funcs import *
 import time
 from sklearn.decomposition import PCA
-
 from scipy.optimize import minimize
 
 from fl_sim_base import *
+from experiment_params import *
+from cost_funcs import *
 
 
 class Client(ModelBase):
     def __init__(self, ID, w, opt_method, full_client_dataset, data_stream, smoothbatch_lr=0.75, current_round=0, PCA_comps=64, 
                 availability=1, final_usable_update_ix=17, global_method='FedAvg', max_iter=1, normalize_EMG=True, starting_update=9, 
                 track_cost_components=True, gradient_clipping=False, log_decs=True, val_set=False,
-                clipping_threshold=100, tol=1e-10, lr=1, track_gradient=True, wprev_global=False, 
+                clipping_threshold=100, tol=1e-10, lr=1, beta=0.01, track_gradient=True, wprev_global=False, 
                 num_steps=1, use_zvel=False, current_fold=0, 
                 mix_in_each_steps=False, mix_mixed_SB=False, delay_scaling=0, random_delays=False, download_delay=1, 
                 upload_delay=1, validate_memory_IDs=True, local_round_threshold=50, condition_number=3, 
@@ -52,6 +50,7 @@ class Client(ModelBase):
 
         self.dt = 1.0/60.0
         self.lr = lr  # Learning rate
+        self.beta = beta # PFA 2nd step learning rate
         # Round minimization output to the nearest int or keep as a float?  Don't need arbitrary precision
         self.round2int = False
         self.max_iter = max_iter
@@ -135,7 +134,7 @@ class Client(ModelBase):
         self.val_set = val_set
 
         if self.test_split_type=="KFOLDCV":
-            if self.global_method=="NOFL":  # AKA: Intra-subject... maybe should disambiguate these...
+            if self.global_method=="NOFL":  # AKA Intra-subject KFCV ... maybe should disambiguate these...
 
                 # MY OLD CODE
                 '''
@@ -168,11 +167,13 @@ class Client(ModelBase):
                 '''
 
                 # Include these in the init? ...
-                append_leftovers_to_last_fold = True
-                shift_leftovers_across_folds = False
+                append_leftovers_to_last_fold = False
+                shift_leftovers_across_folds = True
                 # Filter update_ix to only include updates 9-16
                 valid_updates = [ix for ix in self.update_ix if starting_update <= self.update_ix.index(ix) < final_usable_update_ix]
+                # THIS SETS THE TESTING FOLD
                 if append_leftovers_to_last_fold:
+                    '''Leftover updates are appended to the last fold. Updates are continuous but the last fold will be much bigger...'''
                     # Calculate the number of updates per fold
                     updates_per_fold = len(valid_updates) // self.num_kfolds
                     # Ensure we have enough updates for the specified number of folds
@@ -187,6 +188,7 @@ class Client(ModelBase):
                         self.folds.pop()
                     assert len(self.folds) == self.num_kfolds, f"Expected {self.num_kfolds} folds, got {len(self.folds)}"
                 elif shift_leftovers_across_folds:
+                    '''Purpose of this code is to shift/push updates to earlier folds, to maintain contintuity, while making test folds more even in size'''
                     # TODO: This has not been validated at all...
                     # Calculate the total number of updates and the ideal number of updates per fold
                     total_updates = len(valid_updates)
@@ -213,6 +215,7 @@ class Client(ModelBase):
                 # TODO: Verify that this actually works when there are more than 
                 lower_bound_pre_idx = self.update_ix.index(fold_updates[0])
                 upper_bound_pre_idx = self.update_ix.index(fold_updates[-1]) + 1  # +1 to include the last update (eg otherwise this update num would be the upperbound, as opposed to included)
+                # Upper and lower bounds mapped to the new size (since we do not use anything before starting_update...)
                 lower_bound = self.update_ix[lower_bound_pre_idx] - self.update_ix[starting_update]
                 upper_bound = self.update_ix[upper_bound_pre_idx] - self.update_ix[starting_update]
                 # Set testing data
@@ -228,6 +231,49 @@ class Client(ModelBase):
                 train_labels_before = self.local_labelset[:lower_bound, :]
                 train_labels_after = self.local_labelset[upper_bound:, :]
                 self.training_labels = np.vstack((train_labels_before, train_labels_after))
+
+                # SIMULATE THE FIRST DATA STREAM FOR THE STARTING UPDATE
+                ## Eg, set self.V, self.s, etc etc
+                # Find the current fold based on self.current_update
+                current_index = self.update_ix[self.current_update]
+                current_fold_index = next(i for i, fold in enumerate(self.folds) if current_index in fold)
+                current_fold = self.folds[current_fold_index]
+                # Is current_fold different from self.current_fold... 
+                # ## --> It's the actual index value instead of the fold count I think?
+                # Set lower_bound and upper_bound based on the current fold
+                lower_bound = self.update_ix.index(current_fold[0])
+                upper_bound = self.update_ix.index(current_fold[-1]) + 1  # +1 to include the last update
+                self.learning_batch = upper_bound - lower_bound
+                # Get the training data for the current fold
+                train_folds = self.folds[:current_fold_index] + self.folds[current_fold_index+1:]
+                train_updates = [update for fold in train_folds for update in fold]
+                s_temp = np.vstack([self.training_data[self.update_ix.index(update):self.update_ix.index(update)+1, :] 
+                                    for update in train_updates])
+                # For Maneeshika's code:
+                # TODO: Rewrite this:
+                p_ref_lim = np.vstack([self.training_labels[self.update_ix.index(update):self.update_ix.index(update)+1, :] 
+                               for update in train_updates])
+                # This is the used label
+                self.p_reference = np.transpose(p_ref_lim)
+
+                # First, normalize the entire s matrix
+                if self.normalize_EMG:
+                    s_normed = s_temp/np.amax(s_temp)
+                else:
+                    s_normed = s_temp
+                # Now do PCA unless it is set to 64 (AKA the default num channels i.e. no reduction)
+                # Also probably ought to find a global transform if possible so I don't recompute it every time...
+                if self.PCA_comps!=self.pca_channel_default:  
+                    pca = PCA(n_components=self.PCA_comps)
+                    s_normed = pca.fit_transform(s_normed)
+                self.s = np.transpose(s_normed)
+                self.F = self.s[:,:-1] # note: truncate F for estimate_decoder
+                v_actual = self.w@self.s
+                p_actual = np.cumsum(v_actual, axis=1)*self.dt  # Numerical integration of v_actual to get p_actual
+                
+                # Original code
+                # self.V must be set ONLY WITHIN TRAINING
+                self.V = (self.p_reference - p_actual)*self.dt
 
                 if self.ID==0:
                     print(f"KFold {self.current_fold}")
@@ -402,49 +448,90 @@ class Client(ModelBase):
             # TODO: need_to_advance shouldn't ever run, once lower_bound and upper_bound have been set once
             need_to_advance=False
         elif streaming_method=='streaming':
-            # If we pass threshold, move on to the next update
-            if self.current_round%self.local_round_threshold==0:
-                # NOTE: This increments self.current_update, not self.current_round, which was updated above
-                self.current_update += 1
-                
-                self.update_transition_log.append(self.latest_global_round)
-                if self.verbose==True and self.ID==0:
-                    print(f"Client {self.ID}: New update after lrt passed: (new update, current global round, current local round): {self.current_update, self.latest_global_round, self.current_round}")
-                    print()
-                    
-                # Using only the second half of each update for co-adaptivity reasons
-                #lower_bound = (self.update_ix[self.current_update] + self.update_ix[self.current_update+1])//2
-                lower_bound = (self.update_ix[self.current_update])
-                upper_bound = self.update_ix[self.current_update+1]
-                self.learning_batch = upper_bound - lower_bound
-            elif self.current_round>2: 
-                # This is the base case
-                # The update number didn't change so we don't need to overwrite everything with the same data
-                need_to_advance = False
+            if self.global_method=="NOFL":  # AKA Intra-Subject KFCV
+                # Really ought to move this branch back so that the other streaming methods are included too...
+                ## Since this version uses the folds to set the streaming index
+                ## Eg the existing lower_bounds and upper_bounds would be incorrect (might be incorrect for other versions even wtihout kfcv...)
+
+                # If we pass threshold, move on to the next update
+                if self.current_round%self.local_round_threshold==0:
+                    self.current_update += 1
+                    self.update_transition_log.append(self.latest_global_round)
+                    if self.verbose==True and self.ID==0:
+                        print(f"Client {self.ID}: New update after lrt passed: (new update, current global round, current local round): {self.current_update, self.latest_global_round, self.current_round}")
+                        print()
+                    need_to_advance = True
+                elif self.current_round>2:  # This is the base case
+                    need_to_advance = False
+                else:  # This is for the init case (current round is 0 or 1)
+                    # This should be False actually, I don't need it to advance immediately...
+                    need_to_advance = False
             else:
-                # This is for the init case (current round is 0 or 1)
-                # need_to_advance is true, so we overwrite s and such... this is fine 
+                # If we pass threshold, move on to the next update
+                if self.current_round%self.local_round_threshold==0:
+                    self.current_update += 1
+                    self.update_transition_log.append(self.latest_global_round)
+                    if self.verbose==True and self.ID==0:
+                        print(f"Client {self.ID}: New update after lrt passed: (new update, current global round, current local round): {self.current_update, self.latest_global_round, self.current_round}")
+                        print()
+                        
+                    # Using only the second half of each update for co-adaptivity reasons
+                    #lower_bound = (self.update_ix[self.current_update] + self.update_ix[self.current_update+1])//2
+                    lower_bound = (self.update_ix[self.current_update]) - self.update_ix[self.starting_update]
+                    upper_bound = self.update_ix[self.current_update+1] - self.update_ix[self.starting_update]
+                    self.learning_batch = upper_bound - lower_bound
+                elif self.current_round>2: 
+                    # This is the base case
+                    # The update number didn't change so we don't need to overwrite everything with the same data
+                    need_to_advance = False
+                else:
+                    # This is for the init case (current round is 0 or 1)
+                    # need_to_advance is true, so we overwrite s and such... this is fine 
 
-                # TODO: This actually doesn't run since current_update is 10...
-
-                #lower_bound = (self.update_ix[self.current_update] + self.update_ix[self.current_update+1])//2
-                lower_bound = (self.update_ix[self.current_update])
-                upper_bound = self.update_ix[self.current_update+1]
-                self.learning_batch = upper_bound - lower_bound
+                    #lower_bound = (self.update_ix[self.current_update] + self.update_ix[self.current_update+1])//2
+                    lower_bound = (self.update_ix[self.current_update]) - self.update_ix[self.starting_update]
+                    upper_bound = self.update_ix[self.current_update+1] - self.update_ix[self.starting_update]
+                    self.learning_batch = upper_bound - lower_bound
         elif streaming_method=='advance_each_iter':
             #lower_bound = (self.update_ix[self.current_update] + self.update_ix[self.current_update+1])//2 
-            lower_bound = (self.update_ix[self.current_update])
-            upper_bound = self.update_ix[self.current_update+1]
+            lower_bound = (self.update_ix[self.current_update]) - self.update_ix[self.starting_update]
+            upper_bound = self.update_ix[self.current_update+1] - self.update_ix[self.starting_update]
             self.learning_batch = upper_bound - lower_bound
-            
             self.current_update += 1
         else:
             raise ValueError(f'streaming_method ("{streaming_method}") not recognized: this data streaming functionality is not supported')
             
         if need_to_advance:
-            s_temp = self.training_data[lower_bound:upper_bound,:]
-            #if self.ID==0:
-            #    print(f"NEED TO ADVANCE: s_temp.shape: {s_temp.shape}")
+            if self.global_method=="NOFL":  # AKA Intra-Subject KFCV
+                # Find the current fold based on self.current_update
+                current_index = self.update_ix[self.current_update]
+                current_fold_index = next(i for i, fold in enumerate(self.folds) if current_index in fold)
+                current_fold = self.folds[current_fold_index]
+                # Is current_fold different from self.current_fold... 
+                # ## --> It's the actual index value instead of the fold count I think?
+                # Set lower_bound and upper_bound based on the current fold
+                lower_bound = self.update_ix.index(current_fold[0])
+                upper_bound = self.update_ix.index(current_fold[-1]) + 1  # +1 to include the last update
+                self.learning_batch = upper_bound - lower_bound
+                # Get the training data for the current fold
+                train_folds = self.folds[:current_fold_index] + self.folds[current_fold_index+1:]
+                train_updates = [update for fold in train_folds for update in fold]
+                s_temp = np.vstack([self.training_data[self.update_ix.index(update):self.update_ix.index(update)+1, :] 
+                                    for update in train_updates])
+                # For Maneeshika's code:
+                # TODO: Rewrite this:
+                p_ref_lim = np.vstack([self.training_labels[self.update_ix.index(update):self.update_ix.index(update)+1, :] 
+                               for update in train_updates])
+                # This is the used label
+                self.p_reference = np.transpose(p_ref_lim)
+            else:
+                s_temp = self.training_data[lower_bound:upper_bound,:]
+                #if self.ID==0:
+                #    print(f"NEED TO ADVANCE: s_temp.shape: {s_temp.shape}")
+                self.p_reference = np.transpose(self.training_labels[lower_bound:upper_bound,:])
+                # For Maneeshika's code, otherwise not used:
+                p_ref_lim = self.training_labels[lower_bound:upper_bound,:]
+            
             # First, normalize the entire s matrix
             if self.normalize_EMG:
                 s_normed = s_temp/np.amax(s_temp)
@@ -459,13 +546,11 @@ class Client(ModelBase):
             self.F = self.s[:,:-1] # note: truncate F for estimate_decoder
             v_actual = self.w@self.s
             p_actual = np.cumsum(v_actual, axis=1)*self.dt  # Numerical integration of v_actual to get p_actual
-            self.p_reference = np.transpose(self.training_labels[lower_bound:upper_bound,:])
-            
+                
             #####################################################################
             # Add the boundary conditions code here
             if self.use_zvel:
                 # Maneeshika code
-                p_ref_lim = self.training_labels[lower_bound:upper_bound,:]
                 if self.current_round<2:
                     self.vel_est = np.zeros_like((p_ref_lim))
                     self.pos_est = np.zeros_like((p_ref_lim))
@@ -555,6 +640,7 @@ class Client(ModelBase):
                 # TODO: Decide what to do about F and V... split in half? Use batches? ...
                 new_stoch_grad = np.reshape(gradient_cost_l2(self.F, w_tilde, self.V, alphaE=self.alphaE, alphaD=self.alphaD, Ne=self.PCA_comps), 
                                         (2, self.PCA_comps))
+                # I mean should I just use linear search here too...
                 self.w_new = D0 - self.beta * new_stoch_grad
             elif self.global_method=='PFAHF':
                 # TODO: Implement. Is the hessian-vector product between the hessian and the gradient? ...

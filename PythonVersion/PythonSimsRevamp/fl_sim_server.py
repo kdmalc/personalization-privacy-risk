@@ -282,7 +282,7 @@ class Server(ModelBase):
             #    file.write(deep_base_str)
             if "PFA" in self.global_method:
                 perfedavg_param_str = ("\n\nPERFEDAVG PARAMS\n"
-                    f"beta = {self.beta}\n")
+                    f"beta = {self.all_clients[0].beta}\n")
                 file.write(perfedavg_param_str)
 
 
