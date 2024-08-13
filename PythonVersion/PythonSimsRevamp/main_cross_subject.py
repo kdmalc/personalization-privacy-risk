@@ -111,10 +111,10 @@ for fold_idx, (train_ids, test_ids) in enumerate(folds):
     # Save the model for the current fold
     if GLOBAL_METHOD.upper()!="NOFL":
         print("Saving server's final (global) model")
-        dir_path = os.path.join(model_saving_dir, server_obj.str_current_datetime)
+        dir_path = os.path.join(model_saving_dir, server_obj.str_current_datetime, GLOBAL_METHOD)
         # Create the directory if it doesn't exist
         os.makedirs(dir_path, exist_ok=True)
-        np.save(os.path.join(dir_path, f'{GLOBAL_METHOD}_servers_final_model_fold{fold_idx}.npy'), server_obj.w)
+        np.save(os.path.join(dir_path, f'servers_final_model_fold{fold_idx}.npy'), server_obj.w)
 
 # Plot all results:
 plt.figure()  # Create a new figure

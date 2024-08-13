@@ -73,6 +73,14 @@ for fold_idx in range(NUM_KFOLDS):
     cross_val_res_lst[fold_idx][1] = copy.deepcopy(server_obj.local_test_error_log)
 
     #server_obj.save_results_h5(save_cost_func_comps=False, save_gradient=False)
+    #server_obj.save_results_h5(save_cost_func_comps=False, save_gradient=False)
+    # Save the model for the current fold
+    if GLOBAL_METHOD.upper()!="NOFL":
+        print("Saving server's final (global) model")
+        dir_path = os.path.join(model_saving_dir, server_obj.str_current_datetime, GLOBAL_METHOD)
+        # Create the directory if it doesn't exist
+        os.makedirs(dir_path, exist_ok=True)
+        np.save(os.path.join(dir_path, f'servers_final_model_fold{fold_idx}.npy'), server_obj.w)
 
 # Plot all results:
 plt.figure()  # Create a new figure
