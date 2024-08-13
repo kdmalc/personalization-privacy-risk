@@ -1,0 +1,34 @@
+BASE
+algorithm = PFAFO_GDLS
+
+
+MODEL HYPERPARAMETERS
+lambdaF = 0.0
+lambdaD = 0.0001
+lambdaE = 1e-06
+global_rounds = 50
+optimizer = GD
+pca_channels = 64
+
+
+TESTING
+test_split_fraction = 0.3
+num_kfolds = 5
+
+
+SEQUENTIAL
+sequential = False
+
+
+FEDERATED LEARNING PARAMS
+local_round_threshold = 50
+
+
+SIMULATION PARAMS
+starting_update = 9
+total effective clients = 12
+smoothbatch_lr = 0.75
+
+
+PERFEDAVG PARAMS
+beta = 0.01

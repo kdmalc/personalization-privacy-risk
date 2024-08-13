@@ -20,15 +20,16 @@ from shared_globals import *
 
 # GLOBALS
 USE_KFOLDCV = True
-GLOBAL_METHOD = "PFAFO_GDLS"  #FedAvg #PFAFO #PFAFO_GDLS
-OPT_METHOD = 'GD'  #FULLSCIPYMIN #MaxiterScipyMin #GD
+GLOBAL_METHOD = "FedAvg"  #FedAvg #PFAFO_GDLS
+# PFAFO (without GDLS) doesnt work / takes many iterations (curves are flatish)
+OPT_METHOD = 'GDLS'  #FULLSCIPYMIN #MaxiterScipyMin #GD #GDLS --> USE GDLS For FedAvg!
 # ^ This gets ignored completely when using PFA
 GLOBAL_ROUNDS = 50
 BETA=0.01
 LR=1
 MAX_ITER=1  # For scipy. Set to -1 for full, otherwise stay with 1
 # ^ Do I need to pass this in? Is that not controlled by OPT_METHOD? ...
-NUM_STEPS=10  # This is also basically just local_epochs, since I don't batch. Num_grad_steps
+NUM_STEPS=5  # This is also basically just local_epochs, since I don't batch. Num_grad_steps
 TEST_SPLIT_TYPE='kfoldcv'
 
 with open(path+cond0_filename, 'rb') as fp:
