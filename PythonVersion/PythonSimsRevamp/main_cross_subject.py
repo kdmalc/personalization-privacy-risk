@@ -20,16 +20,18 @@ from shared_globals import *
 
 # GLOBALS
 USE_KFOLDCV = True
-GLOBAL_METHOD = "FedAvg"  #FedAvg #PFAFO_GDLS
-# PFAFO (without GDLS) doesnt work / takes many iterations (curves are flatish)
+GLOBAL_METHOD = "PFAFO_GDLS"  #FedAvg #PFAFO_GDLS
+# NoFL
+# PFAFO (without GDLS) doesnt work / takes many iterations (curves are flatish) --> Reduce this to just be PFA (FO GDLS is only option)
 OPT_METHOD = 'GDLS'  #FULLSCIPYMIN #MaxiterScipyMin #GD #GDLS --> USE GDLS For FedAvg!
 # ^ This gets ignored completely when using PFA
+NUM_STEPS=3  # This is basically just local_epochs. Num_grad_steps
+
 GLOBAL_ROUNDS = 50
-BETA=0.01
-LR=1
+BETA=0.01  # Not used with GDLS? Only pertains to PFA regardless
+LR=1  # Not used with GDLS?
 MAX_ITER=1  # For scipy. Set to -1 for full, otherwise stay with 1
 # ^ Do I need to pass this in? Is that not controlled by OPT_METHOD? ...
-NUM_STEPS=5  # This is also basically just local_epochs, since I don't batch. Num_grad_steps
 TEST_SPLIT_TYPE='kfoldcv'
 
 with open(path+cond0_filename, 'rb') as fp:
@@ -106,6 +108,13 @@ for fold_idx, (train_ids, test_ids) in enumerate(folds):
     cross_val_res_lst[fold_idx][1] = copy.deepcopy(server_obj.local_test_error_log)
 
     #server_obj.save_results_h5(save_cost_func_comps=False, save_gradient=False)
+    # Save the model for the current fold
+    if GLOBAL_METHOD.upper()!="NOFL":
+        print("Saving server's final (global) model")
+        dir_path = os.path.join(model_saving_dir, server_obj.str_current_datetime)
+        # Create the directory if it doesn't exist
+        os.makedirs(dir_path, exist_ok=True)
+        np.save(os.path.join(dir_path, f'{GLOBAL_METHOD}_servers_final_model_fold{fold_idx}.npy'), server_obj.w)
 
 # Plot all results:
 plt.figure()  # Create a new figure

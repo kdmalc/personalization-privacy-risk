@@ -2,6 +2,7 @@ import numpy as np
 
 
 path = r'C:\Users\kdmen\Desktop\Research\Data\CPHS_EMG'
+model_saving_dir = r"C:\Users\kdmen\Desktop\Research\personalization-privacy-risk\PythonVersion\PythonSimsRevamp\models"
 cond0_filename = r'\cond0_dict_list.p'
 all_decs_init_filename = r'\all_decs_init.p'
 nofl_decs_filename = r'\nofl_decs.p'

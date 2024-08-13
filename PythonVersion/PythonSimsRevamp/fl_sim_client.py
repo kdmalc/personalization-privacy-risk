@@ -47,6 +47,8 @@ class Client(ModelBase):
         # Sentinel Values
         self.F = None
         self.V = None
+        self.F2 = None
+        self.V2 = None
         self.learning_batch = None
 
         self.dt = 1.0/60.0
@@ -135,37 +137,6 @@ class Client(ModelBase):
 
         if self.test_split_type=="KFOLDCV":
             if self.global_method=="NOFL":  # AKA Intra-subject KFCV ... maybe should disambiguate these...
-
-                # MY OLD CODE
-                '''
-                # Divide full dataset into folds according to self.num_kfolds
-                self.internal_fold_ix = self.local_dataset.shape[0] // self.num_kfolds - 1
-                assert(self.internal_fold_ix*self.num_kfolds <= self.local_dataset.shape[0])
-                # Given self.current_fold, select the corresponding fold as the testing set
-                ## Double check how upper and lower bound are used in other places in the code
-                ## Eg make sure they aren't reused since this code isn't going to work that way
-                lower_bound_pre_idx = self.internal_fold_ix * self.current_fold
-                upper_bound_pre_idx = self.internal_fold_ix * self.current_fold + self.internal_fold_ix
-                # Convert the above to the nearest update_ix's
-                ## Could probably condense these lines into 1-2:
-                lower_bound_update_number = min(self.update_ix, key=lambda x:abs(x-lower_bound_pre_idx))
-                upper_bound_update_number = min(self.update_ix, key=lambda x:abs(x-upper_bound_pre_idx))
-                lower_bound = self.update_ix.index(lower_bound_update_number)
-                upper_bound = self.update_ix.index(upper_bound_update_number)
-                # Make sure that lower_bound and upper_bound are separate...
-                assert(lower_bound != upper_bound)
-                # Set testing data
-                self.test_split_idx = -1  # Does this get used outside this func...
-                self.testing_data = self.local_dataset[lower_bound:upper_bound, :]
-                self.testing_labels = self.local_labelset[lower_bound:upper_bound, :]
-                self.test_learning_batch = self.testing_data.shape[0]
-                # Setting the training data
-                self.training_data = np.concatenate((self.local_dataset[:lower_bound, :], self.local_dataset[upper_bound:, :]), axis=0)
-                self.training_labels = np.concatenate((self.local_labelset[:lower_bound, :], self.local_labelset[upper_bound:, :]), axis=0)
-                # Overwrite self.update_ix since there is a discontinuity in the data which breaks it otherwise... ? Not sure if this is necessary...
-                #self.update_ix
-                '''
-
                 # Include these in the init? ...
                 append_leftovers_to_last_fold = False
                 shift_leftovers_across_folds = True
@@ -525,13 +496,21 @@ class Client(ModelBase):
                 # This is the used label
                 self.p_reference = np.transpose(p_ref_lim)
             else:
-                s_temp = self.training_data[lower_bound:upper_bound,:]
-                #if self.ID==0:
-                #    print(f"NEED TO ADVANCE: s_temp.shape: {s_temp.shape}")
-                self.p_reference = np.transpose(self.training_labels[lower_bound:upper_bound,:])
-                # For Maneeshika's code, otherwise not used:
-                p_ref_lim = self.training_labels[lower_bound:upper_bound,:]
-            
+                if self.global_method=="FEDAVG":
+                    s_temp = self.training_data[lower_bound:upper_bound,:]
+                    self.p_reference = np.transpose(self.training_labels[lower_bound:upper_bound,:])
+                    # For Maneeshika's code, otherwise not used:
+                    p_ref_lim = self.training_labels[lower_bound:upper_bound,:]
+                elif "PFA" in self.global_method:
+                    mid_point = (lower_bound+upper_bound)//2
+                    s_temp = self.training_data[lower_bound:mid_point,:]
+                    s_temp2 = self.training_data[mid_point:upper_bound,:]
+                    self.p_reference = np.transpose(self.training_labels[lower_bound:mid_point,:])
+                    self.p_reference2 = np.transpose(self.training_labels[mid_point:upper_bound,:])
+                    # For Maneeshika's code, otherwise not used:
+                    p_ref_lim = self.training_labels[lower_bound:mid_point,:]
+                    p_ref_lim2 = self.training_labels[mid_point:upper_bound,:]
+                
             # First, normalize the entire s matrix
             if self.normalize_EMG:
                 s_normed = s_temp/np.amax(s_temp)
@@ -546,6 +525,18 @@ class Client(ModelBase):
             self.F = self.s[:,:-1] # note: truncate F for estimate_decoder
             v_actual = self.w@self.s
             p_actual = np.cumsum(v_actual, axis=1)*self.dt  # Numerical integration of v_actual to get p_actual
+            if "PFA" in self.global_method:
+                if self.normalize_EMG:
+                    s_normed2 = s_temp2/np.amax(s_temp2)
+                else:
+                    s_normed2 = s_temp2
+                if self.PCA_comps!=self.pca_channel_default:  
+                    pca = PCA(n_components=self.PCA_comps)
+                    s_normed2 = pca.fit_transform(s_normed2)
+                self.s2 = np.transpose(s_normed2)
+                self.F2 = self.s2[:,:-1] # note: truncate F for estimate_decoder
+                v_actual2 = self.w@self.s2
+                p_actual2 = np.cumsum(v_actual2, axis=1)*self.dt  # Numerical integration of v_actual to get p_actual
                 
             #####################################################################
             # Add the boundary conditions code here
@@ -600,6 +591,8 @@ class Client(ModelBase):
                 # Original code
                 # self.V must be set ONLY WITHIN TRAINING
                 self.V = (self.p_reference - p_actual)*self.dt
+                if "PFA" in self.global_method:
+                    self.V2 = (self.p_reference2 - p_actual2)*self.dt
             
 
     def train_given_model_1_comm_round(self, model, which):
@@ -675,8 +668,7 @@ class Client(ModelBase):
                                         (2, self.PCA_comps))
                 w_tilde = D0 - self.lr * stochastic_grad
                 # ^ D0 is w_new from the previous iteration, eg w_{t-1}
-                # TODO: Decide what to do about F and V... split in half? Use batches? ...
-                new_stoch_grad = np.reshape(gradient_cost_l2(self.F, w_tilde, self.V, alphaE=self.alphaE, alphaD=self.alphaD, Ne=self.PCA_comps), 
+                new_stoch_grad = np.reshape(gradient_cost_l2(self.F2, w_tilde, self.V2, alphaE=self.alphaE, alphaD=self.alphaD, Ne=self.PCA_comps), 
                                         (2, self.PCA_comps))
                 # I mean should I just use linear search here too...
                 self.w_new = D0 - self.beta * new_stoch_grad
@@ -699,8 +691,7 @@ class Client(ModelBase):
 
                 ## Step 2: Using w_tilde to inform the update on copy_of_original_weights
                 ## FO Only
-                # TODO: Decide what to do about F and V... split in half? Use batches? ...
-                self.w_new = self.gd_step_with_line_search(w_tilde_gd, self.F, self.V, w_base=D0)
+                self.w_new = self.gd_step_with_line_search(w_tilde_gd, self.F2, self.V2, w_base=D0)
             elif self.global_method=='PFAHF':
                 # TODO: Implement. Is the hessian-vector product between the hessian and the gradient? ...
                 raise ValueError('Per-FedAvg HF NOT FINISHED YET')

@@ -15,7 +15,6 @@ class ModelBase:
         self.update_ix = [0,  1200,  2402,  3604,  4806,  6008,  7210,  8412,  9614, 10816, 12018, 13220, 14422, 15624, 16826, 18028, 19230, 20432, 20769]
         self.id2color = {0:'lightcoral', 1:'maroon', 2:'chocolate', 3:'darkorange', 4:'gold', 5:'olive', 6:'olivedrab', 
                 7:'lawngreen', 8:'aquamarine', 9:'deepskyblue', 10:'steelblue', 11:'violet', 12:'darkorchid', 13:'deeppink'}
-        #self.pers_methods = ['FedAvgSB', 'Per-FedAvg FO', 'Per-FedAvg HF']
         
         self.type = 'BaseClass'
         self.ID = ID
@@ -36,13 +35,10 @@ class ModelBase:
         self.alphaE = alphaE
         self.alphaD = alphaD
 
-        self.local_train_error_log = [] #[log_init]*num_clients
-        self.global_train_error_log = [] #[log_init]*num_clients
-        #self.pers_train_error_log = [] #[log_init]*num_clients
-
-        self.local_test_error_log = [] #[log_init]*num_clients
-        self.global_test_error_log = [] #[log_init]*num_clients
-        #self.pers_test_error_log = [] #[log_init]*num_clients
+        self.local_train_error_log = []
+        self.global_train_error_log = []
+        self.local_test_error_log = []
+        self.global_test_error_log = []
         
         self.opt_method = opt_method.upper()
         self.current_round = current_round
