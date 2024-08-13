@@ -43,7 +43,12 @@ kf = KFold(n_splits=k)
 # Assuming cond0_training_and_labels_lst is a list of labels for 14 clients
 user_ids = list(range(14))
 folds = list(kf.split(user_ids))
-cross_val_res_lst = [[0, 0]]*NUM_KFOLDS
+#cross_val_res_lst = [[0, 0]]*NUM_KFOLDS
+# ^ THIS IS BAD CODE! 
+## creates a list of references to the same inner list. 
+## This means that when you modify one element, all elements change.
+## Instead, use list comprehension:
+cross_val_res_lst = [[0, 0] for _ in range(NUM_KFOLDS)]
 
 for fold_idx, (train_ids, test_ids) in enumerate(folds):
     print(f"Fold {fold_idx+1}/{k}")
@@ -76,9 +81,9 @@ for fold_idx, (train_ids, test_ids) in enumerate(folds):
 
         server_obj.execute_FL_loop()
 
-        if i % 10 == 0:
-            print(f"Global test loss: {server_obj.global_test_error_log[-1]}")
-            print(f"Local test loss: {server_obj.local_test_error_log[-1]}")
+        #if i % 10 == 0:
+        #    print(f"Global test loss: {server_obj.global_test_error_log[-1]}")
+        #    print(f"Local test loss: {server_obj.local_test_error_log[-1]}")
 
     if PLOT_EACH_FOLD:
         plt.figure()  # Create a new figure

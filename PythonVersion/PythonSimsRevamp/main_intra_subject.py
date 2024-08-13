@@ -33,7 +33,7 @@ with open(path+cond0_filename, 'rb') as fp:
 #    init_decoders = pickle.load(fp)    
 #cond0_init_decs = [dec[0, :, :] for dec in init_decoders]
 
-cross_val_res_lst = [[0, 0]]*NUM_KFOLDS
+cross_val_res_lst = [[0, 0] for _ in range(NUM_KFOLDS)]
 for fold_idx in range(NUM_KFOLDS):
     print(f"Fold {fold_idx+1}/{NUM_KFOLDS}")
     
