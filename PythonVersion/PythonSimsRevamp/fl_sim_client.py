@@ -4,6 +4,7 @@ import copy
 import time
 from sklearn.decomposition import PCA
 from scipy.optimize import minimize
+from scipy.optimize import line_search
 
 from fl_sim_base import *
 from experiment_params import *
@@ -115,8 +116,7 @@ class Client(ModelBase):
         self.pers_gradient_log = []
         self.global_gradient_log = []
 
-        # FedAvgSB Stuff
-        ## Not used AFAIK...
+        ## Not used AFAIK... --> control where SmoothBatch is used (verify this code still exists if you plan on using)
         self.mix_in_each_steps = mix_in_each_steps
         self.mix_mixed_SB = mix_mixed_SB
 
@@ -606,6 +606,49 @@ class Client(ModelBase):
         '''This can be used for training the in ML pipeline but principally is for local-finetuning (eg training a model after it as completed its global training pipeline).'''
         raise ValueError("train_given_model_1_comm_round is not implemented yet.")
     
+
+    def gd_step_with_line_search(self, w, F, V, w_base=None):
+        if w_base is None:
+            w_flat = w.flatten()
+            gradient = gradient_cost_l2(F, np.reshape(w_flat, (2, 64)), V, alphaE=self.alphaE, alphaD=self.alphaD, flatten=True)
+            def objective(w_flat):
+                D = np.reshape(w_flat, (2, 64))
+                c_e = np.sum((D@F - V[:, 1:]) ** 2)
+                c_d = np.sum(D ** 2)
+                cost = self.alphaE*c_e + self.alphaD*c_d
+                return cost
+            def gradient_function(w_flat):
+                return gradient_cost_l2(F, np.reshape(w_flat, (2, 64)), V, alphaE=self.alphaE, alphaD=self.alphaD,  flatten=True)
+            # Perform line search
+            alpha = line_search(objective, gradient_function, w_flat, -gradient)[0]
+            if alpha is None:
+                print("LINE SEARCH FAILED")
+                alpha = self.lr  # Use default learning rate if line search fails
+            new_w = w_flat - alpha*gradient
+            # Gradient step using optimal lr:
+            return np.reshape(new_w, (2, self.PCA_comps))
+        else:
+            w_flat = w.flatten()
+            gradient = gradient_cost_l2(F, np.reshape(w_flat, (2, 64)), V, alphaE=self.alphaE, alphaD=self.alphaD, flatten=True)
+            def objective(w_flat):
+                # TODO: Use w_base (actual location) or w_flat (AKA w_tilde)
+                D = np.reshape(w_flat, (2, 64))
+                c_e = np.sum((D@F - V[:, 1:]) ** 2)
+                c_d = np.sum(D ** 2)
+                cost = self.alphaE*c_e + self.alphaD*c_d
+                return cost
+            def gradient_function(w_flat):
+                # TODO: Use w_base (actual location) or w_flat (AKA w_tilde)
+                return gradient_cost_l2(F, np.reshape(w_flat, (2, 64)), V, alphaE=self.alphaE, alphaD=self.alphaD, flatten=True)
+            # Perform line search
+            alpha = line_search(objective, gradient_function, w_flat, -gradient)[0]
+            if alpha is None:
+                print("LINE SEARCH FAILED")
+                alpha = self.lr  # Use default learning rate if line search fails
+            new_w = w_base - alpha*np.reshape(gradient, (2, 64))
+            # Gradient step using optimal lr:
+            return np.reshape(new_w, (2, self.PCA_comps))
+        
     
     def train_model(self):
         ## Set the w_prev equal to the current w:
@@ -619,11 +662,6 @@ class Client(ModelBase):
         else:
             # w_new is just the same model it has been
             self.w_new = copy.deepcopy(self.w)
-        
-        # I think this ought to be on but it makes the global model and gradient diverge...
-        if self.wprev_global==True and ('PFA' in self.opt_method):  # TODO: In opt_method? I don't think that's an opt_method...
-            # TODO: What is wprev_global...
-            self.w_prev = copy.deepcopy(self.global_w)
         
         for i in range(self.num_steps):
             D0 = copy.deepcopy(self.w_new)  
@@ -642,13 +680,37 @@ class Client(ModelBase):
                                         (2, self.PCA_comps))
                 # I mean should I just use linear search here too...
                 self.w_new = D0 - self.beta * new_stoch_grad
+            elif self.global_method=='PFAFO_GDLS':
+                # Step 1: Compute w_tilde
+                ## One step of GD on the trained_model weights
+                result = minimize(
+                    lambda D: cost_l2(self.F, D, self.V, self.alphaE, self.alphaD),
+                    D0,
+                    method='BFGS',
+                    jac=lambda D: gradient_cost_l2(self.F, D, self.V, self.alphaE, self.alphaD),
+                    options={'maxiter': 1})
+                w_tilde = np.reshape(result.x, (2, self.PCA_comps))
+
+                ## Redo of step 1 just for my curiousity...
+                w_tilde_gd = self.gd_step_with_line_search(self.w_new, self.F, self.V)
+                # Just for my purposes, how similar are w_tilde nad w_tilde_gd? Ideally are the same...
+                #print(f"\nw_tilde (BFGS) - w_tilde_gd Norm: {np.linalg.norm(w_tilde - w_tilde_gd)}\n")
+                # They are 0.2-0.9 in difference...
+
+                ## Step 2: Using w_tilde to inform the update on copy_of_original_weights
+                ## FO Only
+                # TODO: Decide what to do about F and V... split in half? Use batches? ...
+                self.w_new = self.gd_step_with_line_search(w_tilde_gd, self.F, self.V, w_base=D0)
             elif self.global_method=='PFAHF':
                 # TODO: Implement. Is the hessian-vector product between the hessian and the gradient? ...
                 raise ValueError('Per-FedAvg HF NOT FINISHED YET')
+            # This is for LOCAL and FEDAVG:
             elif self.opt_method=='GD':
                 grad_cost = np.reshape(gradient_cost_l2(self.F, self.w_new, self.V, alphaE=self.alphaE, alphaD=self.alphaD, Ne=self.PCA_comps), 
                                         (2, self.PCA_comps))
                 self.w_new -= self.lr*grad_cost
+            elif self.opt_method=='GDLS':
+                self.w_new = self.gd_step_with_line_search(self.w_new, self.F, self.V)
             elif self.opt_method=='FULLSCIPYMIN':
                 out = minimize(
                     lambda D: cost_l2(self.F, D, self.V, alphaD=self.alphaD, alphaE=self.alphaE, Ne=self.PCA_comps), 
@@ -680,14 +742,6 @@ class Client(ModelBase):
         #    print(f"self.w_new norm: {np.linalg.norm(self.w_new)}")
         #    print(f"self.w norm: {np.linalg.norm(self.w)}")
         #    print("\n")
-
-
-        # TODO: I think I can delete this? This gets logged in the execute_FL main loop func
-        # Save the new decoder to the log
-        #self.dec_log.append(self.w)
-        #if "PFA" in self.global_method:
-        #    self.pers_dec_log.append(self.mixed_w)
-        #self.global_dec_log.append(self.global_w)
         
         
     def eval_model(self, which):

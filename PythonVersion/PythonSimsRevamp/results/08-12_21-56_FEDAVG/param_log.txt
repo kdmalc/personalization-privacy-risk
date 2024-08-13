@@ -1,5 +1,5 @@
 BASE
-algorithm = PFAFO
+algorithm = FEDAVG
 
 
 MODEL HYPERPARAMETERS
@@ -7,7 +7,7 @@ lambdaF = 0.0
 lambdaD = 0.0001
 lambdaE = 1e-06
 global_rounds = 50
-optimizer = MAXITERSCIPYMIN
+optimizer = GD
 pca_channels = 64
 
 
@@ -28,7 +28,3 @@ SIMULATION PARAMS
 starting_update = 9
 total effective clients = 12
 smoothbatch_lr = 0.75
-
-
-PERFEDAVG PARAMS
-beta = 0.01

@@ -1,5 +1,5 @@
 BASE
-algorithm = NOFL
+algorithm = FEDAVG
 
 
 MODEL HYPERPARAMETERS
@@ -7,7 +7,7 @@ lambdaF = 0.0
 lambdaD = 0.0001
 lambdaE = 1e-06
 global_rounds = 50
-optimizer = FULLSCIPYMIN
+optimizer = GD
 pca_channels = 64
 
 
@@ -26,5 +26,5 @@ local_round_threshold = 50
 
 SIMULATION PARAMS
 starting_update = 9
-total effective clients = 14
+total effective clients = 12
 smoothbatch_lr = 0.75
