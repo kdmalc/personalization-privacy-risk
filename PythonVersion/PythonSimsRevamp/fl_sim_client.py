@@ -127,7 +127,6 @@ class Client(ModelBase):
         self.running_pers_term = 0
         self.running_global_term = 0
         self.global_w = copy.deepcopy(self.w)
-        self.mixed_w = copy.deepcopy(self.w)
 
         # TRAIN TEST DATA SPLIT
         self.test_split_type = test_split_type.upper() # "KFOLDCV" "UPDATE16" "ENDFRACTION"
@@ -139,8 +138,9 @@ class Client(ModelBase):
         if self.test_split_type=="KFOLDCV":
             if self.scenario=="INTRA":
                 # Include these in the init? ...
-                append_leftovers_to_last_fold = True
-                shift_leftovers_across_folds = False
+                append_leftovers_to_last_fold = False
+                shift_leftovers_across_folds = True
+
                 # Filter update_ix to only include updates 9-16
                 valid_updates = [ix for ix in self.update_ix if starting_update <= self.update_ix.index(ix) < final_usable_update_ix]
                 # THIS SETS THE TESTING FOLD
@@ -148,8 +148,7 @@ class Client(ModelBase):
                     '''Leftover updates are appended to the last fold. Updates are continuous but the last fold will be much bigger...'''
                     # Calculate the number of updates per fold
                     updates_per_fold = len(valid_updates) // self.num_kfolds
-                    if self.ID==1: 
-                        print(f"updates_per_fold: {updates_per_fold}")
+                    #print(f"updates_per_fold: {updates_per_fold}")
                     # Ensure we have enough updates for the specified number of folds
                     assert updates_per_fold > 0, "Not enough valid updates for the specified number of folds"
                     # Create folds --> THESE ARE THE TEST UPDATES!
@@ -161,15 +160,6 @@ class Client(ModelBase):
                         self.folds[-2].extend(self.folds[-1])
                         self.folds.pop()
                     assert len(self.folds) == self.num_kfolds, f"Expected {self.num_kfolds} folds, got {len(self.folds)}"
-                #elif measure_folds_twice:
-                #    '''Set the number of folds ahead of time'''
-                #    # Calculate the number of updates per fold
-                #    updates_per_fold = len(valid_updates) // self.num_kfolds
-                #    # Ensure we have enough updates for the specified number of folds
-                #    assert updates_per_fold > 0, "Not enough valid updates for the specified number of folds"
-                #    # Create folds
-                #    self.folds = [valid_updates[i:i+updates_per_fold] for i in range(0, len(valid_updates), updates_per_fold)]
-                #    assert len(self.folds) == self.num_kfolds, f"Expected {self.num_kfolds} folds, got {len(self.folds)}"
                 elif shift_leftovers_across_folds:
                     '''Purpose of this code is to shift/push updates to earlier folds, to maintain contintuity, while making test folds more even in size'''
                     # TODO: This has not been validated at all...
@@ -188,14 +178,14 @@ class Client(ModelBase):
                     if hasattr(self, 'ID') and self.ID == 0:
                         print(f"Created {len(self.folds)} folds:")
                         for i, fold in enumerate(self.folds):
-                            print(f"Fold {i+1}: {len(fold)} updates, from index {self.update_ix.index(fold[0])} to {self.update_ix.index(fold[-1])}")
+                            print(f"Fold {i}: {len(fold)} updates: {[self.update_ix.index(i) for i in fold]}")
                     assert len(self.folds) == self.num_kfolds, f"Expected {self.num_kfolds} folds, got {len(self.folds)}"
                     assert sum(len(fold) for fold in self.folds) == total_updates, "Not all updates were included in the folds"
                 # SET THE TEST DATA
                 # Get the current fold's update indices
                 fold_updates = self.folds[self.current_fold]
                 # Find the start and end indices in the dataset
-                # TODO: Verify that this actually works when there are more than 
+                ## THE BELOW CODE ASSUMES TEST UPDATES IN FOLD ARE CONTIGUOUS
                 lower_bound_pre_idx = self.update_ix.index(fold_updates[0])
                 upper_bound_pre_idx = self.update_ix.index(fold_updates[-1]) + 1  # +1 to include the last update (eg otherwise this update num would be the upperbound, as opposed to included)
                 # Upper and lower bounds mapped to the new size (since we do not use anything before starting_update...)
@@ -218,7 +208,7 @@ class Client(ModelBase):
                 # SIMULATE THE FIRST DATA STREAM FOR THE STARTING UPDATE
                 ## Eg, set self.V, self.s, etc etc
                 # Find the current fold based on self.current_update
-                current_index = self.update_ix[self.current_update]
+                current_index = self.update_ix[self.current_update]  # So does this need a -self.update_ix[self.starting_update]??
                 current_fold_index = next(i for i, fold in enumerate(self.folds) if current_index in fold)
                 current_fold = self.folds[current_fold_index]
                 # Is current_fold different from self.current_fold... 
@@ -301,10 +291,10 @@ class Client(ModelBase):
         else:
             raise ValueError("test_split_type not working as expected")
         
-        if self.test_split_type=="KFOLDCV" and self.global_method=="NOFL":
+        if self.scenario=="INTRA":
             # If so, then DONT overwrite the training data and labels!
             pass
-        else:
+        elif self.scenario=="CROSS":
             self.training_data = self.local_dataset[:self.test_split_idx, :]
             self.training_labels = self.local_labelset[:self.test_split_idx, :]
             self.test_learning_batch = upper_bound - lower_bound
@@ -487,7 +477,9 @@ class Client(ModelBase):
             raise ValueError(f'streaming_method ("{streaming_method}") not recognized: this data streaming functionality is not supported')
             
         if need_to_advance:
-            if self.global_method=="NOFL":  # AKA Intra-Subject KFCV
+            #if self.global_method=="NOFL":  # AKA Intra-Subject KFCV
+            if self.scenario=="INTRA":
+                #if "PFA" in self.global_method: ...
                 # Find the current fold based on self.current_update
                 current_index = self.update_ix[self.current_update]
                 current_fold_index = next(i for i, fold in enumerate(self.folds) if current_index in fold)
@@ -510,12 +502,7 @@ class Client(ModelBase):
                 # This is the used label
                 self.p_reference = np.transpose(p_ref_lim)
             else:
-                if self.global_method=="FEDAVG":
-                    s_temp = self.training_data[lower_bound:upper_bound,:]
-                    self.p_reference = np.transpose(self.training_labels[lower_bound:upper_bound,:])
-                    # For Maneeshika's code, otherwise not used:
-                    p_ref_lim = self.training_labels[lower_bound:upper_bound,:]
-                elif "PFA" in self.global_method:
+                if "PFA" in self.global_method:
                     mid_point = (lower_bound+upper_bound)//2
                     s_temp = self.training_data[lower_bound:mid_point,:]
                     s_temp2 = self.training_data[mid_point:upper_bound,:]
@@ -524,6 +511,11 @@ class Client(ModelBase):
                     # For Maneeshika's code, otherwise not used:
                     p_ref_lim = self.training_labels[lower_bound:mid_point,:]
                     p_ref_lim2 = self.training_labels[mid_point:upper_bound,:]
+                else:  # FEDAVG AND NOFL!
+                    s_temp = self.training_data[lower_bound:upper_bound,:]
+                    self.p_reference = np.transpose(self.training_labels[lower_bound:upper_bound,:])
+                    # For Maneeshika's code, otherwise not used:
+                    p_ref_lim = self.training_labels[lower_bound:upper_bound,:]
                 
             # First, normalize the entire s matrix
             if self.normalize_EMG:

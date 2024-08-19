@@ -39,8 +39,8 @@ for fold_idx in range(NUM_KFOLDS):
     print(f"Fold {fold_idx+1}/{NUM_KFOLDS}")
     
     # Initialize clients for training
-    full_client_lst = [Client(i, copy.deepcopy(D_0), OPT_METHOD, cond0_training_and_labels_lst[i],
-                            DATA_STREAM, current_fold=fold_idx, global_method=GLOBAL_METHOD, max_iter=MAX_ITER, 
+    full_client_lst = [Client(i, copy.deepcopy(D_0), OPT_METHOD, cond0_training_and_labels_lst[i], DATA_STREAM, 
+                            scenario=SCENARIO, current_fold=fold_idx, global_method=GLOBAL_METHOD, max_iter=MAX_ITER, 
                             num_steps=NUM_STEPS, use_zvel=USE_HITBOUNDS, test_split_type=TEST_SPLIT_TYPE) for i in range(NUM_USERS)]
 
     server_obj = Server(1, copy.deepcopy(D_0), opt_method=OPT_METHOD, global_method=GLOBAL_METHOD, all_clients=full_client_lst)

@@ -113,6 +113,7 @@ for fold_idx, (train_ids, test_ids) in enumerate(folds):
     # Save the model for the current fold
     if GLOBAL_METHOD.upper()!="NOFL":
         print("Saving server's final (global) model")
+        # TODO: Where is model_saving_dir defined...................
         dir_path = os.path.join(model_saving_dir, server_obj.str_current_datetime, GLOBAL_METHOD)
         # Create the directory if it doesn't exist
         os.makedirs(dir_path, exist_ok=True)
