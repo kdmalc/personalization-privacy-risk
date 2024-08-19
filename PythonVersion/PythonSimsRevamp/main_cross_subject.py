@@ -19,21 +19,18 @@ from shared_globals import *
 
 
 # GLOBALS
-USE_KFOLDCV = True
-GLOBAL_METHOD = "FedAvg"  #FedAvg #PFAFO_GDLS
-# NoFL
-# PFAFO (without GDLS) doesnt work / takes many iterations (curves are flatish) --> Reduce this to just be PFA (FO GDLS is only option)
+GLOBAL_METHOD = "PFAFO_GDLS"  #FedAvg #PFAFO_GDLS #NOFL
 OPT_METHOD = 'GDLS'  #FULLSCIPYMIN #MaxiterScipyMin #GD #GDLS --> USE GDLS For FedAvg!
 # ^ This gets ignored completely when using PFA
 NUM_STEPS=3  # This is basically just local_epochs. Num_grad_steps
 SCENARIO="CROSS"  # "INTRA" --> Cant be used in this file??
 
-GLOBAL_ROUNDS = 50
+GLOBAL_ROUNDS = 100
 BETA=0.01  # Not used with GDLS? Only pertains to PFA regardless
 LR=1  # Not used with GDLS?
 MAX_ITER=1  # For scipy. Set to -1 for full, otherwise stay with 1
 # ^ Do I need to pass this in? Is that not controlled by OPT_METHOD? ...
-TEST_SPLIT_TYPE='kfoldcv'
+LOCAL_ROUND_THRESHOLD=75
 
 with open(path+cond0_filename, 'rb') as fp:
     cond0_training_and_labels_lst = pickle.load(fp)
@@ -62,11 +59,11 @@ for fold_idx, (train_ids, test_ids) in enumerate(folds):
     
     # Initialize clients for training
     train_clients = [Client(i, copy.deepcopy(D_0), OPT_METHOD, cond0_training_and_labels_lst[i], DATA_STREAM,
-                            beta=BETA, scenario=SCENARIO, lr=LR, current_fold=fold_idx, num_kfolds=NUM_KFOLDS, global_method=GLOBAL_METHOD, max_iter=MAX_ITER, 
+                            beta=BETA, scenario=SCENARIO, local_round_threshold=LOCAL_ROUND_THRESHOLD, lr=LR, current_fold=fold_idx, num_kfolds=NUM_KFOLDS, global_method=GLOBAL_METHOD, max_iter=MAX_ITER, 
                             num_steps=NUM_STEPS, use_zvel=USE_HITBOUNDS, test_split_type=TEST_SPLIT_TYPE) for i in train_ids]
     # Initialize clients for testing
     test_clients = [Client(i, copy.deepcopy(D_0), OPT_METHOD, cond0_training_and_labels_lst[i], DATA_STREAM,
-                           beta=BETA, scenario=SCENARIO, lr=LR, current_fold=fold_idx, availability=False, val_set=True, num_kfolds=NUM_KFOLDS, global_method=GLOBAL_METHOD, max_iter=MAX_ITER, 
+                           beta=BETA, scenario=SCENARIO, local_round_threshold=LOCAL_ROUND_THRESHOLD, lr=LR, current_fold=fold_idx, availability=False, val_set=True, num_kfolds=NUM_KFOLDS, global_method=GLOBAL_METHOD, max_iter=MAX_ITER, 
                            num_steps=NUM_STEPS, use_zvel=USE_HITBOUNDS, test_split_type=TEST_SPLIT_TYPE) for i in test_ids]
 
     testing_datasets_lst = []

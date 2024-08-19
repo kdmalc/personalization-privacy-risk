@@ -18,7 +18,7 @@ class Client(ModelBase):
                 clipping_threshold=100, tol=1e-10, lr=1, beta=0.01, track_gradient=True, wprev_global=False, 
                 num_steps=1, use_zvel=False, current_fold=0, scenario="", 
                 mix_in_each_steps=False, mix_mixed_SB=False, delay_scaling=0, random_delays=False, download_delay=1, 
-                upload_delay=1, validate_memory_IDs=True, local_round_threshold=50, condition_number=3, 
+                upload_delay=1, validate_memory_IDs=True, local_round_threshold=25, condition_number=3, 
                 verbose=False, test_split_type='kfoldcv', num_kfolds=5, test_split_frac=0.3):
         super().__init__(ID, w, opt_method, smoothbatch_lr=smoothbatch_lr, current_round=current_round, PCA_comps=PCA_comps, 
                          verbose=verbose, num_clients=14, log_init=0)
@@ -30,6 +30,7 @@ class Client(ModelBase):
         assert(full_client_dataset['training'].shape[1]==64) # --> Shape is (20770, 64)
         # Don't use anything past update 17 since they are different (update 17 is the short one, only like 300 datapoints)
         self.current_update = starting_update
+        self.current_train_update = 0
         self.starting_update = starting_update
         self.final_usable_update_ix = final_usable_update_ix
         self.local_dataset = full_client_dataset['training'][self.update_ix[starting_update]:self.update_ix[final_usable_update_ix], :]
@@ -57,7 +58,6 @@ class Client(ModelBase):
         # Round minimization output to the nearest int or keep as a float?  Don't need arbitrary precision
         self.round2int = False
         self.max_iter = max_iter
-        self.current_fold = current_fold
         
         # Maneeshika Code:
         self.use_zvel = use_zvel
@@ -134,6 +134,9 @@ class Client(ModelBase):
         self.num_kfolds = num_kfolds
         self.val_set = val_set
         self.scenario = scenario.upper()
+        self.current_fold = current_fold
+        self.test_update_ix = None
+        self.train_update_ix = None
 
         if self.test_split_type=="KFOLDCV":
             if self.scenario=="INTRA":
@@ -184,8 +187,12 @@ class Client(ModelBase):
                 # SET THE TEST DATA
                 # Get the current fold's update indices
                 fold_updates = self.folds[self.current_fold]
-                # Find the start and end indices in the dataset
+                self.test_update_ix = [self.update_ix.index(ele) for ele in fold_updates]
+                self.train_update_ix = [ele for ele in self.update_ix if ((self.update_ix.index(ele)>=self.starting_update) and (self.update_ix.index(ele) not in self.test_update_ix) and (self.update_ix.index(ele)<self.final_usable_update_ix))]
+
+                # Find the start and end indices for the TEST dataset
                 ## THE BELOW CODE ASSUMES TEST UPDATES IN FOLD ARE CONTIGUOUS
+                ## The values in fold_updates represent the START of each update, NOT the BOUNDS!!  Thus the adjustment
                 lower_bound_pre_idx = self.update_ix.index(fold_updates[0])
                 upper_bound_pre_idx = self.update_ix.index(fold_updates[-1]) + 1  # +1 to include the last update (eg otherwise this update num would be the upperbound, as opposed to included)
                 # Upper and lower bounds mapped to the new size (since we do not use anything before starting_update...)
@@ -194,40 +201,50 @@ class Client(ModelBase):
                 # Set testing data
                 self.testing_data = self.local_dataset[lower_bound:upper_bound, :]
                 self.testing_labels = self.local_labelset[lower_bound:upper_bound, :]
-                # SET THE TRAIN DATA
-                # Combine data before and after the test fold
-                # Dataset
-                train_data_before = self.local_dataset[:lower_bound, :]
-                train_data_after = self.local_dataset[upper_bound:, :]
-                self.training_data = np.vstack((train_data_before, train_data_after))
-                # Labels
-                train_labels_before = self.local_labelset[:lower_bound, :]
-                train_labels_after = self.local_labelset[upper_bound:, :]
-                self.training_labels = np.vstack((train_labels_before, train_labels_after))
+                #if self.ID==0:
+                #print(f"Client{self.ID} TESTING DATA: Mean, var, and norm: {np.mean(self.testing_data), np.var(self.testing_data), np.linalg.norm(self.testing_data)}")
+                ## SET THE TRAIN DATA
+                ## Combine data before and after the test fold
+                ## Dataset
+                #train_data_before = self.local_dataset[:lower_bound, :]
+                #train_data_after = self.local_dataset[upper_bound:, :]
+                #self.training_data = np.vstack((train_data_before, train_data_after))
+                ## Labels
+                #train_labels_before = self.local_labelset[:lower_bound, :]
+                #train_labels_after = self.local_labelset[upper_bound:, :]
+                #self.training_labels = np.vstack((train_labels_before, train_labels_after))
 
                 # SIMULATE THE FIRST DATA STREAM FOR THE STARTING UPDATE
                 ## Eg, set self.V, self.s, etc etc
                 # Find the current fold based on self.current_update
-                current_index = self.update_ix[self.current_update]  # So does this need a -self.update_ix[self.starting_update]??
-                current_fold_index = next(i for i, fold in enumerate(self.folds) if current_index in fold)
-                current_fold = self.folds[current_fold_index]
+                #current_index = self.update_ix[self.current_update]  # So does this need a -self.update_ix[self.starting_update]??
+                #current_fold_index = next(i for i, fold in enumerate(self.folds) if current_index in fold)
+                #current_fold = self.folds[current_fold_index]
                 # Is current_fold different from self.current_fold... 
                 # ## --> It's the actual index value instead of the fold count I think?
                 # Set lower_bound and upper_bound based on the current fold
-                lower_bound = self.update_ix.index(current_fold[0])
-                upper_bound = self.update_ix.index(current_fold[-1]) + 1  # +1 to include the last update
-                self.learning_batch = upper_bound - lower_bound
+                #lower_bound = self.update_ix.index(current_fold[0])
+                #upper_bound = self.update_ix.index(current_fold[-1]) + 1  # +1 to include the last update
+                #self.learning_batch = upper_bound - lower_bound
                 # Get the training data for the current fold
-                train_folds = self.folds[:current_fold_index] + self.folds[current_fold_index+1:]
-                train_updates = [update for fold in train_folds for update in fold]
-                s_temp = np.vstack([self.training_data[self.update_ix.index(update):self.update_ix.index(update)+1, :] 
-                                    for update in train_updates])
+                #train_folds = self.folds[:current_fold_index] + self.folds[current_fold_index+1:]
+                #train_updates = [update for fold in train_folds for update in fold]
+                #s_temp = np.vstack([self.training_data[self.update_ix.index(update):self.update_ix.index(update)+1, :] 
+                #                    for update in train_updates])
+                # NEW VERSION
+                # self.train_update_ix starts at starting_update already!
+                lower_bound = self.train_update_ix[0] - self.update_ix[self.starting_update]
+                upper_bound = self.train_update_ix[1] - self.update_ix[self.starting_update]
+                self.learning_batch = upper_bound - lower_bound
+                s_temp = self.local_dataset[lower_bound:upper_bound, :]
                 # For Maneeshika's code:
-                # TODO: Rewrite this:
-                p_ref_lim = np.vstack([self.training_labels[self.update_ix.index(update):self.update_ix.index(update)+1, :] 
-                               for update in train_updates])
+                #p_ref_lim = np.vstack([self.training_labels[self.update_ix.index(update):self.update_ix.index(update)+1, :] 
+                #               for update in train_updates])
+                p_ref_lim = self.local_labelset[lower_bound:upper_bound, :]
                 # This is the used label
                 self.p_reference = np.transpose(p_ref_lim)
+                if self.ID==0:
+                    pass
 
                 # First, normalize the entire s matrix
                 if self.normalize_EMG:
@@ -250,10 +267,11 @@ class Client(ModelBase):
 
                 if self.ID==0:
                     print(f"KFold {self.current_fold}")
-                    print(f"Update ix's: ({lower_bound_pre_idx}, {upper_bound_pre_idx})")
+                    # Subtract one to convert from bounds to update vals
+                    print(f"Testing updates: ({lower_bound_pre_idx}, {upper_bound_pre_idx-1})")
                     print(f"Actual lower and upper bound values: ({lower_bound}, {upper_bound})")
                     print(f"self.testing_data.shape: ({self.testing_data.shape})")
-                    print(f"self.training_data.shape: ({self.training_data.shape})")
+                    #print(f"self.training_data.shape: ({self.training_data.shape})")
                     #print(f"self.training_data bounds: ({}, {})")
                     print()
             elif self.scenario=="CROSS":
@@ -403,17 +421,20 @@ class Client(ModelBase):
         ## This is sort of fine since it's just the round and doesn't matter that much 
         self.current_round += 1
 
-        if self.current_update==self.final_usable_update_ix:  #17: previously 17 but the last update is super short so I cut it out
-            #print("Maxxed out your update (you are on update 18), continuing training on last update only")
+        if (self.current_update==self.final_usable_update_ix) or (self.train_update_ix is not None and self.current_train_update>=(len(self.train_update_ix)-1)):  #17: previously 17 but the last update is super short so I cut it out
+            print("Maxxed out your update (you are on update 18), continuing training on last update only")
             # Probably ought to track that we maxed out --> LOG SYSTEM
             # We are stopping an update early, so use -3/-2 and not -2/-1 (the last update)
-            lower_bound = (self.update_ix[16])#//2  #Use only the second half of each update
-            upper_bound = self.update_ix[17]
+            # TODO: This is sus with INTRA, although I doubt it reaches it ever
+            if self.scenario=="INTRA":
+                # Should this be -2/-1 or -1/? ...?
+                lower_bound = (self.train_update_ix[-2])
+                upper_bound = self.train_update_ix[-1]
+            else:
+                lower_bound = (self.update_ix[16])
+                upper_bound = self.update_ix[17]
             self.learning_batch = upper_bound - lower_bound
-            # TODO: Make sure the above update to lower_bound and upper_bound gets integrated first
-            ## Otherwise need_to_advance doesnt need to re-run everytime...
             need_to_advance=False
-            # Use another var, like self.ran_before or something...
         elif streaming_method=='full_data':
             lower_bound = self.update_ix[0]  # Starts at 0 and not update 10, for now
             upper_bound = self.update_ix[-1]
@@ -421,7 +442,6 @@ class Client(ModelBase):
             # TODO: need_to_advance shouldn't ever run, once lower_bound and upper_bound have been set once
             need_to_advance=False
         elif streaming_method=='streaming':
-            #if self.global_method=="NOFL":  # AKA Intra-Subject KFCV
             if self.scenario=="INTRA":
                 # Really ought to move this branch back so that the other streaming methods are included too...
                 ## Since this version uses the folds to set the streaming index
@@ -429,11 +449,14 @@ class Client(ModelBase):
                 ### NAH ignore the old versions. We only doing KFCV now
 
                 # If we pass threshold, move on to the next update
-                if (self.current_round!=0) and (self.current_round%self.local_round_threshold==0):
+                ## > 2 since starts at 0 but is immediately incremented to 1 in this func (should not update immediately)
+                if (self.current_round>2) and (self.current_round%self.local_round_threshold==0):
                     self.current_update += 1
+                    self.current_train_update += 1
                     self.update_transition_log.append(self.latest_global_round)
                     if self.verbose==True and self.ID==0:
-                        print(f"Client {self.ID}: New update after lrt passed: (new update, current global round, current local round): {self.current_update, self.latest_global_round, self.current_round}")
+                        # self.current_update here should really be changed...
+                        print(f"Client{self.ID}: New update after lrt passed: (new update, current global round, current local round): {self.current_update, self.latest_global_round, self.current_round}")
                         print()
                     need_to_advance = True
                 #elif self.current_round>2:  # This is the base case
@@ -473,35 +496,46 @@ class Client(ModelBase):
             upper_bound = self.update_ix[self.current_update+1] - self.update_ix[self.starting_update]
             self.learning_batch = upper_bound - lower_bound
             self.current_update += 1
+            self.current_train_update += 1
         else:
             raise ValueError(f'streaming_method ("{streaming_method}") not recognized: this data streaming functionality is not supported')
             
         if need_to_advance:
-            #if self.global_method=="NOFL":  # AKA Intra-Subject KFCV
             if self.scenario=="INTRA":
-                #if "PFA" in self.global_method: ...
+                if "PFA" in self.global_method:
+                    raise ValueError("PFA methods with INTRA are not supported yet!")
                 # Find the current fold based on self.current_update
-                current_index = self.update_ix[self.current_update]
-                current_fold_index = next(i for i, fold in enumerate(self.folds) if current_index in fold)
-                current_fold = self.folds[current_fold_index]
+                #current_index = self.update_ix[self.current_update]
+                #current_fold_index = next(i for i, fold in enumerate(self.folds) if current_index in fold)
+                #current_fold = self.folds[current_fold_index]
                 # Is current_fold different from self.current_fold... 
                 # ## --> It's the actual index value instead of the fold count I think?
                 # Set lower_bound and upper_bound based on the current fold
-                lower_bound = self.update_ix.index(current_fold[0])
-                upper_bound = self.update_ix.index(current_fold[-1]) + 1  # +1 to include the last update
+                #lower_bound = self.update_ix.index(current_fold[0])
+                #upper_bound = self.update_ix.index(current_fold[-1]) + 1  # +1 to include the last update
+                #self.learning_batch = upper_bound - lower_bound
+                ## Get the training data for the current fold
+                #train_folds = self.folds[:current_fold_index] + self.folds[current_fold_index+1:]
+                #train_updates = [update for fold in train_folds for update in fold]
+                #s_temp = np.vstack([self.training_data[self.update_ix.index(update):self.update_ix.index(update)+1, :] 
+                #                    for update in train_updates])
+                # NEW VERSION
+                # Should the 0 be changed to self.current_update... would need to be subtracted by starting_update...
+                lower_bound = self.train_update_ix[self.current_train_update] - self.update_ix[self.starting_update]
+                # This might be a subpar soln... pretty hardcoded in but it doesnt really matter for this dataset I dont think
+                upper_bound = lower_bound + 1200
                 self.learning_batch = upper_bound - lower_bound
-                # Get the training data for the current fold
-                train_folds = self.folds[:current_fold_index] + self.folds[current_fold_index+1:]
-                train_updates = [update for fold in train_folds for update in fold]
-                s_temp = np.vstack([self.training_data[self.update_ix.index(update):self.update_ix.index(update)+1, :] 
-                                    for update in train_updates])
+                s_temp = self.local_dataset[lower_bound:upper_bound, :]
+                #print(f"Client{self.ID} TRAINING DATA UPDATE: Mean, var, and norm: {np.mean(s_temp), np.var(s_temp), np.linalg.norm(s_temp)}")
                 # For Maneeshika's code:
-                # TODO: Rewrite this:
-                p_ref_lim = np.vstack([self.training_labels[self.update_ix.index(update):self.update_ix.index(update)+1, :] 
-                               for update in train_updates])
+                #p_ref_lim = np.vstack([self.training_labels[self.update_ix.index(update):self.update_ix.index(update)+1, :] 
+                #               for update in train_updates])
+                p_ref_lim = self.local_labelset[lower_bound:upper_bound, :]
                 # This is the used label
                 self.p_reference = np.transpose(p_ref_lim)
             else:
+                # TODO: uhhhh where are lower_bound and upper_bound set for the below.........
+                ## They are set in the CROSS section above... but no eqv in INTRA... for now...
                 if "PFA" in self.global_method:
                     mid_point = (lower_bound+upper_bound)//2
                     s_temp = self.training_data[lower_bound:mid_point,:]
@@ -528,6 +562,7 @@ class Client(ModelBase):
                 pca = PCA(n_components=self.PCA_comps)
                 s_normed = pca.fit_transform(s_normed)
             self.s = np.transpose(s_normed)
+            #print(f"Client{self.ID} TRAINING DATA UPDATE: Mean, var, and norm: {np.mean(self.s), np.var(self.s), np.linalg.norm(self.s)}")
             self.F = self.s[:,:-1] # note: truncate F for estimate_decoder
             v_actual = self.w@self.s
             p_actual = np.cumsum(v_actual, axis=1)*self.dt  # Numerical integration of v_actual to get p_actual

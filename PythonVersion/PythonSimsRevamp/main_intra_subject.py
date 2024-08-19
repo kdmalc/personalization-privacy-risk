@@ -18,15 +18,14 @@ from shared_globals import *
 
 
 # GLOBALS
-USE_KFOLDCV = True
-GLOBAL_METHOD = "NOFL"
-OPT_METHOD = 'FULLSCIPYMIN'
-GLOBAL_ROUNDS = 50
+GLOBAL_METHOD = "NOFL"  #FedAvg #PFAFO_GDLS #NOFL
+OPT_METHOD = 'FULLSCIPYMIN'  #FULLSCIPYMIN #MaxiterScipyMin #GD #GDLS --> USE GDLS For FedAvg!
+GLOBAL_ROUNDS = 10
 LR=0.1
 MAX_ITER=None  # Setting to -1 DOES NOT WORK FOR THIS CODE BASE! Use OPT_METHOD to specify that instead...
 NUM_STEPS=1  # This is also basically just local_epochs, since I don't batch. Num_grad_steps
-TEST_SPLIT_TYPE='kfoldcv'
 SCENARIO="INTRA"  # "CROSS" --> Cant be used in this file??
+LOCAL_ROUND_THRESHOLD=1
 
 with open(path+cond0_filename, 'rb') as fp:
     cond0_training_and_labels_lst = pickle.load(fp)
@@ -40,7 +39,7 @@ for fold_idx in range(NUM_KFOLDS):
     
     # Initialize clients for training
     full_client_lst = [Client(i, copy.deepcopy(D_0), OPT_METHOD, cond0_training_and_labels_lst[i], DATA_STREAM, 
-                            scenario=SCENARIO, current_fold=fold_idx, global_method=GLOBAL_METHOD, max_iter=MAX_ITER, 
+                            scenario=SCENARIO, local_round_threshold=LOCAL_ROUND_THRESHOLD, current_fold=fold_idx, global_method=GLOBAL_METHOD, max_iter=MAX_ITER, 
                             num_steps=NUM_STEPS, use_zvel=USE_HITBOUNDS, test_split_type=TEST_SPLIT_TYPE) for i in range(NUM_USERS)]
 
     server_obj = Server(1, copy.deepcopy(D_0), opt_method=OPT_METHOD, global_method=GLOBAL_METHOD, all_clients=full_client_lst)
@@ -91,8 +90,8 @@ for fold_idx in range(NUM_KFOLDS):
     train_loss = cross_val_res_lst[fold_idx][0]
     test_loss = cross_val_res_lst[fold_idx][1]
 
-    plt.plot(train_loss, label=f"Fold{fold_idx} Train")
-    plt.plot(test_loss, label=f"Fold{fold_idx} Test")
+    plt.plot(train_loss, alpha=0.3, label=f"Fold{fold_idx} Train")
+    plt.plot(test_loss, alpha=0.3, label=f"Fold{fold_idx} Test")
 
     running_train_loss += np.array(train_loss)
     running_test_loss += np.array(test_loss)
