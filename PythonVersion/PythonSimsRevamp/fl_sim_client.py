@@ -16,7 +16,7 @@ class Client(ModelBase):
                 availability=1, final_usable_update_ix=17, global_method='FedAvg', max_iter=1, normalize_EMG=True, starting_update=9, 
                 track_cost_components=True, gradient_clipping=False, log_decs=True, val_set=False,
                 clipping_threshold=100, tol=1e-10, lr=1, beta=0.01, track_gradient=True, wprev_global=False, 
-                num_steps=1, use_zvel=False, current_fold=0, 
+                num_steps=1, use_zvel=False, current_fold=0, scenario="", 
                 mix_in_each_steps=False, mix_mixed_SB=False, delay_scaling=0, random_delays=False, download_delay=1, 
                 upload_delay=1, validate_memory_IDs=True, local_round_threshold=50, condition_number=3, 
                 verbose=False, test_split_type='kfoldcv', num_kfolds=5, test_split_frac=0.3):
@@ -134,12 +134,13 @@ class Client(ModelBase):
         self.test_split_frac = test_split_frac
         self.num_kfolds = num_kfolds
         self.val_set = val_set
+        self.scenario = scenario.upper()
 
         if self.test_split_type=="KFOLDCV":
-            if self.global_method=="NOFL":  # AKA Intra-subject KFCV ... maybe should disambiguate these...
+            if self.scenario=="INTRA":
                 # Include these in the init? ...
-                append_leftovers_to_last_fold = False
-                shift_leftovers_across_folds = True
+                append_leftovers_to_last_fold = True
+                shift_leftovers_across_folds = False
                 # Filter update_ix to only include updates 9-16
                 valid_updates = [ix for ix in self.update_ix if starting_update <= self.update_ix.index(ix) < final_usable_update_ix]
                 # THIS SETS THE TESTING FOLD
@@ -147,9 +148,11 @@ class Client(ModelBase):
                     '''Leftover updates are appended to the last fold. Updates are continuous but the last fold will be much bigger...'''
                     # Calculate the number of updates per fold
                     updates_per_fold = len(valid_updates) // self.num_kfolds
+                    if self.ID==1: 
+                        print(f"updates_per_fold: {updates_per_fold}")
                     # Ensure we have enough updates for the specified number of folds
                     assert updates_per_fold > 0, "Not enough valid updates for the specified number of folds"
-                    # Create folds
+                    # Create folds --> THESE ARE THE TEST UPDATES!
                     self.folds = [valid_updates[i:i+updates_per_fold] for i in range(0, len(valid_updates), updates_per_fold)]
                     # If there are leftover updates, add them to the last fold
                     while len(self.folds) > self.num_kfolds:
@@ -158,6 +161,15 @@ class Client(ModelBase):
                         self.folds[-2].extend(self.folds[-1])
                         self.folds.pop()
                     assert len(self.folds) == self.num_kfolds, f"Expected {self.num_kfolds} folds, got {len(self.folds)}"
+                #elif measure_folds_twice:
+                #    '''Set the number of folds ahead of time'''
+                #    # Calculate the number of updates per fold
+                #    updates_per_fold = len(valid_updates) // self.num_kfolds
+                #    # Ensure we have enough updates for the specified number of folds
+                #    assert updates_per_fold > 0, "Not enough valid updates for the specified number of folds"
+                #    # Create folds
+                #    self.folds = [valid_updates[i:i+updates_per_fold] for i in range(0, len(valid_updates), updates_per_fold)]
+                #    assert len(self.folds) == self.num_kfolds, f"Expected {self.num_kfolds} folds, got {len(self.folds)}"
                 elif shift_leftovers_across_folds:
                     '''Purpose of this code is to shift/push updates to earlier folds, to maintain contintuity, while making test folds more even in size'''
                     # TODO: This has not been validated at all...
@@ -254,7 +266,7 @@ class Client(ModelBase):
                     print(f"self.training_data.shape: ({self.training_data.shape})")
                     #print(f"self.training_data bounds: ({}, {})")
                     print()
-            else:
+            elif self.scenario=="CROSS":
                 self.test_split_idx = -1
                 # Setting the testing set to the whole dataset so that it can be extracted
                 ## If this is a training cliet this will be overwritten by other client's testing dataset
@@ -419,25 +431,27 @@ class Client(ModelBase):
             # TODO: need_to_advance shouldn't ever run, once lower_bound and upper_bound have been set once
             need_to_advance=False
         elif streaming_method=='streaming':
-            if self.global_method=="NOFL":  # AKA Intra-Subject KFCV
+            #if self.global_method=="NOFL":  # AKA Intra-Subject KFCV
+            if self.scenario=="INTRA":
                 # Really ought to move this branch back so that the other streaming methods are included too...
                 ## Since this version uses the folds to set the streaming index
                 ## Eg the existing lower_bounds and upper_bounds would be incorrect (might be incorrect for other versions even wtihout kfcv...)
+                ### NAH ignore the old versions. We only doing KFCV now
 
                 # If we pass threshold, move on to the next update
-                if self.current_round%self.local_round_threshold==0:
+                if (self.current_round!=0) and (self.current_round%self.local_round_threshold==0):
                     self.current_update += 1
                     self.update_transition_log.append(self.latest_global_round)
                     if self.verbose==True and self.ID==0:
                         print(f"Client {self.ID}: New update after lrt passed: (new update, current global round, current local round): {self.current_update, self.latest_global_round, self.current_round}")
                         print()
                     need_to_advance = True
-                elif self.current_round>2:  # This is the base case
-                    need_to_advance = False
+                #elif self.current_round>2:  # This is the base case
+                #    need_to_advance = False
                 else:  # This is for the init case (current round is 0 or 1)
                     # This should be False actually, I don't need it to advance immediately...
                     need_to_advance = False
-            else:
+            elif self.scenario=="CROSS":
                 # If we pass threshold, move on to the next update
                 if self.current_round%self.local_round_threshold==0:
                     self.current_update += 1

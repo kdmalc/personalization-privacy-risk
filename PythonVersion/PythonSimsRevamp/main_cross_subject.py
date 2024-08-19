@@ -20,12 +20,13 @@ from shared_globals import *
 
 # GLOBALS
 USE_KFOLDCV = True
-GLOBAL_METHOD = "PFAFO_GDLS"  #FedAvg #PFAFO_GDLS
+GLOBAL_METHOD = "FedAvg"  #FedAvg #PFAFO_GDLS
 # NoFL
 # PFAFO (without GDLS) doesnt work / takes many iterations (curves are flatish) --> Reduce this to just be PFA (FO GDLS is only option)
 OPT_METHOD = 'GDLS'  #FULLSCIPYMIN #MaxiterScipyMin #GD #GDLS --> USE GDLS For FedAvg!
 # ^ This gets ignored completely when using PFA
 NUM_STEPS=3  # This is basically just local_epochs. Num_grad_steps
+SCENARIO="CROSS"  # "INTRA" --> Cant be used in this file??
 
 GLOBAL_ROUNDS = 50
 BETA=0.01  # Not used with GDLS? Only pertains to PFA regardless
@@ -61,11 +62,11 @@ for fold_idx, (train_ids, test_ids) in enumerate(folds):
     
     # Initialize clients for training
     train_clients = [Client(i, copy.deepcopy(D_0), OPT_METHOD, cond0_training_and_labels_lst[i], DATA_STREAM,
-                            beta=BETA, lr=LR, current_fold=fold_idx, num_kfolds=NUM_KFOLDS, global_method=GLOBAL_METHOD, max_iter=MAX_ITER, 
+                            beta=BETA, scenario=SCENARIO, lr=LR, current_fold=fold_idx, num_kfolds=NUM_KFOLDS, global_method=GLOBAL_METHOD, max_iter=MAX_ITER, 
                             num_steps=NUM_STEPS, use_zvel=USE_HITBOUNDS, test_split_type=TEST_SPLIT_TYPE) for i in train_ids]
     # Initialize clients for testing
     test_clients = [Client(i, copy.deepcopy(D_0), OPT_METHOD, cond0_training_and_labels_lst[i], DATA_STREAM,
-                           beta=BETA, lr=LR, current_fold=fold_idx, availability=False, val_set=True, num_kfolds=NUM_KFOLDS, global_method=GLOBAL_METHOD, max_iter=MAX_ITER, 
+                           beta=BETA, scenario=SCENARIO, lr=LR, current_fold=fold_idx, availability=False, val_set=True, num_kfolds=NUM_KFOLDS, global_method=GLOBAL_METHOD, max_iter=MAX_ITER, 
                            num_steps=NUM_STEPS, use_zvel=USE_HITBOUNDS, test_split_type=TEST_SPLIT_TYPE) for i in test_ids]
 
     testing_datasets_lst = []
@@ -91,10 +92,11 @@ for fold_idx, (train_ids, test_ids) in enumerate(folds):
 
     if PLOT_EACH_FOLD:
         plt.figure()  # Create a new figure
-        plt.plot(server_obj.local_train_error_log, label=f"f{fold_idx} local train")
-        plt.plot(server_obj.local_test_error_log, label=f"f{fold_idx} local test")
-        plt.plot(server_obj.global_train_error_log, label=f"f{fold_idx} global train")
-        plt.plot(server_obj.global_test_error_log, label=f"f{fold_idx} global test")
+        plt.plot(server_obj.local_train_error_log, alpha=0.5, label=f"f{fold_idx} local train")
+        plt.plot(server_obj.local_test_error_log, alpha=0.5, label=f"f{fold_idx} local test")
+        if server_obj.global_method!="NOFL":
+            plt.plot(server_obj.global_train_error_log, alpha=0.5, label=f"f{fold_idx} global train")
+            plt.plot(server_obj.global_test_error_log, alpha=0.5, label=f"f{fold_idx} global test")
         plt.xlabel("Training Round")
         plt.ylabel("Loss")
         plt.title(f"Train/Test Local/Global Error Curves For Fold {fold_idx}")
@@ -124,16 +126,16 @@ for fold_idx in range(NUM_KFOLDS):
     train_loss = cross_val_res_lst[fold_idx][0]
     test_loss = cross_val_res_lst[fold_idx][1]
 
-    plt.plot(train_loss, label=f"Fold{fold_idx} Train")
-    plt.plot(test_loss, label=f"Fold{fold_idx} Test")
+    plt.plot(train_loss, alpha=0.5, label=f"Fold{fold_idx} Train")
+    plt.plot(test_loss, alpha=0.5, label=f"Fold{fold_idx} Test")
 
     running_train_loss += np.array(train_loss)
     running_test_loss += np.array(test_loss)
 # Average to get cross val curve:
 avg_cv_train_loss = running_train_loss / NUM_KFOLDS
 avg_cv_test_loss = running_test_loss / NUM_KFOLDS
-plt.plot(avg_cv_train_loss,  label="Avg CrossVal Train")
-plt.plot(avg_cv_test_loss,  label="Avg CrossVal Test")
+plt.plot(avg_cv_train_loss, linewidth=2, label="Avg CrossVal Train")
+plt.plot(avg_cv_test_loss, linewidth=2, label="Avg CrossVal Test")
 plt.xlabel("Training Round")
 plt.ylabel("Loss")
 plt.title("Train/Test Local Error Curves")

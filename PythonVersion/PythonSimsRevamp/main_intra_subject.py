@@ -26,6 +26,7 @@ LR=0.1
 MAX_ITER=None  # Setting to -1 DOES NOT WORK FOR THIS CODE BASE! Use OPT_METHOD to specify that instead...
 NUM_STEPS=1  # This is also basically just local_epochs, since I don't batch. Num_grad_steps
 TEST_SPLIT_TYPE='kfoldcv'
+SCENARIO="INTRA"  # "CROSS" --> Cant be used in this file??
 
 with open(path+cond0_filename, 'rb') as fp:
     cond0_training_and_labels_lst = pickle.load(fp)
