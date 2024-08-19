@@ -19,13 +19,13 @@ from shared_globals import *
 
 # GLOBALS
 GLOBAL_METHOD = "NOFL"  #FedAvg #PFAFO_GDLS #NOFL
-OPT_METHOD = 'FULLSCIPYMIN'  #FULLSCIPYMIN #MaxiterScipyMin #GD #GDLS --> USE GDLS For FedAvg!
-GLOBAL_ROUNDS = 10
+OPT_METHOD = 'FULLSCIPYMIN'  #FULLSCIPYMIN #GDLS
+GLOBAL_ROUNDS = 50
 LR=0.1
 MAX_ITER=None  # Setting to -1 DOES NOT WORK FOR THIS CODE BASE! Use OPT_METHOD to specify that instead...
-NUM_STEPS=1  # This is also basically just local_epochs, since I don't batch. Num_grad_steps
+NUM_STEPS=3  # This is also basically just local_epochs, since I don't batch. Num_grad_steps
 SCENARIO="INTRA"  # "CROSS" --> Cant be used in this file??
-LOCAL_ROUND_THRESHOLD=1
+LOCAL_ROUND_THRESHOLD=20
 
 with open(path+cond0_filename, 'rb') as fp:
     cond0_training_and_labels_lst = pickle.load(fp)

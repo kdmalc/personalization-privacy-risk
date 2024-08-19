@@ -201,50 +201,46 @@ class Client(ModelBase):
                 # Set testing data
                 self.testing_data = self.local_dataset[lower_bound:upper_bound, :]
                 self.testing_labels = self.local_labelset[lower_bound:upper_bound, :]
-                #if self.ID==0:
-                #print(f"Client{self.ID} TESTING DATA: Mean, var, and norm: {np.mean(self.testing_data), np.var(self.testing_data), np.linalg.norm(self.testing_data)}")
-                ## SET THE TRAIN DATA
-                ## Combine data before and after the test fold
-                ## Dataset
-                #train_data_before = self.local_dataset[:lower_bound, :]
-                #train_data_after = self.local_dataset[upper_bound:, :]
-                #self.training_data = np.vstack((train_data_before, train_data_after))
-                ## Labels
-                #train_labels_before = self.local_labelset[:lower_bound, :]
-                #train_labels_after = self.local_labelset[upper_bound:, :]
-                #self.training_labels = np.vstack((train_labels_before, train_labels_after))
 
                 # SIMULATE THE FIRST DATA STREAM FOR THE STARTING UPDATE
                 ## Eg, set self.V, self.s, etc etc
-                # Find the current fold based on self.current_update
-                #current_index = self.update_ix[self.current_update]  # So does this need a -self.update_ix[self.starting_update]??
-                #current_fold_index = next(i for i, fold in enumerate(self.folds) if current_index in fold)
-                #current_fold = self.folds[current_fold_index]
-                # Is current_fold different from self.current_fold... 
-                # ## --> It's the actual index value instead of the fold count I think?
-                # Set lower_bound and upper_bound based on the current fold
-                #lower_bound = self.update_ix.index(current_fold[0])
-                #upper_bound = self.update_ix.index(current_fold[-1]) + 1  # +1 to include the last update
-                #self.learning_batch = upper_bound - lower_bound
-                # Get the training data for the current fold
-                #train_folds = self.folds[:current_fold_index] + self.folds[current_fold_index+1:]
-                #train_updates = [update for fold in train_folds for update in fold]
-                #s_temp = np.vstack([self.training_data[self.update_ix.index(update):self.update_ix.index(update)+1, :] 
-                #                    for update in train_updates])
-                # NEW VERSION
                 # self.train_update_ix starts at starting_update already!
                 lower_bound = self.train_update_ix[0] - self.update_ix[self.starting_update]
-                upper_bound = self.train_update_ix[1] - self.update_ix[self.starting_update]
-                self.learning_batch = upper_bound - lower_bound
-                s_temp = self.local_dataset[lower_bound:upper_bound, :]
-                # For Maneeshika's code:
-                #p_ref_lim = np.vstack([self.training_labels[self.update_ix.index(update):self.update_ix.index(update)+1, :] 
-                #               for update in train_updates])
-                p_ref_lim = self.local_labelset[lower_bound:upper_bound, :]
-                # This is the used label
-                self.p_reference = np.transpose(p_ref_lim)
-                if self.ID==0:
-                    pass
+                upper_bound = lower_bound + 1200
+
+                if "PFA" in self.global_method:
+                    mid_point = (lower_bound+upper_bound)//2
+                    self.learning_batch = mid_point - lower_bound
+
+                    s_temp = self.local_dataset[lower_bound:mid_point, :]
+                    s_temp2 = self.local_dataset[mid_point:upper_bound, :]
+                    p_ref_lim = self.local_labelset[lower_bound:mid_point, :]
+                    p_ref_lim2 = self.local_labelset[mid_point:upper_bound, :]
+                    self.p_reference = np.transpose(p_ref_lim)
+                    self.p_reference2 = np.transpose(p_ref_lim2)
+
+                    # First, normalize the entire s matrix
+                    if self.normalize_EMG:
+                        s_normed2 = s_temp2/np.amax(s_temp2)
+                    else:
+                        s_normed2 = s_temp2
+                    # Now do PCA unless it is set to 64 (AKA the default num channels i.e. no reduction)
+                    # Also probably ought to find a global transform if possible so I don't recompute it every time...
+                    if self.PCA_comps!=self.pca_channel_default:  
+                        pca = PCA(n_components=self.PCA_comps)
+                        s_normed2 = pca.fit_transform(s_normed2)
+                    self.s2 = np.transpose(s_normed2)
+                    self.F2 = self.s2[:,:-1] # note: truncate F for estimate_decoder
+                    v_actual2 = self.w@self.s2
+                    p_actual2 = np.cumsum(v_actual2, axis=1)*self.dt  # Numerical integration of v_actual to get p_actual
+                    self.V2 = (self.p_reference2 - p_actual2)*self.dt
+                else:
+                    self.learning_batch = upper_bound - lower_bound
+                    s_temp = self.local_dataset[lower_bound:upper_bound, :]
+                    # For Maneeshika's code:
+                    p_ref_lim = self.local_labelset[lower_bound:upper_bound, :]
+                    # This is the used label
+                    self.p_reference = np.transpose(p_ref_lim)
 
                 # First, normalize the entire s matrix
                 if self.normalize_EMG:
@@ -260,9 +256,6 @@ class Client(ModelBase):
                 self.F = self.s[:,:-1] # note: truncate F for estimate_decoder
                 v_actual = self.w@self.s
                 p_actual = np.cumsum(v_actual, axis=1)*self.dt  # Numerical integration of v_actual to get p_actual
-                
-                # Original code
-                # self.V must be set ONLY WITHIN TRAINING
                 self.V = (self.p_reference - p_actual)*self.dt
 
                 if self.ID==0:
@@ -502,38 +495,48 @@ class Client(ModelBase):
             
         if need_to_advance:
             if self.scenario=="INTRA":
-                if "PFA" in self.global_method:
-                    raise ValueError("PFA methods with INTRA are not supported yet!")
-                # Find the current fold based on self.current_update
-                #current_index = self.update_ix[self.current_update]
-                #current_fold_index = next(i for i, fold in enumerate(self.folds) if current_index in fold)
-                #current_fold = self.folds[current_fold_index]
-                # Is current_fold different from self.current_fold... 
-                # ## --> It's the actual index value instead of the fold count I think?
-                # Set lower_bound and upper_bound based on the current fold
-                #lower_bound = self.update_ix.index(current_fold[0])
-                #upper_bound = self.update_ix.index(current_fold[-1]) + 1  # +1 to include the last update
-                #self.learning_batch = upper_bound - lower_bound
-                ## Get the training data for the current fold
-                #train_folds = self.folds[:current_fold_index] + self.folds[current_fold_index+1:]
-                #train_updates = [update for fold in train_folds for update in fold]
-                #s_temp = np.vstack([self.training_data[self.update_ix.index(update):self.update_ix.index(update)+1, :] 
-                #                    for update in train_updates])
-                # NEW VERSION
                 # Should the 0 be changed to self.current_update... would need to be subtracted by starting_update...
                 lower_bound = self.train_update_ix[self.current_train_update] - self.update_ix[self.starting_update]
                 # This might be a subpar soln... pretty hardcoded in but it doesnt really matter for this dataset I dont think
                 upper_bound = lower_bound + 1200
-                self.learning_batch = upper_bound - lower_bound
-                s_temp = self.local_dataset[lower_bound:upper_bound, :]
-                #print(f"Client{self.ID} TRAINING DATA UPDATE: Mean, var, and norm: {np.mean(s_temp), np.var(s_temp), np.linalg.norm(s_temp)}")
-                # For Maneeshika's code:
-                #p_ref_lim = np.vstack([self.training_labels[self.update_ix.index(update):self.update_ix.index(update)+1, :] 
-                #               for update in train_updates])
-                p_ref_lim = self.local_labelset[lower_bound:upper_bound, :]
-                # This is the used label
-                self.p_reference = np.transpose(p_ref_lim)
-            else:
+
+                if "PFA" in self.global_method:
+                    mid_point = (lower_bound+upper_bound)//2
+                    self.learning_batch = mid_point - lower_bound
+
+                    s_temp = self.local_dataset[lower_bound:mid_point, :]
+                    s_temp2 = self.local_dataset[mid_point:upper_bound, :]
+                    p_ref_lim = self.local_labelset[lower_bound:mid_point, :]
+                    p_ref_lim2 = self.local_labelset[mid_point:upper_bound, :]
+                    self.p_reference = np.transpose(p_ref_lim)
+                    self.p_reference2 = np.transpose(p_ref_lim2)
+
+                    # First, normalize the entire s matrix
+                    if self.normalize_EMG:
+                        s_normed2 = s_temp2/np.amax(s_temp2)
+                    else:
+                        s_normed2 = s_temp2
+                    # Now do PCA unless it is set to 64 (AKA the default num channels i.e. no reduction)
+                    # Also probably ought to find a global transform if possible so I don't recompute it every time...
+                    if self.PCA_comps!=self.pca_channel_default:  
+                        pca = PCA(n_components=self.PCA_comps)
+                        s_normed2 = pca.fit_transform(s_normed2)
+                    self.s2 = np.transpose(s_normed2)
+                    self.F2 = self.s2[:,:-1] # note: truncate F for estimate_decoder
+                    v_actual2 = self.w@self.s2
+                    p_actual2 = np.cumsum(v_actual2, axis=1)*self.dt  # Numerical integration of v_actual to get p_actual
+                    self.V2 = (self.p_reference2 - p_actual2)*self.dt
+                else:
+                    self.learning_batch = upper_bound - lower_bound
+                    s_temp = self.local_dataset[lower_bound:upper_bound, :]
+                    #print(f"Client{self.ID} TRAINING DATA UPDATE: Mean, var, and norm: {np.mean(s_temp), np.var(s_temp), np.linalg.norm(s_temp)}")
+                    # For Maneeshika's code:
+                    #p_ref_lim = np.vstack([self.training_labels[self.update_ix.index(update):self.update_ix.index(update)+1, :] 
+                    #               for update in train_updates])
+                    p_ref_lim = self.local_labelset[lower_bound:upper_bound, :]
+                    # This is the used label
+                    self.p_reference = np.transpose(p_ref_lim)
+            elif self.scenario=="CROSS":
                 # TODO: uhhhh where are lower_bound and upper_bound set for the below.........
                 ## They are set in the CROSS section above... but no eqv in INTRA... for now...
                 if "PFA" in self.global_method:
