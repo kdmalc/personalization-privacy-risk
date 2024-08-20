@@ -1,9 +1,6 @@
 import numpy as np
 import random
 import copy
-#from matplotlib import pyplot as plt
-#import time
-#import pickle
 from datetime import datetime
 import os
 import h5py
@@ -70,10 +67,6 @@ class Server(ModelBase):
         self.paramtxt_file_path = os.path.join(self.trial_result_path, "param_log.txt")
         if not os.path.exists(self.trial_result_path):
             os.makedirs(self.trial_result_path)
-
-        # TODO: Remove these?
-        self.init_lst = [self.log_init]*self.num_train_clients  # This is some  placeholder reference value that isn't even up to date...
-        self.validate_memory_IDs = validate_memory_IDs  # Remove this entirely?
         
                 
     # Main Loop
@@ -207,15 +200,11 @@ class Server(ModelBase):
         for my_client in self.chosen_clients_lst:
             summed_num_datapoints += my_client.learning_batch
         # Aggregate local model weights, weighted by normalized local learning rate
+        ## Learning rate or number of datapoints? I believe it is number of datapoints, as implemented
         aggr_w = np.zeros((2, self.PCA_comps))
         for my_client in self.chosen_clients_lst:
             aggr_w += (my_client.learning_batch/summed_num_datapoints) * my_client.w
-
-        # This would be the place to do smoothbatch if we wanted to do it on a global level
-        # Right now the global decoders are essentially independent
         
-        #print(np.sum(self.w-aggr_w))
-        #assert(np.sum(self.w-aggr_w) != 0)
         self.w = aggr_w
 
 
@@ -305,7 +294,7 @@ class Server(ModelBase):
                     hf.create_dataset('local_test_error_log', data=self.local_test_error_log)
                     hf.create_dataset('local_train_error_log', data=self.local_train_error_log)
 
-                # TODO: this hasn't been implemented yet...
+                # TODO: This feature got removed... 
                 if self.sequential:
                     hf.create_dataset('curr_live_rs_test_loss', data=self.curr_live_rs_test_loss)
                     hf.create_dataset('prev_live_rs_test_loss', data=self.prev_live_rs_test_loss)

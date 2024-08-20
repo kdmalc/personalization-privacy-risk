@@ -22,15 +22,15 @@ from shared_globals import *
 GLOBAL_METHOD = "PFAFO_GDLS"  #FedAvg #PFAFO_GDLS #NOFL
 OPT_METHOD = 'GDLS'  #FULLSCIPYMIN #MaxiterScipyMin #GD #GDLS --> USE GDLS For FedAvg!
 # ^ This gets ignored completely when using PFA
-NUM_STEPS=3  # This is basically just local_epochs. Num_grad_steps
+NUM_STEPS=1  # This is basically just local_epochs. Num_grad_steps
 SCENARIO="CROSS"  # "INTRA" --> Cant be used in this file??
 
-GLOBAL_ROUNDS = 100
+GLOBAL_ROUNDS = 75
 BETA=0.01  # Not used with GDLS? Only pertains to PFA regardless
 LR=1  # Not used with GDLS?
-MAX_ITER=1  # For scipy. Set to -1 for full, otherwise stay with 1
+MAX_ITER=3  # For scipy. Set to -1 for full, otherwise stay with 1
 # ^ Do I need to pass this in? Is that not controlled by OPT_METHOD? ...
-LOCAL_ROUND_THRESHOLD=75
+LOCAL_ROUND_THRESHOLD=20
 
 with open(path+cond0_filename, 'rb') as fp:
     cond0_training_and_labels_lst = pickle.load(fp)

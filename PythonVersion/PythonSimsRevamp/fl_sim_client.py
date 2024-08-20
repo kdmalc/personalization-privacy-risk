@@ -43,6 +43,7 @@ class Client(ModelBase):
         self.chosen_status = 0
         self.latest_global_round = 0
         self.update_transition_log = []
+        self.client_test_loss_log = []
         self.normalize_EMG = normalize_EMG
 
         # Sentinel Values
@@ -54,14 +55,14 @@ class Client(ModelBase):
 
         self.dt = 1.0/60.0
         self.lr = lr  # Learning rate
-        self.beta = beta # PFA 2nd step learning rate
+        self.beta = beta # PFA 2nd step learning rate (not used as of now...)
         # Round minimization output to the nearest int or keep as a float?  Don't need arbitrary precision
         self.round2int = False
         self.max_iter = max_iter
         
         # Maneeshika Code:
         self.use_zvel = use_zvel
-        self.hit_bound = 0
+        self.hit_bound = 0  # This is just initializing it to 0 (eg no hits yet)
         
         # FL CLASS STUFF
         # Availability for training
@@ -810,8 +811,6 @@ class Client(ModelBase):
             test_log = self.local_test_error_log
         elif which=='global':
             test_log = self.global_test_error_log
-        elif which=='pers':
-            test_log = self.pers_test_error_log
         else:
             raise ValueError('test_metrics which does not exist. Must be local, global, or pers')
             
@@ -829,6 +828,7 @@ class Client(ModelBase):
                 running_test_loss += batch_loss * batch_samples  # Accumulate weighted loss by number of samples in batch
                 running_num_samples += batch_samples
             normalized_test_loss = running_test_loss / running_num_samples  # Normalize by total number of samples
+            self.client_test_loss_log.append(normalized_test_loss)
             test_log.append(normalized_test_loss)
         else:
             # TODO: Ensure that this is supposed to be D@s and not D@F...
@@ -840,6 +840,7 @@ class Client(ModelBase):
             total_samples = self.F_test.shape[1]  # Shape is (64, 1201ish) AKA (self.PCA_comps, 1201ish)
             assert(total_samples!=self.PCA_comps)
             normalized_test_loss = test_loss / total_samples  # Normalize by the number of samples
+            self.client_test_loss_log.append(normalized_test_loss)
             test_log.append(normalized_test_loss)
         
         # This was returning V_test for some reason
@@ -890,3 +891,4 @@ class Client(ModelBase):
         # This was returning V for some reason
         ## I have None as a placeholder for now, maybe I'll return training samples? But it already has access to that...
         return normalized_train_loss, None
+
