@@ -128,19 +128,16 @@ class Server(ModelBase):
         for client_idx, my_client in enumerate(self.train_clients): # Eg all train-able clients (no witheld val clients from kfoldcv)
             # Reset all clients so no one is chosen for the next round
             my_client.chosen_status = 0
+            
             # test_metrics for all clients
+            local_test_loss, _ = my_client.test_metrics(my_client.w, 'local')
+            local_train_loss, _ = my_client.train_metrics(my_client.w, 'local')
             if self.global_method=='FEDAVG' or 'PFA' in self.global_method:
                 global_test_loss, _ = my_client.test_metrics(self.w, 'global')
-                local_test_loss, _ = my_client.test_metrics(my_client.w, 'local')
-
                 global_train_loss, _ = my_client.train_metrics(self.w, 'global')
-                local_train_loss, _ = my_client.train_metrics(my_client.w, 'local')
             elif self.global_method=='NOFL':
                 global_test_loss = 0
-                local_test_loss, _ = my_client.train_metrics(my_client.w, 'local') 
-
                 global_train_loss = 0
-                local_train_loss, _ = my_client.train_metrics(my_client.w, 'local') 
             
             if client_idx!=0:
                 running_global_test_loss += global_test_loss

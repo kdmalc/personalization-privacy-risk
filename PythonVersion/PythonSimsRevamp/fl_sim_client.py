@@ -43,7 +43,6 @@ class Client(ModelBase):
         self.chosen_status = 0
         self.latest_global_round = 0
         self.update_transition_log = []
-        self.client_test_loss_log = []
         self.normalize_EMG = normalize_EMG
 
         # Sentinel Values
@@ -828,7 +827,7 @@ class Client(ModelBase):
                 running_test_loss += batch_loss * batch_samples  # Accumulate weighted loss by number of samples in batch
                 running_num_samples += batch_samples
             normalized_test_loss = running_test_loss / running_num_samples  # Normalize by total number of samples
-            self.client_test_loss_log.append(normalized_test_loss)
+            #self.client_test_loss_log.append(normalized_test_loss)
             test_log.append(normalized_test_loss)
         else:
             # TODO: Ensure that this is supposed to be D@s and not D@F...
@@ -840,7 +839,7 @@ class Client(ModelBase):
             total_samples = self.F_test.shape[1]  # Shape is (64, 1201ish) AKA (self.PCA_comps, 1201ish)
             assert(total_samples!=self.PCA_comps)
             normalized_test_loss = test_loss / total_samples  # Normalize by the number of samples
-            self.client_test_loss_log.append(normalized_test_loss)
+            #self.client_test_loss_log.append(normalized_test_loss)
             test_log.append(normalized_test_loss)
         
         # This was returning V_test for some reason
