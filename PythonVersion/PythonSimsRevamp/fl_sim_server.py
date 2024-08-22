@@ -232,6 +232,7 @@ class Server(ModelBase):
         param_log_str = (
             "BASE\n"
             f"algorithm = {self.global_method}\n"
+            f"scenario = {self.all_clients[0].scenario}\n"
             #f"model = {self.model}\n"  # TODO: Make this return/print a string...
             "\n\nMODEL HYPERPARAMETERS\n"
             f"lambdaF = {self.alphaF}\n"
@@ -247,6 +248,9 @@ class Server(ModelBase):
             f"pca_channels = {self.PCA_comps}\n"
             #f"(model) input_size = {self.input_size}\n"
             #f"(model) output_size = {self.output_size}\n"
+            f"learning rate (only used with GD) = {self.all_clients[0].lr}\n"
+            f"max iter (only used with scipy) = {self.all_clients[0].max_iter}\n"
+            f"num gradient steps / epochs = {self.all_clients[0].num_steps}\n"
             "\n\nTESTING\n"
             f"test_split_fraction = {self.test_split_frac}\n"
             f"num_kfolds = {self.num_kfolds}\n")

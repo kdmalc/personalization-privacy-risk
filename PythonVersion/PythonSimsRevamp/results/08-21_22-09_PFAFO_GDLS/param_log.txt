@@ -1,14 +1,18 @@
 BASE
-algorithm = NOFL
+algorithm = PFAFO_GDLS
+scenario = INTRA
 
 
 MODEL HYPERPARAMETERS
 lambdaF = 0.0
 lambdaD = 0.0001
 lambdaE = 1e-06
-global_rounds = 20
-optimizer = FULLSCIPYMIN
+global_rounds = 100
+optimizer = GDLS
 pca_channels = 64
+learning rate (only used with GD) = 1
+max iter (only used with scipy) = None
+num gradient steps / epochs = 3
 
 
 TESTING
@@ -21,10 +25,14 @@ sequential = False
 
 
 FEDERATED LEARNING PARAMS
-local_round_threshold = 5
+local_round_threshold = 20
 
 
 SIMULATION PARAMS
 starting_update = 9
 total effective clients = 14
 smoothbatch_lr = 0.75
+
+
+PERFEDAVG PARAMS
+beta = 0.01

@@ -23,7 +23,7 @@ OPT_METHOD = 'FULLSCIPYMIN' if GLOBAL_METHOD=="NOFL" else 'GDLS'
 GLOBAL_ROUNDS = 20 if GLOBAL_METHOD=="NOFL" else 100
 LR=0.1
 MAX_ITER=None  # Setting to -1 DOES NOT WORK FOR THIS CODE BASE! Use OPT_METHOD to specify that instead...
-NUM_STEPS=1
+NUM_STEPS=3
 # ^ This is also basically just local_epochs, since I don't batch. Num_grad_steps
 SCENARIO="INTRA"  # "CROSS" cant be used in this file!
 LOCAL_ROUND_THRESHOLD = 5 if GLOBAL_METHOD=="NOFL" else 20
@@ -82,11 +82,10 @@ for fold_idx in range(NUM_KFOLDS):
         cross_val_res_lst[fold_idx][2][cli_idx] = copy.deepcopy(cli.local_test_error_log)
 
     #server_obj.save_results_h5(save_cost_func_comps=False, save_gradient=False)
-    #server_obj.save_results_h5(save_cost_func_comps=False, save_gradient=False)
     # Save the model for the current fold
     if GLOBAL_METHOD.upper()!="NOFL":
         print("Saving server's final (global) model")
-        dir_path = os.path.join(model_saving_dir, server_obj.str_current_datetime, GLOBAL_METHOD)
+        dir_path = os.path.join(model_saving_dir, server_obj.str_current_datetime+"_"+GLOBAL_METHOD)
         # Create the directory if it doesn't exist
         os.makedirs(dir_path, exist_ok=True)
         np.save(os.path.join(dir_path, f'servers_final_model_fold{fold_idx}.npy'), server_obj.w)
@@ -107,8 +106,8 @@ for fold_idx in range(NUM_KFOLDS):
 # Average to get cross val curve:
 avg_cv_train_loss = running_train_loss / NUM_KFOLDS
 avg_cv_test_loss = running_test_loss / NUM_KFOLDS
-plt.plot(avg_cv_train_loss,  label="Avg CrossVal Train")
-plt.plot(avg_cv_test_loss,  label="Avg CrossVal Test")
+plt.plot(avg_cv_train_loss, linewidth=2, label="Avg CrossVal Train")
+plt.plot(avg_cv_test_loss, linewidth=2, label="Avg CrossVal Test")
 plt.xlabel("Training Round")
 plt.ylabel("Loss")
 plt.title("Train/Test Local Error Curves")

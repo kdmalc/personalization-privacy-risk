@@ -20,17 +20,17 @@ from shared_globals import *
 
 # GLOBALS
 GLOBAL_METHOD = "PFAFO_GDLS"  #FedAvg #PFAFO_GDLS #NOFL
-OPT_METHOD = 'GDLS'  #FULLSCIPYMIN #MaxiterScipyMin #GD #GDLS --> USE GDLS For FedAvg!
+OPT_METHOD = 'FULLSCIPYMIN' if GLOBAL_METHOD=="NOFL" else 'GDLS'
 # ^ This gets ignored completely when using PFA
 NUM_STEPS=1  # This is basically just local_epochs. Num_grad_steps
-SCENARIO="CROSS"  # "INTRA" --> Cant be used in this file??
+SCENARIO = "CROSS"  # "INTRA" cant be used in this file!
+GLOBAL_ROUNDS = 20 if GLOBAL_METHOD=="NOFL" else 100
+LOCAL_ROUND_THRESHOLD = 5 if GLOBAL_METHOD=="NOFL" else 20
 
-GLOBAL_ROUNDS = 75
 BETA=0.01  # Not used with GDLS? Only pertains to PFA regardless
 LR=1  # Not used with GDLS?
-MAX_ITER=3  # For scipy. Set to -1 for full, otherwise stay with 1
+MAX_ITER=None  # For scipy. Set to -1 for full, otherwise stay with 1
 # ^ Do I need to pass this in? Is that not controlled by OPT_METHOD? ...
-LOCAL_ROUND_THRESHOLD=20
 
 with open(path+cond0_filename, 'rb') as fp:
     cond0_training_and_labels_lst = pickle.load(fp)
@@ -45,13 +45,13 @@ kf = KFold(n_splits=k)
 # Assuming cond0_training_and_labels_lst is a list of labels for 14 clients
 user_ids = list(range(14))
 folds = list(kf.split(user_ids))
+
 #cross_val_res_lst = [[0, 0]]*NUM_KFOLDS
 # ^ THIS IS BAD CODE! 
 ## creates a list of references to the same inner list. 
 ## This means that when you modify one element, all elements change.
 ## Instead, use list comprehension:
-cross_val_res_lst = [[0, 0] for _ in range(NUM_KFOLDS)]
-
+cross_val_res_lst = [[0, 0, 0] for _ in range(NUM_KFOLDS)]
 for fold_idx, (train_ids, test_ids) in enumerate(folds):
     print(f"Fold {fold_idx+1}/{k}")
     print(f"{len(train_ids)} Train_IDs: {train_ids}")
@@ -75,11 +75,12 @@ for fold_idx, (train_ids, test_ids) in enumerate(folds):
     full_client_lst = train_clients+test_clients
 
     server_obj = Server(1, copy.deepcopy(D_0), opt_method=OPT_METHOD, global_method=GLOBAL_METHOD, all_clients=full_client_lst)
+    # Add these to the init func params...
     server_obj.current_fold = fold_idx
     server_obj.global_rounds = GLOBAL_ROUNDS
     for i in range(GLOBAL_ROUNDS):
-        if i % 10 == 0:
-            print(f"Round {i} of {GLOBAL_ROUNDS}")
+        #if i % 10 == 0:
+        #    print(f"Round {i} of {GLOBAL_ROUNDS}")
 
         server_obj.execute_FL_loop()
 
@@ -102,16 +103,20 @@ for fold_idx, (train_ids, test_ids) in enumerate(folds):
         plt.show()
 
     # Record results
-    # copy.deepcopy didn't fix it... must be upstream...
+    ## Idk if I really need to be using deepcopy here...
     cross_val_res_lst[fold_idx][0] = copy.deepcopy(server_obj.local_train_error_log)
     cross_val_res_lst[fold_idx][1] = copy.deepcopy(server_obj.local_test_error_log)
+    cross_val_res_lst[fold_idx][2] = [0 for _ in range(len(server_obj.all_clients))]  
+    for cli_idx, cli in enumerate(train_clients):
+        assert(len(cli.local_test_error_log)>1)
+        #print(f"CLI{cli_idx} SUCCESS: LEN = {len(cli.local_test_error_log)}")
+        cross_val_res_lst[fold_idx][2][cli_idx] = copy.deepcopy(cli.local_test_error_log)
 
     #server_obj.save_results_h5(save_cost_func_comps=False, save_gradient=False)
     # Save the model for the current fold
     if GLOBAL_METHOD.upper()!="NOFL":
         print("Saving server's final (global) model")
-        # TODO: Where is model_saving_dir defined...................
-        dir_path = os.path.join(model_saving_dir, server_obj.str_current_datetime, GLOBAL_METHOD)
+        dir_path = os.path.join(model_saving_dir, server_obj.str_current_datetime+"_"+GLOBAL_METHOD)
         # Create the directory if it doesn't exist
         os.makedirs(dir_path, exist_ok=True)
         np.save(os.path.join(dir_path, f'servers_final_model_fold{fold_idx}.npy'), server_obj.w)
@@ -149,6 +154,8 @@ with h5py.File(server_obj.h5_file_path + "_CrossValResults.h5", 'w') as hf:
         #    hf.create_dataset('global_train_error_log', data=self.global_train_error_log)
         hf.create_dataset(f'Fold{fold_idx}_local_test_error_log', data=cross_val_res_lst[fold_idx][1])
         hf.create_dataset(f'Fold{fold_idx}_local_train_error_log', data=cross_val_res_lst[fold_idx][0])
+        for cli_idx, cli in enumerate(server_obj.all_clients):
+            hf.create_dataset(f'Fold{fold_idx}_client{cli_idx}_local_test_error_log', data=cross_val_res_lst[fold_idx][2][cli_idx])
     # Save the averaged cv results
     hf.create_dataset(f'AveragedCV_local_test_error_log', data=avg_cv_test_loss)
     hf.create_dataset(f'AveragedCV_local_train_error_log', data=avg_cv_train_loss)
