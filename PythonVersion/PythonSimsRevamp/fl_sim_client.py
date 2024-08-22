@@ -415,7 +415,7 @@ class Client(ModelBase):
         self.current_round += 1
 
         if (self.current_update==self.final_usable_update_ix) or (self.train_update_ix is not None and self.current_train_update>=(len(self.train_update_ix)-1)):  #17: previously 17 but the last update is super short so I cut it out
-            print("Maxxed out your update (you are on update 18), continuing training on last update only")
+            #print("Maxxed out your update (you are on update 18), continuing training on last update only")
             # Probably ought to track that we maxed out --> LOG SYSTEM
             # We are stopping an update early, so use -3/-2 and not -2/-1 (the last update)
             # TODO: This is sus with INTRA, although I doubt it reaches it ever

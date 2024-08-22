@@ -67,6 +67,35 @@ class Server(ModelBase):
         self.paramtxt_file_path = os.path.join(self.trial_result_path, "param_log.txt")
         if not os.path.exists(self.trial_result_path):
             os.makedirs(self.trial_result_path)
+
+        # EVALUATE INIT MODEL AND SAVE THAT LOSS
+        ## See if this fixes each algo having different init losses...
+        for client_idx, my_client in enumerate(self.train_clients): # Eg all train-able clients (no witheld val clients from kfoldcv)
+            # test_metrics for all clients
+            local_test_loss, _ = my_client.test_metrics(my_client.w, 'local')
+            local_train_loss, _ = my_client.train_metrics(my_client.w, 'local')
+            if self.global_method=='FEDAVG' or 'PFA' in self.global_method:
+                global_test_loss, _ = my_client.test_metrics(self.w, 'global')
+                global_train_loss, _ = my_client.train_metrics(self.w, 'global')
+            elif self.global_method=='NOFL':
+                global_test_loss = 0
+                global_train_loss = 0
+
+            if client_idx!=0:
+                running_global_test_loss += global_test_loss
+                running_local_test_loss += local_test_loss
+                running_global_train_loss += global_train_loss
+                running_local_train_loss += local_train_loss
+            else:
+                running_global_test_loss = global_test_loss
+                running_local_test_loss = local_test_loss
+                running_global_train_loss = global_train_loss
+                running_local_train_loss = local_train_loss
+        self.local_test_error_log.append(running_local_test_loss / len(self.train_clients))
+        self.local_train_error_log.append(running_local_train_loss / len(self.train_clients))
+        if self.global_method!='NOFL':
+            self.global_test_error_log.append(running_global_test_loss / len(self.train_clients))
+            self.global_train_error_log.append(running_global_train_loss / len(self.train_clients))
         
                 
     # Main Loop

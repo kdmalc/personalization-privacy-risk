@@ -1,14 +1,9 @@
 import os
 import numpy as np
-np.random.seed(0)
 import random
-random.seed(0)
-import time
 import pickle
 import copy
 from matplotlib import pyplot as plt
-#import seaborn as sns
-#from presentation_sns_config import *
 
 from experiment_params import *
 from cost_funcs import *
@@ -16,14 +11,17 @@ from fl_sim_client import *
 from fl_sim_server import *
 from shared_globals import *
 
+np.random.seed(0)
+random.seed(0)
+
 
 # GLOBALS
-GLOBAL_METHOD = "PFAFO_GDLS"  #FedAvg #PFAFO_GDLS #NOFL
+GLOBAL_METHOD = "FedAvg"  #FedAvg #PFAFO_GDLS #NOFL
 OPT_METHOD = 'FULLSCIPYMIN' if GLOBAL_METHOD=="NOFL" else 'GDLS'
-GLOBAL_ROUNDS = 20 if GLOBAL_METHOD=="NOFL" else 100
-LR=0.1
+GLOBAL_ROUNDS = 20 if GLOBAL_METHOD=="NOFL" else 500
+LR=0.1  # Is LR used or is everything line search now...
 MAX_ITER=None  # Setting to -1 DOES NOT WORK FOR THIS CODE BASE! Use OPT_METHOD to specify that instead...
-NUM_STEPS=3
+NUM_STEPS=1
 # ^ This is also basically just local_epochs, since I don't batch. Num_grad_steps
 SCENARIO="INTRA"  # "CROSS" cant be used in this file!
 LOCAL_ROUND_THRESHOLD = 5 if GLOBAL_METHOD=="NOFL" else 20
@@ -92,8 +90,8 @@ for fold_idx in range(NUM_KFOLDS):
 
 # Plot all results:
 plt.figure()  # Create a new figure
-running_train_loss = np.zeros(GLOBAL_ROUNDS)
-running_test_loss = np.zeros(GLOBAL_ROUNDS)
+running_train_loss = np.zeros(GLOBAL_ROUNDS+1)  # +1 because we record the initial model loss now
+running_test_loss = np.zeros(GLOBAL_ROUNDS+1)
 for fold_idx in range(NUM_KFOLDS):
     train_loss = cross_val_res_lst[fold_idx][0]
     test_loss = cross_val_res_lst[fold_idx][1]
