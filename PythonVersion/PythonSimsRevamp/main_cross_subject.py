@@ -19,12 +19,12 @@ from shared_globals import *
 
 
 # GLOBALS
-GLOBAL_METHOD = "PFAFO_GDLS"  #FedAvg #PFAFO_GDLS #NOFL
+GLOBAL_METHOD = "NOFL"  #FedAvg #PFAFO_GDLS #NOFL
 OPT_METHOD = 'FULLSCIPYMIN' if GLOBAL_METHOD=="NOFL" else 'GDLS'
 # ^ This gets ignored completely when using PFA
-NUM_STEPS=1  # This is basically just local_epochs. Num_grad_steps
+NUM_STEPS=3  # This is basically just local_epochs. Num_grad_steps
 SCENARIO = "CROSS"  # "INTRA" cant be used in this file!
-GLOBAL_ROUNDS = 20 if GLOBAL_METHOD=="NOFL" else 100
+GLOBAL_ROUNDS = 20 if GLOBAL_METHOD=="NOFL" else 500
 LOCAL_ROUND_THRESHOLD = 5 if GLOBAL_METHOD=="NOFL" else 20
 
 BETA=0.01  # Not used with GDLS? Only pertains to PFA regardless
@@ -79,38 +79,33 @@ for fold_idx, (train_ids, test_ids) in enumerate(folds):
     server_obj.current_fold = fold_idx
     server_obj.global_rounds = GLOBAL_ROUNDS
     for i in range(GLOBAL_ROUNDS):
-        #if i % 10 == 0:
-        #    print(f"Round {i} of {GLOBAL_ROUNDS}")
-
         server_obj.execute_FL_loop()
-
-        #if i % 10 == 0:
-        #    print(f"Global test loss: {server_obj.global_test_error_log[-1]}")
-        #    print(f"Local test loss: {server_obj.local_test_error_log[-1]}")
 
     if PLOT_EACH_FOLD:
         plt.figure()  # Create a new figure
-        plt.plot(server_obj.local_train_error_log, alpha=0.5, label=f"f{fold_idx} local train")
-        plt.plot(server_obj.local_test_error_log, alpha=0.5, label=f"f{fold_idx} local test")
+        plt.plot(server_obj.local_train_error_log, linestyle='--', color=COLORS_LST[0], alpha=ALPHA, label=f"f{fold_idx} local train")
+        plt.plot(server_obj.local_test_error_log, alpha=ALPHA, color=COLORS_LST[0], label=f"f{fold_idx} local test")
         if server_obj.global_method!="NOFL":
-            plt.plot(server_obj.global_train_error_log, alpha=0.5, label=f"f{fold_idx} global train")
-            plt.plot(server_obj.global_test_error_log, alpha=0.5, label=f"f{fold_idx} global test")
+            plt.plot(server_obj.global_train_error_log, linestyle='--', color=COLORS_LST[1], alpha=ALPHA, label=f"f{fold_idx} global train")
+            plt.plot(server_obj.global_test_error_log, alpha=ALPHA, color=COLORS_LST[1], label=f"f{fold_idx} global test")
         plt.xlabel("Training Round")
         plt.ylabel("Loss")
         plt.title(f"Train/Test Local/Global Error Curves For Fold {fold_idx}")
         plt.legend()
-        plt.savefig(server_obj.trial_result_path + f'\\TrainTestLossCurvesf{fold_idx}.png', format='png')
+        plt.savefig(server_obj.trial_result_path + f'\\Cross_PLOTEACHFOLD_LossCurvesf{fold_idx}.png', format='png')
         plt.show()
 
     # Record results
     ## Idk if I really need to be using deepcopy here...
     cross_val_res_lst[fold_idx][0] = copy.deepcopy(server_obj.local_train_error_log)
     cross_val_res_lst[fold_idx][1] = copy.deepcopy(server_obj.local_test_error_log)
-    cross_val_res_lst[fold_idx][2] = [0 for _ in range(len(server_obj.all_clients))]  
-    for cli_idx, cli in enumerate(train_clients):
-        assert(len(cli.local_test_error_log)>1)
-        #print(f"CLI{cli_idx} SUCCESS: LEN = {len(cli.local_test_error_log)}")
-        cross_val_res_lst[fold_idx][2][cli_idx] = copy.deepcopy(cli.local_test_error_log)
+    cross_val_res_lst[fold_idx][2] = [[0] for _ in range(len(full_client_lst))]  
+    #for idx, cli in enumerate(server_obj.train_clients):  
+    for cli in server_obj.train_clients:  
+        # Using train_clients leaves the 2-3 0s at the end, which appear in/as Clients 11-13
+        assert(len(cli.local_test_error_log)>1)  # Is this actually an issue? idk... turning off for now...
+        #print(f"CLI{cli.ID} SUCCESS: LEN = {len(cli.local_test_error_log)}")
+        cross_val_res_lst[fold_idx][2][cli.ID] = copy.deepcopy(cli.local_test_error_log)
 
     #server_obj.save_results_h5(save_cost_func_comps=False, save_gradient=False)
     # Save the model for the current fold
@@ -123,22 +118,22 @@ for fold_idx, (train_ids, test_ids) in enumerate(folds):
 
 # Plot all results:
 plt.figure()  # Create a new figure
-running_train_loss = np.zeros(GLOBAL_ROUNDS)
-running_test_loss = np.zeros(GLOBAL_ROUNDS)
+running_train_loss = np.zeros(GLOBAL_ROUNDS+1)  # +1 because we record the initial model loss now
+running_test_loss = np.zeros(GLOBAL_ROUNDS+1)
 for fold_idx in range(NUM_KFOLDS):
     train_loss = cross_val_res_lst[fold_idx][0]
     test_loss = cross_val_res_lst[fold_idx][1]
 
-    plt.plot(train_loss, alpha=0.5, label=f"Fold{fold_idx} Train")
-    plt.plot(test_loss, alpha=0.5, label=f"Fold{fold_idx} Test")
+    plt.plot(train_loss, alpha=ALPHA, linestyle='--', color=COLORS_LST[fold_idx], label=f"Fold{fold_idx} Train")
+    plt.plot(test_loss, alpha=ALPHA, color=COLORS_LST[fold_idx], label=f"Fold{fold_idx} Test")
 
     running_train_loss += np.array(train_loss)
     running_test_loss += np.array(test_loss)
 # Average to get cross val curve:
 avg_cv_train_loss = running_train_loss / NUM_KFOLDS
 avg_cv_test_loss = running_test_loss / NUM_KFOLDS
-plt.plot(avg_cv_train_loss, linewidth=2, label="Avg CrossVal Train")
-plt.plot(avg_cv_test_loss, linewidth=2, label="Avg CrossVal Test")
+plt.plot(avg_cv_train_loss, linewidth=2, linestyle='--', color=COLORS_LST[NUM_KFOLDS], label="Avg CrossVal Train")
+plt.plot(avg_cv_test_loss, linewidth=2, color=COLORS_LST[NUM_KFOLDS], label="Avg CrossVal Test")
 plt.xlabel("Training Round")
 plt.ylabel("Loss")
 plt.title("Train/Test Local Error Curves")
@@ -154,8 +149,10 @@ with h5py.File(server_obj.h5_file_path + "_CrossValResults.h5", 'w') as hf:
         #    hf.create_dataset('global_train_error_log', data=self.global_train_error_log)
         hf.create_dataset(f'Fold{fold_idx}_local_test_error_log', data=cross_val_res_lst[fold_idx][1])
         hf.create_dataset(f'Fold{fold_idx}_local_train_error_log', data=cross_val_res_lst[fold_idx][0])
-        for cli_idx, cli in enumerate(server_obj.all_clients):
-            hf.create_dataset(f'Fold{fold_idx}_client{cli_idx}_local_test_error_log', data=cross_val_res_lst[fold_idx][2][cli_idx])
+        #for idx, cli in enumerate(full_client_lst):
+        for cli in full_client_lst:
+            # NOTE: train_clients here is train_clients from the last fold, which is NOT equal to train_clients from earlier folds
+            hf.create_dataset(f'Fold{fold_idx}_client{cli.ID}_local_test_error_log', data=cross_val_res_lst[fold_idx][2][cli.ID])
     # Save the averaged cv results
     hf.create_dataset(f'AveragedCV_local_test_error_log', data=avg_cv_test_loss)
     hf.create_dataset(f'AveragedCV_local_train_error_log', data=avg_cv_train_loss)

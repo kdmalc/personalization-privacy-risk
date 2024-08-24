@@ -207,66 +207,6 @@ class Client(ModelBase):
                 # self.train_update_ix starts at starting_update already!
                 lower_bound = self.train_update_ix[0] - self.update_ix[self.starting_update]
                 upper_bound = lower_bound + 1200
-
-                if "PFA" in self.global_method:
-                    mid_point = (lower_bound+upper_bound)//2
-                    self.learning_batch = mid_point - lower_bound
-
-                    s_temp = self.local_dataset[lower_bound:mid_point, :]
-                    s_temp2 = self.local_dataset[mid_point:upper_bound, :]
-                    p_ref_lim = self.local_labelset[lower_bound:mid_point, :]
-                    p_ref_lim2 = self.local_labelset[mid_point:upper_bound, :]
-                    self.p_reference = np.transpose(p_ref_lim)
-                    self.p_reference2 = np.transpose(p_ref_lim2)
-
-                    # First, normalize the entire s matrix
-                    if self.normalize_EMG:
-                        s_normed2 = s_temp2/np.amax(s_temp2)
-                    else:
-                        s_normed2 = s_temp2
-                    # Now do PCA unless it is set to 64 (AKA the default num channels i.e. no reduction)
-                    # Also probably ought to find a global transform if possible so I don't recompute it every time...
-                    if self.PCA_comps!=self.pca_channel_default:  
-                        pca = PCA(n_components=self.PCA_comps)
-                        s_normed2 = pca.fit_transform(s_normed2)
-                    self.s2 = np.transpose(s_normed2)
-                    self.F2 = self.s2[:,:-1] # note: truncate F for estimate_decoder
-                    v_actual2 = self.w@self.s2
-                    p_actual2 = np.cumsum(v_actual2, axis=1)*self.dt  # Numerical integration of v_actual to get p_actual
-                    self.V2 = (self.p_reference2 - p_actual2)*self.dt
-                else:
-                    self.learning_batch = upper_bound - lower_bound
-                    s_temp = self.local_dataset[lower_bound:upper_bound, :]
-                    # For Maneeshika's code:
-                    p_ref_lim = self.local_labelset[lower_bound:upper_bound, :]
-                    # This is the used label
-                    self.p_reference = np.transpose(p_ref_lim)
-
-                # First, normalize the entire s matrix
-                if self.normalize_EMG:
-                    s_normed = s_temp/np.amax(s_temp)
-                else:
-                    s_normed = s_temp
-                # Now do PCA unless it is set to 64 (AKA the default num channels i.e. no reduction)
-                # Also probably ought to find a global transform if possible so I don't recompute it every time...
-                if self.PCA_comps!=self.pca_channel_default:  
-                    pca = PCA(n_components=self.PCA_comps)
-                    s_normed = pca.fit_transform(s_normed)
-                self.s = np.transpose(s_normed)
-                self.F = self.s[:,:-1] # note: truncate F for estimate_decoder
-                v_actual = self.w@self.s
-                p_actual = np.cumsum(v_actual, axis=1)*self.dt  # Numerical integration of v_actual to get p_actual
-                self.V = (self.p_reference - p_actual)*self.dt
-
-                if self.ID==0:
-                    print(f"KFold {self.current_fold}")
-                    # Subtract one to convert from bounds to update vals
-                    print(f"Testing updates: ({lower_bound_pre_idx}, {upper_bound_pre_idx-1})")
-                    print(f"Actual lower and upper bound values: ({lower_bound}, {upper_bound})")
-                    print(f"self.testing_data.shape: ({self.testing_data.shape})")
-                    #print(f"self.training_data.shape: ({self.training_data.shape})")
-                    #print(f"self.training_data bounds: ({}, {})")
-                    print()
             elif self.scenario=="CROSS":
                 self.test_split_idx = -1
                 # Setting the testing set to the whole dataset so that it can be extracted
@@ -276,6 +216,56 @@ class Client(ModelBase):
                 lower_bound = 0
                 self.testing_data = self.local_dataset
                 self.testing_labels = self.local_labelset
+
+            if "PFA" in self.global_method:
+                mid_point = (lower_bound+upper_bound)//2
+                self.learning_batch = mid_point - lower_bound
+
+                s_temp = self.local_dataset[lower_bound:mid_point, :]
+                s_temp2 = self.local_dataset[mid_point:upper_bound, :]
+                p_ref_lim = self.local_labelset[lower_bound:mid_point, :]
+                p_ref_lim2 = self.local_labelset[mid_point:upper_bound, :]
+                self.p_reference = np.transpose(p_ref_lim)
+                self.p_reference2 = np.transpose(p_ref_lim2)
+
+                # First, normalize the entire s matrix
+                if self.normalize_EMG:
+                    s_normed2 = s_temp2/np.amax(s_temp2)
+                else:
+                    s_normed2 = s_temp2
+                # Now do PCA unless it is set to 64 (AKA the default num channels i.e. no reduction)
+                # Also probably ought to find a global transform if possible so I don't recompute it every time...
+                if self.PCA_comps!=self.pca_channel_default:  
+                    pca = PCA(n_components=self.PCA_comps)
+                    s_normed2 = pca.fit_transform(s_normed2)
+                self.s2 = np.transpose(s_normed2)
+                self.F2 = self.s2[:,:-1] # note: truncate F for estimate_decoder
+                v_actual2 = self.w@self.s2
+                p_actual2 = np.cumsum(v_actual2, axis=1)*self.dt  # Numerical integration of v_actual to get p_actual
+                self.V2 = (self.p_reference2 - p_actual2)*self.dt
+            else:
+                self.learning_batch = upper_bound - lower_bound
+                s_temp = self.local_dataset[lower_bound:upper_bound, :]
+                # For Maneeshika's code:
+                p_ref_lim = self.local_labelset[lower_bound:upper_bound, :]
+                # This is the used label
+                self.p_reference = np.transpose(p_ref_lim)
+
+            # First, normalize the entire s matrix
+            if self.normalize_EMG:
+                s_normed = s_temp/np.amax(s_temp)
+            else:
+                s_normed = s_temp
+            # Now do PCA unless it is set to 64 (AKA the default num channels i.e. no reduction)
+            # Also probably ought to find a global transform if possible so I don't recompute it every time...
+            if self.PCA_comps!=self.pca_channel_default:  
+                pca = PCA(n_components=self.PCA_comps)
+                s_normed = pca.fit_transform(s_normed)
+            self.s = np.transpose(s_normed)
+            self.F = self.s[:,:-1] # note: truncate F for estimate_decoder
+            v_actual = self.w@self.s
+            p_actual = np.cumsum(v_actual, axis=1)*self.dt  # Numerical integration of v_actual to get p_actual
+            self.V = (self.p_reference - p_actual)*self.dt
         elif self.test_split_type=="UPDATE16":
             # self.update_ix[17] and further is the short update, self.update_ix[18] is literally the last value
             # This is technically update 17 but it doesnt matter, update 17 is the last usable update (17/19)
@@ -414,27 +404,30 @@ class Client(ModelBase):
         ## This is sort of fine since it's just the round and doesn't matter that much 
         self.current_round += 1
 
-        if (self.current_update==self.final_usable_update_ix) or (self.train_update_ix is not None and self.current_train_update>=(len(self.train_update_ix)-1)):  #17: previously 17 but the last update is super short so I cut it out
+        if (self.current_update>=self.final_usable_update_ix-1) or (self.train_update_ix is not None and self.current_train_update>=(len(self.train_update_ix)-1)):  #17: previously 17 but the last update is super short so I cut it out
+            self.logger = "UNNAMED"
             #print("Maxxed out your update (you are on update 18), continuing training on last update only")
             # Probably ought to track that we maxed out --> LOG SYSTEM
             # We are stopping an update early, so use -3/-2 and not -2/-1 (the last update)
             # TODO: This is sus with INTRA, although I doubt it reaches it ever
             if self.scenario=="INTRA":
                 # Should this be -2/-1 or -1/? ...?
-                lower_bound = (self.train_update_ix[-2])
+                lower_bound = self.train_update_ix[-2]
                 upper_bound = self.train_update_ix[-1]
             else:
-                lower_bound = (self.update_ix[16])
-                upper_bound = self.update_ix[17]
+                lower_bound = self.update_ix[16] - self.update_ix[self.starting_update]
+                upper_bound = self.update_ix[17] - self.update_ix[self.starting_update]
             self.learning_batch = upper_bound - lower_bound
             need_to_advance=False
         elif streaming_method=='full_data':
+            self.logger = "full_data"
             lower_bound = self.update_ix[0]  # Starts at 0 and not update 10, for now
             upper_bound = self.update_ix[-1]
             self.learning_batch = upper_bound - lower_bound
             # TODO: need_to_advance shouldn't ever run, once lower_bound and upper_bound have been set once
             need_to_advance=False
         elif streaming_method=='streaming':
+            self.logger = "streaming"
             if self.scenario=="INTRA":
                 # Really ought to move this branch back so that the other streaming methods are included too...
                 ## Since this version uses the folds to set the streaming index
@@ -459,30 +452,20 @@ class Client(ModelBase):
                     need_to_advance = False
             elif self.scenario=="CROSS":
                 # If we pass threshold, move on to the next update
-                if self.current_round%self.local_round_threshold==0:
+                if self.current_round>2 and self.current_round%self.local_round_threshold==0:
                     self.current_update += 1
                     self.update_transition_log.append(self.latest_global_round)
                     if self.verbose==True and self.ID==0:
                         print(f"Client {self.ID}: New update after lrt passed: (new update, current global round, current local round): {self.current_update, self.latest_global_round, self.current_round}")
                         print()
                         
-                    # Using only the second half of each update for co-adaptivity reasons
-                    #lower_bound = (self.update_ix[self.current_update] + self.update_ix[self.current_update+1])//2
-                    lower_bound = (self.update_ix[self.current_update]) - self.update_ix[self.starting_update]
-                    upper_bound = self.update_ix[self.current_update+1] - self.update_ix[self.starting_update]
-                    self.learning_batch = upper_bound - lower_bound
-                elif self.current_round>2: 
-                    # This is the base case
-                    # The update number didn't change so we don't need to overwrite everything with the same data
-                    need_to_advance = False
+                    need_to_advance = True
                 else:
                     # This is for the init case (current round is 0 or 1)
                     # need_to_advance is true, so we overwrite s and such... this is fine 
+                    ## Uhh changed it so now this is the default case (removed current_round>2 branch), not sure if this is correct...
 
-                    #lower_bound = (self.update_ix[self.current_update] + self.update_ix[self.current_update+1])//2
-                    lower_bound = (self.update_ix[self.current_update]) - self.update_ix[self.starting_update]
-                    upper_bound = self.update_ix[self.current_update+1] - self.update_ix[self.starting_update]
-                    self.learning_batch = upper_bound - lower_bound
+                    need_to_advance = False
         elif streaming_method=='advance_each_iter':
             #lower_bound = (self.update_ix[self.current_update] + self.update_ix[self.current_update+1])//2 
             lower_bound = (self.update_ix[self.current_update]) - self.update_ix[self.starting_update]
@@ -537,8 +520,11 @@ class Client(ModelBase):
                     # This is the used label
                     self.p_reference = np.transpose(p_ref_lim)
             elif self.scenario=="CROSS":
-                # TODO: uhhhh where are lower_bound and upper_bound set for the below.........
-                ## They are set in the CROSS section above... but no eqv in INTRA... for now...
+                #lower_bound = (self.update_ix[self.current_update] + self.update_ix[self.current_update+1])//2
+                lower_bound = (self.update_ix[self.current_update]) - self.update_ix[self.starting_update]
+                upper_bound = self.update_ix[self.current_update+1] - self.update_ix[self.starting_update]
+                self.learning_batch = upper_bound - lower_bound
+
                 if "PFA" in self.global_method:
                     mid_point = (lower_bound+upper_bound)//2
                     s_temp = self.training_data[lower_bound:mid_point,:]

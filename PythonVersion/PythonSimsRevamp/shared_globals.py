@@ -16,6 +16,9 @@ D_0 = np.random.rand(2,64)
 num_updates = 18
 step_indices = list(range(num_updates))
 
+COLORS_LST = ['red', 'blue', 'magenta', 'orange', 'darkviolet', 'lime']
+ALPHA = 0.7
+
 STARTING_UPDATE=10
 DATA_STREAM='streaming'
 NUM_KFOLDS=5
