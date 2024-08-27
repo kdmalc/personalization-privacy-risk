@@ -21,16 +21,13 @@ from shared_globals import *
 # GLOBALS
 GLOBAL_METHOD = "NOFL"  #FedAvg #PFAFO_GDLS #NOFL
 OPT_METHOD = 'FULLSCIPYMIN' if GLOBAL_METHOD=="NOFL" else 'GDLS'
-# ^ This gets ignored completely when using PFA
-NUM_STEPS=3  # This is basically just local_epochs. Num_grad_steps
+GLOBAL_ROUNDS = 12 if GLOBAL_METHOD=="NOFL" else 210
+LOCAL_ROUND_THRESHOLD = 1 if GLOBAL_METHOD=="NOFL" else 20
+NUM_STEPS = 3  # This is basically just local_epochs. Num_grad_steps
 SCENARIO = "CROSS"  # "INTRA" cant be used in this file!
-GLOBAL_ROUNDS = 20 if GLOBAL_METHOD=="NOFL" else 500
-LOCAL_ROUND_THRESHOLD = 5 if GLOBAL_METHOD=="NOFL" else 20
 
 BETA=0.01  # Not used with GDLS? Only pertains to PFA regardless
 LR=1  # Not used with GDLS?
-MAX_ITER=None  # For scipy. Set to -1 for full, otherwise stay with 1
-# ^ Do I need to pass this in? Is that not controlled by OPT_METHOD? ...
 
 with open(path+cond0_filename, 'rb') as fp:
     cond0_training_and_labels_lst = pickle.load(fp)
@@ -40,8 +37,7 @@ with open(path+cond0_filename, 'rb') as fp:
 
 # THIS K FOLD SCHEME IS ONLY FOR CROSS-SUBJECT ANALYSIS!!!
 # Define number of folds
-k = NUM_KFOLDS
-kf = KFold(n_splits=k)
+kf = KFold(n_splits=NUM_KFOLDS)
 # Assuming cond0_training_and_labels_lst is a list of labels for 14 clients
 user_ids = list(range(14))
 folds = list(kf.split(user_ids))
@@ -53,7 +49,7 @@ folds = list(kf.split(user_ids))
 ## Instead, use list comprehension:
 cross_val_res_lst = [[0, 0, 0] for _ in range(NUM_KFOLDS)]
 for fold_idx, (train_ids, test_ids) in enumerate(folds):
-    print(f"Fold {fold_idx+1}/{k}")
+    print(f"Fold {fold_idx+1}/{NUM_KFOLDS}")
     print(f"{len(train_ids)} Train_IDs: {train_ids}")
     print(f"{len(test_ids)} Test_IDs: {test_ids}")
     

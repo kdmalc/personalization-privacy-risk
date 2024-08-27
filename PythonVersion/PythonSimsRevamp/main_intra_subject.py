@@ -16,15 +16,14 @@ random.seed(0)
 
 
 # GLOBALS
-GLOBAL_METHOD = "NOFL"  #FedAvg #PFAFO_GDLS #NOFL
+GLOBAL_METHOD = "PFAFO_GDLS"  #FedAvg #PFAFO_GDLS #NOFL
 OPT_METHOD = 'FULLSCIPYMIN' if GLOBAL_METHOD=="NOFL" else 'GDLS'
-GLOBAL_ROUNDS = 20 if GLOBAL_METHOD=="NOFL" else 500
+GLOBAL_ROUNDS = 12 if GLOBAL_METHOD=="NOFL" else 210
+LOCAL_ROUND_THRESHOLD = 1 if GLOBAL_METHOD=="NOFL" else 20
 LR=0.1  # Is LR used or is everything line search now...
-MAX_ITER=None  # Setting to -1 DOES NOT WORK FOR THIS CODE BASE! Use OPT_METHOD to specify that instead...
-NUM_STEPS=1
+NUM_STEPS = 1
 # ^ This is also basically just local_epochs, since I don't batch. Num_grad_steps
-SCENARIO="INTRA"  # "CROSS" cant be used in this file!
-LOCAL_ROUND_THRESHOLD = 5 if GLOBAL_METHOD=="NOFL" else 20
+SCENARIO = "INTRA"  # "CROSS" cant be used in this file!
 
 with open(path+cond0_filename, 'rb') as fp:
     cond0_training_and_labels_lst = pickle.load(fp)

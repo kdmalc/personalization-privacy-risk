@@ -16,13 +16,15 @@ D_0 = np.random.rand(2,64)
 num_updates = 18
 step_indices = list(range(num_updates))
 
+MAX_ITER=None  # For MAXITERSCIPYMIN. Use FULLSCIPYMIN for complete minimization, otherwise stay with 1
+
 COLORS_LST = ['red', 'blue', 'magenta', 'orange', 'darkviolet', 'lime']
 ALPHA = 0.7
 
 STARTING_UPDATE=10
 DATA_STREAM='streaming'
 NUM_KFOLDS=5
-USE_HITBOUNDS=False
+USE_HITBOUNDS = False
 PLOT_EACH_FOLD = False
 USE_KFOLDCV = True
-TEST_SPLIT_TYPE='KFOLDCV'
+TEST_SPLIT_TYPE = 'KFOLDCV'
