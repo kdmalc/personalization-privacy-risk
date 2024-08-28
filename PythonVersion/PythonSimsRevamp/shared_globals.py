@@ -1,4 +1,5 @@
 import numpy as np
+from datetime import datetime
 
 
 path = r'C:\Users\kdmen\Desktop\Research\Data\CPHS_EMG'
@@ -20,6 +21,9 @@ MAX_ITER=None  # For MAXITERSCIPYMIN. Use FULLSCIPYMIN for complete minimization
 
 COLORS_LST = ['red', 'blue', 'magenta', 'orange', 'darkviolet', 'lime']
 ALPHA = 0.7
+
+# get current date and time
+CURRENT_DATETIME = str(datetime.now().strftime("%m-%d_%H-%M"))
 
 STARTING_UPDATE=10
 DATA_STREAM='streaming'

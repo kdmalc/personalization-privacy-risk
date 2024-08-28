@@ -1,8 +1,8 @@
 import numpy as np
 import random
 import copy
-from datetime import datetime
 import os
+from datetime import datetime
 import h5py
 
 from experiment_params import *
@@ -13,7 +13,7 @@ from fl_sim_base import *
 class Server(ModelBase):
     def __init__(self, ID, D0, opt_method, global_method, all_clients, smoothbatch_lr=0.75, C=0.35, test_split_type='kfoldcv', 
                  num_kfolds=5, test_split_frac=0.3, current_round=0, PCA_comps=64, verbose=False, validate_memory_IDs=True, save_client_loss_logs=True, 
-                 sequential=False):
+                 sequential=False, current_datatime="Overwritten"):
         super().__init__(ID, D0, opt_method, smoothbatch_lr=smoothbatch_lr, current_round=current_round, PCA_comps=PCA_comps, 
                          verbose=verbose, num_clients=14, log_init=0)
         
@@ -51,22 +51,12 @@ class Server(ModelBase):
         self.test_split_frac = test_split_frac
 
         # SAVE FILE RELATED
-        # get current date and time
-        current_datetime = datetime.now().strftime("%m-%d_%H-%M")
-        # convert datetime obj to string
-        self.str_current_datetime = str(current_datetime)
         # Get the directory of the current script
         self.script_directory = os.path.dirname(os.path.abspath(__file__))  # This returns the path to serverbase... so don't index the end of the path
         # Relative path to results dir
         self.result_path = "\\results\\"
-        # Specify the relative path from the script's directory
-        self.relative_path = self.result_path + self.str_current_datetime + "_" + self.global_method
-        # Combine the script's directory and the relative path to get the full path
-        self.trial_result_path = self.script_directory + self.relative_path
-        self.h5_file_path = os.path.join(self.trial_result_path, f"{self.opt_method}_{self.global_method}")
-        self.paramtxt_file_path = os.path.join(self.trial_result_path, "param_log.txt")
-        if not os.path.exists(self.trial_result_path):
-            os.makedirs(self.trial_result_path)
+        if current_datatime is None:
+            self.set_save_filename()
 
         # EVALUATE INIT MODEL AND SAVE THAT LOSS
         ## See if this fixes each algo having different init losses...
@@ -97,6 +87,23 @@ class Server(ModelBase):
             self.global_test_error_log.append(running_global_test_loss / len(self.train_clients))
             self.global_train_error_log.append(running_global_train_loss / len(self.train_clients))
         
+
+    def set_save_filename(self, current_datetime=None):
+        if current_datetime is None:
+            # get current date and time
+            current_datetime = datetime.now().strftime("%m-%d_%H-%M")
+
+        # convert datetime obj to string
+        self.str_current_datetime = str(current_datetime)
+        # Specify the relative path from the script's directory
+        self.relative_path = self.result_path + self.str_current_datetime + "_" + self.global_method
+        # Combine the script's directory and the relative path to get the full path
+        self.trial_result_path = self.script_directory + self.relative_path
+        self.h5_file_path = os.path.join(self.trial_result_path, f"{self.opt_method}_{self.global_method}")
+        self.paramtxt_file_path = os.path.join(self.trial_result_path, "param_log.txt")
+        if not os.path.exists(self.trial_result_path):
+            os.makedirs(self.trial_result_path)
+
                 
     # Main Loop
     def execute_FL_loop(self):
@@ -306,7 +313,6 @@ class Server(ModelBase):
 
 
     def save_results_h5(self, save_cost_func_comps=False, save_gradient=True):
-        ## THIS FUNC IS CURRENTLY NOT USED...
         if len(self.local_test_error_log)!=0:
             print("File path: " + self.h5_file_path + ".h5")
 
@@ -319,23 +325,20 @@ class Server(ModelBase):
                 if self.global_method!="NOFL":
                     hf.create_dataset('global_test_error_log', data=self.global_test_error_log)
                     hf.create_dataset('global_train_error_log', data=self.global_train_error_log)
-                else:
-                    # TODO: Shouldn't this get saved always...
-                    hf.create_dataset('local_test_error_log', data=self.local_test_error_log)
-                    hf.create_dataset('local_train_error_log', data=self.local_train_error_log)
+                hf.create_dataset('local_test_error_log', data=self.local_test_error_log)
+                hf.create_dataset('local_train_error_log', data=self.local_train_error_log)
 
-                # TODO: This feature got removed... 
-                if self.sequential:
-                    hf.create_dataset('curr_live_rs_test_loss', data=self.curr_live_rs_test_loss)
-                    hf.create_dataset('prev_live_rs_test_loss', data=self.prev_live_rs_test_loss)
-                    hf.create_dataset('unseen_live_rs_test_loss', data=self.unseen_live_rs_test_loss)
+                # This feature got removed... 
+                #if self.sequential:
+                #    hf.create_dataset('curr_live_rs_test_loss', data=self.curr_live_rs_test_loss)
+                #    hf.create_dataset('prev_live_rs_test_loss', data=self.prev_live_rs_test_loss)
+                #    hf.create_dataset('unseen_live_rs_test_loss', data=self.unseen_live_rs_test_loss)
 
                 if self.save_client_loss_logs:
-                    group = hf.create_group('client_testing_logs')
-                    for c in self.all_clients:
-                        dataset_name = c.ID
-                        data = c.client_testing_log  # Replace this with your actual data
-                        group.create_dataset(dataset_name, data=data)
+                    group = hf.create_group('client_local_test_log')
+                    for cli in self.all_clients:
+                        data = cli.local_test_error_log
+                        group.create_dataset(f"S{cli.ID}_client_local_test_log", data=data)
 
                 if save_cost_func_comps:
                     # TODO: This is code from PyTorch version, self.cost_func_comps_log doesnt exist here (yet)

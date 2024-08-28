@@ -14,8 +14,8 @@ from cost_funcs import *
 class Client(ModelBase):
     def __init__(self, ID, w, opt_method, full_client_dataset, data_stream, smoothbatch_lr=0.75, current_round=0, PCA_comps=64, 
                 availability=1, final_usable_update_ix=17, global_method='FedAvg', max_iter=1, normalize_EMG=True, starting_update=9, 
-                track_cost_components=True, gradient_clipping=False, log_decs=True, val_set=False,
-                clipping_threshold=100, tol=1e-10, lr=1, beta=0.01, track_gradient=True, wprev_global=False, 
+                track_cost_components=True, log_decs=True, val_set=False,
+                tol=1e-10, lr=1, beta=0.01, track_gradient=True,  
                 num_steps=1, use_zvel=False, current_fold=0, scenario="", 
                 mix_in_each_steps=False, mix_mixed_SB=False, delay_scaling=0, random_delays=False, download_delay=1, 
                 upload_delay=1, validate_memory_IDs=True, local_round_threshold=25, condition_number=3, 
@@ -71,12 +71,11 @@ class Client(ModelBase):
         self.data_stream = data_stream  # {'full_data', 'streaming', 'advance_each_iter'} 
         # Number of gradient steps to take when training (eg amount of local computation):
         self.num_steps = num_steps  # This is Tau in PFA!
-        self.wprev_global = wprev_global # Not sure what this is honestly
         # UPDATE STUFF
         self.local_round_threshold = local_round_threshold
 
         # PRACTICAL / REAL WORLD
-        # Not even using the delay stuff right now
+        # Not using the delay stuff right now
         # Boolean setting whether or not up/download delays should be random or predefined
         self.random_delays = random_delays
         # Scaling from random [0,1] to number of seconds
@@ -90,19 +89,16 @@ class Client(ModelBase):
             self.upload_delay = upload_delay
         
         # ML Parameters / Conditions
-        cond_dict = {1:(0.25, 1e-3, 1), 2:(0.25, 1e-4, 1), 3:(0.75, 1e-3, 1), 4:(0.75, 1e-4, 1), 5:(0.25, 1e-4, -1), 6:(0.25, 1e-4, -1), 7:(0.75, 1e-3, -1), 8:(0.75, 1e-4, -1)}
-        cond_smoothbatch, self.alphaD, self.init_dec_sign = cond_dict[condition_number]
+        #cond_dict = {1:(0.25, 1e-3, 1), 2:(0.25, 1e-4, 1), 3:(0.75, 1e-3, 1), 4:(0.75, 1e-4, 1), 5:(0.25, 1e-4, -1), 6:(0.25, 1e-4, -1), 7:(0.75, 1e-3, -1), 8:(0.75, 1e-4, -1)}
+        #cond_smoothbatch, self.alphaD, self.init_dec_sign = cond_dict[condition_number]
         if type(smoothbatch_lr)==str and smoothbatch_lr.upper()=='OFF':
             self.smoothbatch_lr = 0  # AKA Use only the new dec, no mixing
-        elif smoothbatch_lr==-1:  
-            # Let the condition number set smoothbatch
-            self.smoothbatch_lr = cond_smoothbatch
+        #elif smoothbatch_lr==-1:  
+        #    # Let the condition number set smoothbatch
+        #    self.smoothbatch_lr = cond_smoothbatch
         else:
             # Set smoothbatch to whatever you manually entered
             self.smoothbatch_lr=smoothbatch_lr
-        # This is probably not used...
-        self.gradient_clipping = gradient_clipping
-        self.clipping_threshold = clipping_threshold
         # LOGS
         self.log_decs = log_decs
         # Overwrite the logs since global and local track in slightly different ways

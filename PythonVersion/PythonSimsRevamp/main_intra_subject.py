@@ -41,11 +41,14 @@ for fold_idx in range(NUM_KFOLDS):
                             num_steps=NUM_STEPS, use_zvel=USE_HITBOUNDS, test_split_type=TEST_SPLIT_TYPE) for i in range(NUM_USERS)]
 
     server_obj = Server(1, copy.deepcopy(D_0), opt_method=OPT_METHOD, global_method=GLOBAL_METHOD, all_clients=full_client_lst)
+    server_obj.set_save_filename(CURRENT_DATETIME)
     # Add these to the init func params...
     server_obj.current_fold = fold_idx
     server_obj.global_rounds = GLOBAL_ROUNDS
     for i in range(GLOBAL_ROUNDS):
         server_obj.execute_FL_loop()
+
+    server_obj.save_results_h5()
 
     if PLOT_EACH_FOLD:
         plt.figure()  # Create a new figure
@@ -112,6 +115,8 @@ plt.savefig(server_obj.trial_result_path + '\\TrainTestLossCurves.png', format='
 plt.show()
     
 server_obj.save_header()
+
+'''
 with h5py.File(server_obj.h5_file_path + "_CrossValResults.h5", 'w') as hf:
     for fold_idx in range(NUM_KFOLDS):
         #if server_obj.global_method!="NOFL":
@@ -125,4 +130,4 @@ with h5py.File(server_obj.h5_file_path + "_CrossValResults.h5", 'w') as hf:
     # Save the averaged cv results
     hf.create_dataset(f'AveragedCV_local_test_error_log', data=avg_cv_test_loss)
     hf.create_dataset(f'AveragedCV_local_train_error_log', data=avg_cv_train_loss)
-
+'''
