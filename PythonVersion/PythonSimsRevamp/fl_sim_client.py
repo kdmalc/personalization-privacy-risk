@@ -42,7 +42,6 @@ class Client(ModelBase):
         self.type = 'Client'
         self.chosen_status = 0
         self.latest_global_round = 0
-        self.update_transition_log = []
         self.normalize_EMG = normalize_EMG
 
         # Sentinel Values
@@ -106,26 +105,19 @@ class Client(ModelBase):
         self.clipping_threshold = clipping_threshold
         # LOGS
         self.log_decs = log_decs
-        self.pers_dec_log = [np.zeros((2,self.PCA_comps))]
-        self.global_dec_log = [np.zeros((2,self.PCA_comps))]
         # Overwrite the logs since global and local track in slightly different ways
         self.track_cost_components = track_cost_components
         self.performance_log = []
         self.Dnorm_log = []
         self.Fnorm_log = []
         self.track_gradient = track_gradient
-        self.gradient_log = []
-        self.pers_gradient_log = []
-        self.global_gradient_log = []
+        self.local_gradient_log = []
+        self.update_transition_log = []
 
         ## Not used AFAIK... --> control where SmoothBatch is used (verify this code still exists if you plan on using)
         self.mix_in_each_steps = mix_in_each_steps
         self.mix_mixed_SB = mix_mixed_SB
 
-        # These are general personalization things
-        ## Not sure if any of these are even used...
-        self.running_pers_term = 0
-        self.running_global_term = 0
         self.global_w = copy.deepcopy(self.w)
 
         # TRAIN TEST DATA SPLIT
@@ -319,11 +311,11 @@ class Client(ModelBase):
         
         # LOG EVERYTHING
         ## I guess this is actually after train_model is called...
+        # TODO: Revamp this to be self.local_dec_log ...
         self.dec_log.append(self.w)
         # TODO: Not sure why this would have higher error than global, given that global is right below...
         self.local_train_error_log.append(self.eval_model(which='local'))
         if self.global_method!="NOFL":
-            self.global_dec_log.append(copy.deepcopy(self.global_w))
             # TODO: Still doesn't tell me what that global would be better than local...
             self.global_train_error_log.append(self.eval_model(which='global'))
         # Log Cost Comp
@@ -691,29 +683,34 @@ class Client(ModelBase):
             # ^ Was self.w_prev for some reason...
             ## But it should be the current model at the start
 
-            # IF GLOBAL METHOD IS ONE OF THE PFA METHODS, OPT METHOD GETS OVERWRITTEN WITH GD
+            # IF GLOBAL METHOD IS ONE OF THE PFA METHODS, OPT METHOD GETS OVERWRITTEN WITH GDLS
             ## This is a bad loop since it checks both global_method and opt_method...
             if self.global_method=='PFAFO':
+                ## THIS ONE WASNT WORKING
                 stochastic_grad = np.reshape(gradient_cost_l2(self.F, D0, self.V, alphaE=self.alphaE, alphaD=self.alphaD, Ne=self.PCA_comps), 
                                         (2, self.PCA_comps))
+                self.local_gradient_log.append(np.linalg.norm(stochastic_grad))
                 w_tilde = D0 - self.lr * stochastic_grad
                 # ^ D0 is w_new from the previous iteration, eg w_{t-1}
                 new_stoch_grad = np.reshape(gradient_cost_l2(self.F2, w_tilde, self.V2, alphaE=self.alphaE, alphaD=self.alphaD, Ne=self.PCA_comps), 
                                         (2, self.PCA_comps))
+                self.local_gradient_log.append(np.linalg.norm(new_stoch_grad))
                 # I mean should I just use linear search here too...
                 self.w_new = D0 - self.beta * new_stoch_grad
             elif self.global_method=='PFAFO_GDLS':
+                ## THIS IS THE WORKING ONE
+
                 # Step 1: Compute w_tilde
                 ## One step of GD on the trained_model weights
-                result = minimize(
-                    lambda D: cost_l2(self.F, D, self.V, self.alphaE, self.alphaD),
-                    D0,
-                    method='BFGS',
-                    jac=lambda D: gradient_cost_l2(self.F, D, self.V, self.alphaE, self.alphaD),
-                    options={'maxiter': 1})
-                w_tilde = np.reshape(result.x, (2, self.PCA_comps))
-
-                ## Redo of step 1 just for my curiousity...
+                ## VERSION USING SCIPYMIN
+                #result = minimize(
+                #    lambda D: cost_l2(self.F, D, self.V, self.alphaE, self.alphaD),
+                #    D0,
+                #    method='BFGS',
+                #    jac=lambda D: gradient_cost_l2(self.F, D, self.V, self.alphaE, self.alphaD),
+                #    options={'maxiter': 1})
+                #w_tilde = np.reshape(result.x, (2, self.PCA_comps))
+                ## VERSION USING GDLS
                 w_tilde_gd = self.gd_step_with_line_search(self.w_new, self.F, self.V)
                 # Just for my purposes, how similar are w_tilde nad w_tilde_gd? Ideally are the same...
                 #print(f"\nw_tilde (BFGS) - w_tilde_gd Norm: {np.linalg.norm(w_tilde - w_tilde_gd)}\n")
@@ -722,11 +719,9 @@ class Client(ModelBase):
                 ## Step 2: Using w_tilde to inform the update on copy_of_original_weights
                 ## FO Only
                 self.w_new = self.gd_step_with_line_search(w_tilde_gd, self.F2, self.V2, w_base=D0)
-            elif self.global_method=='PFAHF':
-                # TODO: Implement. Is the hessian-vector product between the hessian and the gradient? ...
-                raise ValueError('Per-FedAvg HF NOT FINISHED YET')
             # This is for LOCAL and FEDAVG:
             elif self.opt_method=='GD':
+                ## NOT WORKING?
                 grad_cost = np.reshape(gradient_cost_l2(self.F, self.w_new, self.V, alphaE=self.alphaE, alphaD=self.alphaD, Ne=self.PCA_comps), 
                                         (2, self.PCA_comps))
                 self.w_new -= self.lr*grad_cost
@@ -752,18 +747,15 @@ class Client(ModelBase):
                 # TODO: mixed_w appears to not be used // is used as the personalized model?...
                 self.mixed_w = self.smoothbatch_lr*self.mixed_w + ((1 - self.smoothbatch_lr)*self.w_new)
 
+            # Log gradient
+            self.local_gradient_log.append(np.linalg.norm(gradient_cost_l2(self.F, self.w, self.V, alphaE=self.alphaE, alphaD=self.alphaD, Ne=self.PCA_comps)))
+            if "PFA" in self.global_method:
+                self.local_gradient_log.append(np.linalg.norm(gradient_cost_l2(self.F2, self.w, self.V2, alphaE=self.alphaE, alphaD=self.alphaD, Ne=self.PCA_comps)))
+
         # Do SmoothBatch
         #W_new = alpha*D[-1] + ((1 - alpha) * W_hat)
         self.w = self.smoothbatch_lr*self.w_prev + ((1 - self.smoothbatch_lr)*self.w_new)
-
-        #if self.ID==0:
-        #    print(f"Gradient norm: {np.linalg.norm(gradient_cost_l2(self.F, self.w_prev, self.V, alphaE=self.alphaE, alphaD=self.alphaD, Ne=self.PCA_comps, flatten=False))}")
-        #    print(f"Cost func: {cost_l2(self.F, self.w_prev, self.V, alphaD=self.alphaD, alphaE=self.alphaE, Ne=self.PCA_comps)}")
-        #    print(f"self.w_prev norm: {np.linalg.norm(self.w_prev)}")
-        #    print(f"self.w_new norm: {np.linalg.norm(self.w_new)}")
-        #    print(f"self.w norm: {np.linalg.norm(self.w)}")
-        #    print("\n")
-        
+ 
         
     def eval_model(self, which):
         if which=='local':

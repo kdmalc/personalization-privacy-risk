@@ -18,7 +18,7 @@ random.seed(0)
 # GLOBALS
 GLOBAL_METHOD = "PFAFO_GDLS"  #FedAvg #PFAFO_GDLS #NOFL
 OPT_METHOD = 'FULLSCIPYMIN' if GLOBAL_METHOD=="NOFL" else 'GDLS'
-GLOBAL_ROUNDS = 12 if GLOBAL_METHOD=="NOFL" else 210
+GLOBAL_ROUNDS = 12 if GLOBAL_METHOD=="NOFL" else 250
 LOCAL_ROUND_THRESHOLD = 1 if GLOBAL_METHOD=="NOFL" else 20
 LR=0.1  # Is LR used or is everything line search now...
 NUM_STEPS = 1
@@ -31,7 +31,7 @@ with open(path+cond0_filename, 'rb') as fp:
 #    init_decoders = pickle.load(fp)    
 #cond0_init_decs = [dec[0, :, :] for dec in init_decoders]
 
-cross_val_res_lst = [[0, 0, 0] for _ in range(NUM_KFOLDS)]
+cross_val_res_lst = [[0, 0, 0, 0] for _ in range(NUM_KFOLDS)]
 for fold_idx in range(NUM_KFOLDS):
     print(f"Fold {fold_idx+1}/{NUM_KFOLDS}")
     
@@ -65,6 +65,8 @@ for fold_idx in range(NUM_KFOLDS):
     ## Idk if I really need to be using deepcopy here...
     cross_val_res_lst[fold_idx][0] = copy.deepcopy(server_obj.local_train_error_log)
     cross_val_res_lst[fold_idx][1] = copy.deepcopy(server_obj.local_test_error_log)
+    cross_val_res_lst[fold_idx][2] = [[0] for _ in range(len(full_client_lst))]
+    cross_val_res_lst[fold_idx][3] = [[0] for _ in range(len(full_client_lst))]
     # Also record the client's loss log
     ## Init an empty lst, with a spot for each client
     ## We do all clients instead of just trained clients since otherwise I would also have to save the index...
@@ -73,6 +75,7 @@ for fold_idx in range(NUM_KFOLDS):
         assert(len(cli.local_test_error_log)>1)
         #print(f"CLI{cli.ID} SUCCESS: LEN = {len(cli.local_test_error_log)}")
         cross_val_res_lst[fold_idx][2][idx] = copy.deepcopy(cli.local_test_error_log)
+        cross_val_res_lst[fold_idx][3][cli.ID] = copy.deepcopy(cli.local_gradient_log)
 
     #server_obj.save_results_h5(save_cost_func_comps=False, save_gradient=False)
     # Save the model for the current fold
@@ -118,6 +121,7 @@ with h5py.File(server_obj.h5_file_path + "_CrossValResults.h5", 'w') as hf:
         hf.create_dataset(f'Fold{fold_idx}_local_train_error_log', data=cross_val_res_lst[fold_idx][0])
         for idx, cli in enumerate(server_obj.all_clients):
             hf.create_dataset(f'Fold{fold_idx}_client{cli.ID}_local_test_error_log', data=cross_val_res_lst[fold_idx][2][idx])
+            hf.create_dataset(f'Fold{fold_idx}_client{cli.ID}_gradient_norm_log', data=cross_val_res_lst[fold_idx][3][cli.ID])
     # Save the averaged cv results
     hf.create_dataset(f'AveragedCV_local_test_error_log', data=avg_cv_test_loss)
     hf.create_dataset(f'AveragedCV_local_train_error_log', data=avg_cv_train_loss)

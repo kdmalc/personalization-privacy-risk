@@ -305,8 +305,8 @@ class Server(ModelBase):
                 file.write(perfedavg_param_str)
 
 
-    def save_results_h5(self, save_cost_func_comps=False, save_gradient=False):
-
+    def save_results_h5(self, save_cost_func_comps=False, save_gradient=True):
+        ## THIS FUNC IS CURRENTLY NOT USED...
         if len(self.local_test_error_log)!=0:
             print("File path: " + self.h5_file_path + ".h5")
 
@@ -338,7 +338,7 @@ class Server(ModelBase):
                         group.create_dataset(dataset_name, data=data)
 
                 if save_cost_func_comps:
-                    # TODO: This is probably not implemented the same
+                    # TODO: This is code from PyTorch version, self.cost_func_comps_log doesnt exist here (yet)
                     G1 = hf.create_group('cost_func_tuples_by_client')
                     for idx, cost_func_comps in enumerate(self.cost_func_comps_log):
                         name_index = idx // len(self.condition_number_lst)
@@ -348,14 +348,9 @@ class Server(ModelBase):
                         G1.create_dataset(name_str, data=cost_func_comps)
 
                 if save_gradient:
-                    # TODO: As of now, I don't think gradients are tracked...
                     G2 = hf.create_group('gradient_norm_lists_by_client')
-                    for idx, grad_norm_list in enumerate(self.gradient_norm_log):
-                        name_index = idx // len(self.condition_number_lst)
-                        if name_index >= len(self.all_subj_IDs):
-                            name_index = len(self.all_subj_IDs) - 1  # Ensure it doesn't exceed the last index
-                        name_str = self.all_subj_IDs[name_index] + "_C" + str(self.condition_number_lst[idx % len(self.condition_number_lst)])
-                        G2.create_dataset(name_str, data=grad_norm_list)
+                    for idx, cli in enumerate(self.all_clients):
+                        G2.create_dataset(f"S{cli.ID}_grad_norm_lst", data=cli.local_gradient_log)
         else:
             print("Saving failed.")
 

@@ -19,9 +19,9 @@ from shared_globals import *
 
 
 # GLOBALS
-GLOBAL_METHOD = "NOFL"  #FedAvg #PFAFO_GDLS #NOFL
+GLOBAL_METHOD = "PFAFO_GDLS"  #FedAvg #PFAFO_GDLS #NOFL
 OPT_METHOD = 'FULLSCIPYMIN' if GLOBAL_METHOD=="NOFL" else 'GDLS'
-GLOBAL_ROUNDS = 12 if GLOBAL_METHOD=="NOFL" else 210
+GLOBAL_ROUNDS = 12 if GLOBAL_METHOD=="NOFL" else 250
 LOCAL_ROUND_THRESHOLD = 1 if GLOBAL_METHOD=="NOFL" else 20
 NUM_STEPS = 3  # This is basically just local_epochs. Num_grad_steps
 SCENARIO = "CROSS"  # "INTRA" cant be used in this file!
@@ -47,7 +47,7 @@ folds = list(kf.split(user_ids))
 ## creates a list of references to the same inner list. 
 ## This means that when you modify one element, all elements change.
 ## Instead, use list comprehension:
-cross_val_res_lst = [[0, 0, 0] for _ in range(NUM_KFOLDS)]
+cross_val_res_lst = [[0, 0, 0, 0] for _ in range(NUM_KFOLDS)]
 for fold_idx, (train_ids, test_ids) in enumerate(folds):
     print(f"Fold {fold_idx+1}/{NUM_KFOLDS}")
     print(f"{len(train_ids)} Train_IDs: {train_ids}")
@@ -95,13 +95,15 @@ for fold_idx, (train_ids, test_ids) in enumerate(folds):
     ## Idk if I really need to be using deepcopy here...
     cross_val_res_lst[fold_idx][0] = copy.deepcopy(server_obj.local_train_error_log)
     cross_val_res_lst[fold_idx][1] = copy.deepcopy(server_obj.local_test_error_log)
-    cross_val_res_lst[fold_idx][2] = [[0] for _ in range(len(full_client_lst))]  
+    cross_val_res_lst[fold_idx][2] = [[0] for _ in range(len(full_client_lst))] 
+    cross_val_res_lst[fold_idx][3] = [[0] for _ in range(len(full_client_lst))]
     #for idx, cli in enumerate(server_obj.train_clients):  
     for cli in server_obj.train_clients:  
         # Using train_clients leaves the 2-3 0s at the end, which appear in/as Clients 11-13
         assert(len(cli.local_test_error_log)>1)  # Is this actually an issue? idk... turning off for now...
         #print(f"CLI{cli.ID} SUCCESS: LEN = {len(cli.local_test_error_log)}")
         cross_val_res_lst[fold_idx][2][cli.ID] = copy.deepcopy(cli.local_test_error_log)
+        cross_val_res_lst[fold_idx][3][cli.ID] = copy.deepcopy(cli.local_gradient_log)
 
     #server_obj.save_results_h5(save_cost_func_comps=False, save_gradient=False)
     # Save the model for the current fold
@@ -149,6 +151,7 @@ with h5py.File(server_obj.h5_file_path + "_CrossValResults.h5", 'w') as hf:
         for cli in full_client_lst:
             # NOTE: train_clients here is train_clients from the last fold, which is NOT equal to train_clients from earlier folds
             hf.create_dataset(f'Fold{fold_idx}_client{cli.ID}_local_test_error_log', data=cross_val_res_lst[fold_idx][2][cli.ID])
+            hf.create_dataset(f'Fold{fold_idx}_client{cli.ID}_gradient_norm_log', data=cross_val_res_lst[fold_idx][3][cli.ID])
     # Save the averaged cv results
     hf.create_dataset(f'AveragedCV_local_test_error_log', data=avg_cv_test_loss)
     hf.create_dataset(f'AveragedCV_local_train_error_log', data=avg_cv_train_loss)
