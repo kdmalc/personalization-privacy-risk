@@ -31,7 +31,7 @@ def gradient_cost_l2(F, D, V, alphaD=1e-4, alphaE=1e-6,
 
 # set up the cost function: 
 # c_L2 = (||DF - V+||_2)^2 + alphaD*(||D||_2)^2
-def cost_l2(F, D, V, alphaD=1e-4, alphaE=1e-6, Nd=2, Ne=64):
+def cost_l2(F, D, V, alphaD=1e-4, alphaE=1e-6, Nd=2, Ne=64, return_cost_func_comps=False):
     '''
     F: 64 channels x time EMG signals
     V: 2 x time target velocity
@@ -48,7 +48,10 @@ def cost_l2(F, D, V, alphaD=1e-4, alphaE=1e-6, Nd=2, Ne=64):
     term2 = alphaD*(np.linalg.norm(D)**2)
     # F Norm (User Effort)
     #term3 = alphaF*(np.linalg.norm(F)**2)
-    return (term1 + term2)
+    if return_cost_func_comps:
+        return (term1 + term2), term1, term2
+    else:
+        return (term1 + term2)
 
 
 def estimate_decoder(F, V):

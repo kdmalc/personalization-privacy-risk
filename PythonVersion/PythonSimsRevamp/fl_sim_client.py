@@ -776,8 +776,9 @@ class Client(ModelBase):
             out = round(temp, 7)
         return out
         
-    def test_metrics(self, model, which):
-        ''' No training, just evaluates the given model on the client's testing dataset (which may be the crossval set) '''
+
+    def test_metrics(self, model, which, return_cost_func_comps=False):
+        ''' No training, just evaluates the given model on the client's testing dataset (which may be the multi-client CROSS testset, if that has been set externally already) '''
         # NOTE: Hit bound code may be incompatible with this!
         
         if which=='local':
@@ -788,37 +789,65 @@ class Client(ModelBase):
             raise ValueError('test_metrics which does not exist. Must be local, global, or pers')
             
         if type(self.F_test) is type([]):
+            print("LIST VERSION IS RUNNING")
+
             running_test_loss = 0
             running_num_samples = 0
+            if return_cost_func_comps:
+                running_vel_error = 0
+                running_dec_error = 0
             for i in range(len(self.F_test)):
                 # TODO: Ensure that this is supposed to be D@s and not D@F...
+                # Not totally sure why this iterates... why doesn't it just operate on the entire matrix? Idk
+
                 v_actual = model@self.s_test[i]
                 p_actual = np.cumsum(v_actual, axis=1)*self.dt  # Numerical integration of v_actual to get p_actual
                 V_test = (self.p_test_reference[i] - p_actual)*self.dt
 
-                batch_loss = cost_l2(self.F_test[i], model, V_test, alphaE=self.alphaE, alphaD=self.alphaD, Ne=self.PCA_comps)
+                if return_cost_func_comps:
+                    batch_loss, vel_error, dec_error = cost_l2(self.F_test[i], model, V_test, alphaE=self.alphaE, alphaD=self.alphaD, Ne=self.PCA_comps, return_cost_func_comps=return_cost_func_comps)
+                    running_vel_error += vel_error * batch_samples
+                    running_dec_error += dec_error * batch_samples
+                else:
+                    batch_loss = cost_l2(self.F_test[i], model, V_test, alphaE=self.alphaE, alphaD=self.alphaD, Ne=self.PCA_comps, return_cost_func_comps=return_cost_func_comps)
                 batch_samples = self.F_test[i].shape[0]
                 running_test_loss += batch_loss * batch_samples  # Accumulate weighted loss by number of samples in batch
                 running_num_samples += batch_samples
             normalized_test_loss = running_test_loss / running_num_samples  # Normalize by total number of samples
-            #self.client_test_loss_log.append(normalized_test_loss)
+            if return_cost_func_comps:
+                normalized_vel_error = running_vel_error / running_num_samples
+                normalized_dec_error = running_dec_error / running_num_samples
             test_log.append(normalized_test_loss)
         else:
+            print("MATRIX(?) VERSION IS RUNNING")
+
             # TODO: Ensure that this is supposed to be D@s and not D@F...
             v_actual = model@self.s_test
             p_actual = np.cumsum(v_actual, axis=1)*self.dt  # Numerical integration of v_actual to get p_actual
             V_test = (self.p_test_reference - p_actual)*self.dt
 
-            test_loss = cost_l2(self.F_test, model, V_test, alphaE=self.alphaE, alphaD=self.alphaD, Ne=self.PCA_comps)
+            if return_cost_func_comps:
+                test_loss, vel_error, dec_error = cost_l2(self.F_test[i], model, V_test, alphaE=self.alphaE, alphaD=self.alphaD, Ne=self.PCA_comps, return_cost_func_comps=return_cost_func_comps)
+                vel_error = vel_error * batch_samples
+                dec_error = dec_error * batch_samples
+            else:
+                test_loss = cost_l2(self.F_test[i], model, V_test, alphaE=self.alphaE, alphaD=self.alphaD, Ne=self.PCA_comps, return_cost_func_comps=return_cost_func_comps)
+
             total_samples = self.F_test.shape[1]  # Shape is (64, 1201ish) AKA (self.PCA_comps, 1201ish)
             assert(total_samples!=self.PCA_comps)
             normalized_test_loss = test_loss / total_samples  # Normalize by the number of samples
-            #self.client_test_loss_log.append(normalized_test_loss)
+            if return_cost_func_comps:
+                normalized_vel_error = vel_error / total_samples
+                normalized_dec_error = dec_error / total_samples
             test_log.append(normalized_test_loss)
         
         # This was returning V_test for some reason
         ## I have None as a placeholder for now, maybe I'll return testing samples? But it already has access to that...
-        return normalized_test_loss, None
+        ## Probably should just remove, just have to remove it everywhere in the code...
+        if return_cost_func_comps:
+            return normalized_test_loss, normalized_vel_error, normalized_dec_error
+        else:
+            return normalized_test_loss, None
     
 
     def train_metrics(self, model, which):
