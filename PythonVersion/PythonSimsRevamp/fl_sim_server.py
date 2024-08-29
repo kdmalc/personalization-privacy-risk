@@ -64,10 +64,10 @@ class Server(ModelBase):
             # test_metrics for all clients
             local_test_loss, _ = my_client.test_metrics(my_client.w, 'local')
             local_train_loss, _ = my_client.train_metrics(my_client.w, 'local')
-            if self.global_method=='FEDAVG' or 'PFA' in self.global_method:
+            if self.global_method!='NOFL':
                 global_test_loss, _ = my_client.test_metrics(self.w, 'global')
                 global_train_loss, _ = my_client.train_metrics(self.w, 'global')
-            elif self.global_method=='NOFL':
+            else:
                 global_test_loss = 0
                 global_train_loss = 0
 

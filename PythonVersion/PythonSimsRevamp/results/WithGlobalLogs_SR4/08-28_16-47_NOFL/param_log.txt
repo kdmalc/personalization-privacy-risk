@@ -1,5 +1,5 @@
 BASE
-algorithm = PFAFO_GDLS
+algorithm = NOFL
 scenario = CROSS
 
 
@@ -7,8 +7,8 @@ MODEL HYPERPARAMETERS
 lambdaF = 0.0
 lambdaD = 0.0001
 lambdaE = 1e-06
-global_rounds = 250
-optimizer = GDLS
+global_rounds = 12
+optimizer = FULLSCIPYMIN
 pca_channels = 64
 learning rate (only used with GD) = 1
 max iter (only used with scipy) = None
@@ -25,14 +25,10 @@ sequential = False
 
 
 FEDERATED LEARNING PARAMS
-local_round_threshold = 20
+local_round_threshold = 1
 
 
 SIMULATION PARAMS
 starting_update = 9
 total effective clients = 12
 smoothbatch_lr = 0.75
-
-
-PERFEDAVG PARAMS
-beta = 0.01
