@@ -19,7 +19,7 @@ step_indices = list(range(num_updates))
 
 MAX_ITER=None  # For MAXITERSCIPYMIN. Use FULLSCIPYMIN for complete minimization, otherwise stay with 1
 
-COLORS_LST = ['red', 'blue', 'magenta', 'orange', 'darkviolet', 'lime']
+COLORS_LST = ['red', 'blue', 'magenta', 'orange', 'darkviolet', 'lime', 'cyan', 'yellow']
 ALPHA = 0.7
 
 # get current date and time
@@ -27,7 +27,7 @@ CURRENT_DATETIME = str(datetime.now().strftime("%m-%d_%H-%M"))
 
 STARTING_UPDATE=10
 DATA_STREAM='streaming'
-NUM_KFOLDS=5
+NUM_KFOLDS=7
 USE_HITBOUNDS = False
 PLOT_EACH_FOLD = False
 USE_KFOLDCV = True

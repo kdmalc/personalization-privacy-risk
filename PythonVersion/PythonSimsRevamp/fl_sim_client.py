@@ -13,7 +13,7 @@ from cost_funcs import *
 
 class Client(ModelBase):
     def __init__(self, ID, w, opt_method, full_client_dataset, data_stream, smoothbatch_lr=0.75, current_round=0, PCA_comps=64, 
-                availability=1, final_usable_update_ix=17, global_method='FedAvg', max_iter=1, normalize_EMG=True, starting_update=9, 
+                availability=1, final_usable_update_ix=17, global_method='FedAvg', max_iter=1, normalize_EMG=True, starting_update=10, 
                 track_cost_components=True, log_decs=True, val_set=False,
                 tol=1e-10, lr=1, beta=0.01, track_gradient=True,  
                 num_steps=1, use_zvel=False, current_fold=0, scenario="", 
@@ -123,19 +123,30 @@ class Client(ModelBase):
         self.val_set = val_set
         self.scenario = scenario.upper()
         self.current_fold = current_fold
-        self.test_update_ix = None
+        self.test_update = None
         self.train_update_ix = None
 
         if self.test_split_type=="KFOLDCV":
             if self.scenario=="INTRA":
                 # Include these in the init? ...
                 append_leftovers_to_last_fold = False
-                shift_leftovers_across_folds = True
+                shift_leftovers_across_folds = False
+                match_num_kfolds_to_num_updates = True
 
                 # Filter update_ix to only include updates 9-16
                 valid_updates = [ix for ix in self.update_ix if starting_update <= self.update_ix.index(ix) < final_usable_update_ix]
                 # THIS SETS THE TESTING FOLD
-                if append_leftovers_to_last_fold:
+                if match_num_kfolds_to_num_updates:
+                    # Set number of kfolds to match number of updates in valid_updates
+                    self.num_kfolds = len(valid_updates)  # OVERWRITES! Set kfolds to number of updates
+                    updates_per_fold = 1  # 1 update per fold since we have 8 updates and 8 folds
+                    self.folds = [[update] for update in valid_updates]  # Each fold has exactly one update
+                    #if hasattr(self, 'ID') and self.ID == 0:
+                    #    print(f"Created {len(self.folds)} folds, each with 1 update:")
+                    #    for i, fold in enumerate(self.folds):
+                    #        print(f"Fold {i}: {len(fold)} updates: {[self.update_ix.index(i) for i in fold]}")
+                    assert len(self.folds) == self.num_kfolds, f"Expected {self.num_kfolds} folds, got {len(self.folds)}"
+                elif append_leftovers_to_last_fold:
                     '''Leftover updates are appended to the last fold. Updates are continuous but the last fold will be much bigger...'''
                     # Calculate the number of updates per fold
                     updates_per_fold = len(valid_updates) // self.num_kfolds
@@ -172,11 +183,12 @@ class Client(ModelBase):
                             print(f"Fold {i}: {len(fold)} updates: {[self.update_ix.index(i) for i in fold]}")
                     assert len(self.folds) == self.num_kfolds, f"Expected {self.num_kfolds} folds, got {len(self.folds)}"
                     assert sum(len(fold) for fold in self.folds) == total_updates, "Not all updates were included in the folds"
+                
                 # SET THE TEST DATA
                 # Get the current fold's update indices
                 fold_updates = self.folds[self.current_fold]
-                self.test_update_ix = [self.update_ix.index(ele) for ele in fold_updates]
-                self.train_update_ix = [ele for ele in self.update_ix if ((self.update_ix.index(ele)>=self.starting_update) and (self.update_ix.index(ele) not in self.test_update_ix) and (self.update_ix.index(ele)<self.final_usable_update_ix))]
+                self.test_update = [self.update_ix.index(ele) for ele in fold_updates]
+                self.train_update_ix = [ele for ele in self.update_ix if ((self.update_ix.index(ele)>=self.starting_update) and (self.update_ix.index(ele) not in self.test_update) and (self.update_ix.index(ele)<self.final_usable_update_ix))]
 
                 # Find the start and end indices for the TEST dataset
                 ## THE BELOW CODE ASSUMES TEST UPDATES IN FOLD ARE CONTIGUOUS
@@ -787,7 +799,8 @@ class Client(ModelBase):
             raise ValueError('test_metrics which does not exist. Must be local, global, or pers')
             
         if type(self.F_test) is type([]):
-            print("LIST VERSION IS RUNNING")
+            # LIST VERSION: THIS IS WHAT RUNS BY DEFAULT IN THE CROSS CASE
+            ## WHY
 
             running_test_loss = 0
             running_num_samples = 0
@@ -817,7 +830,7 @@ class Client(ModelBase):
                 normalized_dec_error = running_dec_error / running_num_samples
             test_log.append(normalized_test_loss)
         else:
-            print("MATRIX(?) VERSION IS RUNNING")
+            # MATRIX VERSION: THIS IS WHAT RUNS BY DEFAULT IN THE INTRA CASE
 
             # TODO: Ensure that this is supposed to be D@s and not D@F...
             v_actual = model@self.s_test
@@ -829,7 +842,7 @@ class Client(ModelBase):
                 vel_error = vel_error * batch_samples
                 dec_error = dec_error * batch_samples
             else:
-                test_loss = cost_l2(self.F_test[i], model, V_test, alphaE=self.alphaE, alphaD=self.alphaD, Ne=self.PCA_comps, return_cost_func_comps=return_cost_func_comps)
+                test_loss = cost_l2(self.F_test, model, V_test, alphaE=self.alphaE, alphaD=self.alphaD, Ne=self.PCA_comps, return_cost_func_comps=return_cost_func_comps)
 
             total_samples = self.F_test.shape[1]  # Shape is (64, 1201ish) AKA (self.PCA_comps, 1201ish)
             assert(total_samples!=self.PCA_comps)
