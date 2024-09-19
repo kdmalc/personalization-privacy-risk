@@ -280,12 +280,9 @@ class Client(ModelBase):
         else:
             raise ValueError("test_split_type not working as expected")
         
-        if self.scenario=="INTRA":
-            # If so, then DONT overwrite the training data and labels!
-            pass
-        elif self.scenario=="CROSS":
-            self.training_data = self.local_dataset[:self.test_split_idx, :]
-            self.training_labels = self.local_labelset[:self.test_split_idx, :]
+        if self.scenario=="CROSS":
+            self.training_data = self.local_dataset
+            self.training_labels = self.local_labelset
             self.test_learning_batch = upper_bound - lower_bound
         s_temp = self.testing_data
         if self.normalize_EMG:
@@ -392,7 +389,7 @@ class Client(ModelBase):
         ## This is sort of fine since it's just the round and doesn't matter that much 
         self.current_round += 1
 
-        if (self.current_update>=self.final_usable_update_ix-1) or (self.train_update_ix is not None and self.current_train_update>=(len(self.train_update_ix)-1)):  #17: previously 17 but the last update is super short so I cut it out
+        if (self.current_update>=self.final_usable_update_ix-1) or (self.train_update_ix is not None and self.current_train_update>=(len(self.train_update_ix)-1)):
             self.logger = "UNNAMED"
             #print("Maxxed out your update (you are on update 18), continuing training on last update only")
             # Probably ought to track that we maxed out --> LOG SYSTEM
@@ -464,6 +461,7 @@ class Client(ModelBase):
         else:
             raise ValueError(f'streaming_method ("{streaming_method}") not recognized: this data streaming functionality is not supported')
             
+        # This code could be heavily condensed but idc enough to refactor it right now...
         if need_to_advance:
             if self.scenario=="INTRA":
                 # Should the 0 be changed to self.current_update... would need to be subtracted by starting_update...
@@ -475,10 +473,10 @@ class Client(ModelBase):
                     mid_point = (lower_bound+upper_bound)//2
                     self.learning_batch = mid_point - lower_bound
 
-                    s_temp = self.local_dataset[lower_bound:mid_point, :]
-                    s_temp2 = self.local_dataset[mid_point:upper_bound, :]
-                    p_ref_lim = self.local_labelset[lower_bound:mid_point, :]
-                    p_ref_lim2 = self.local_labelset[mid_point:upper_bound, :]
+                    s_temp = copy.deepcopy(self.local_dataset[lower_bound:mid_point, :])
+                    s_temp2 = copy.deepcopy(self.local_dataset[mid_point:upper_bound, :])
+                    p_ref_lim = copy.deepcopy(self.local_labelset[lower_bound:mid_point, :])
+                    p_ref_lim2 = copy.deepcopy(self.local_labelset[mid_point:upper_bound, :])
                     self.p_reference = np.transpose(p_ref_lim)
                     self.p_reference2 = np.transpose(p_ref_lim2)
 
@@ -499,12 +497,12 @@ class Client(ModelBase):
                     self.V2 = (self.p_reference2 - p_actual2)*self.dt
                 else:
                     self.learning_batch = upper_bound - lower_bound
-                    s_temp = self.local_dataset[lower_bound:upper_bound, :]
+                    s_temp = copy.deepcopy(self.local_dataset[lower_bound:upper_bound, :])
                     #print(f"Client{self.ID} TRAINING DATA UPDATE: Mean, var, and norm: {np.mean(s_temp), np.var(s_temp), np.linalg.norm(s_temp)}")
                     # For Maneeshika's code:
                     #p_ref_lim = np.vstack([self.training_labels[self.update_ix.index(update):self.update_ix.index(update)+1, :] 
                     #               for update in train_updates])
-                    p_ref_lim = self.local_labelset[lower_bound:upper_bound, :]
+                    p_ref_lim = copy.deepcopy(self.local_labelset[lower_bound:upper_bound, :])
                     # This is the used label
                     self.p_reference = np.transpose(p_ref_lim)
             elif self.scenario=="CROSS":
@@ -515,18 +513,18 @@ class Client(ModelBase):
 
                 if "PFA" in self.global_method:
                     mid_point = (lower_bound+upper_bound)//2
-                    s_temp = self.training_data[lower_bound:mid_point,:]
-                    s_temp2 = self.training_data[mid_point:upper_bound,:]
-                    self.p_reference = np.transpose(self.training_labels[lower_bound:mid_point,:])
-                    self.p_reference2 = np.transpose(self.training_labels[mid_point:upper_bound,:])
+                    s_temp = copy.deepcopy(self.training_data[lower_bound:mid_point,:])
+                    s_temp2 = copy.deepcopy(self.training_data[mid_point:upper_bound,:])
+                    self.p_reference = copy.deepcopy(np.transpose(self.training_labels[lower_bound:mid_point,:]))
+                    self.p_reference2 = copy.deepcopy(np.transpose(self.training_labels[mid_point:upper_bound,:]))
                     # For Maneeshika's code, otherwise not used:
-                    p_ref_lim = self.training_labels[lower_bound:mid_point,:]
-                    p_ref_lim2 = self.training_labels[mid_point:upper_bound,:]
+                    #p_ref_lim = self.training_labels[lower_bound:mid_point,:]
+                    #p_ref_lim2 = self.training_labels[mid_point:upper_bound,:]
                 else:  # FEDAVG AND NOFL!
-                    s_temp = self.training_data[lower_bound:upper_bound,:]
-                    self.p_reference = np.transpose(self.training_labels[lower_bound:upper_bound,:])
+                    s_temp = copy.deepcopy(self.training_data[lower_bound:upper_bound,:])
+                    self.p_reference = copy.deepcopy(np.transpose(self.training_labels[lower_bound:upper_bound,:]))
                     # For Maneeshika's code, otherwise not used:
-                    p_ref_lim = self.training_labels[lower_bound:upper_bound,:]
+                    #p_ref_lim = self.training_labels[lower_bound:upper_bound,:]
                 
             # First, normalize the entire s matrix
             if self.normalize_EMG:
