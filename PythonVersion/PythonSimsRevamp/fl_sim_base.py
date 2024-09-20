@@ -26,7 +26,8 @@ class ModelBase:
         else:
             self.w = w
         self.w_prev = copy.deepcopy(self.w)
-        self.dec_log = [copy.deepcopy(self.w)]
+        self.global_dec_log = [copy.deepcopy(self.w)]
+        self.local_dec_log = [copy.deepcopy(self.w)]
         self.w_prev = copy.deepcopy(self.w)
         self.num_clients = num_clients
         self.log_init = log_init

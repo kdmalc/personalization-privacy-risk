@@ -159,7 +159,7 @@ class Server(ModelBase):
             raise('Method not currently supported, please reset method to FedAvg')
         
         # Save the new decoder to the log
-        self.dec_log.append(copy.deepcopy(self.w))
+        self.global_dec_log.append(copy.deepcopy(self.w))
         # Run train_metrics and test_metrics to log performance on training/testing data
         for client_idx, my_client in enumerate(self.train_clients): # Eg all train-able clients (no witheld val clients from kfoldcv)
             # Reset all clients so no one is chosen for the next round
@@ -325,8 +325,15 @@ class Server(ModelBase):
                 if self.global_method!="NOFL":
                     hf.create_dataset('global_test_error_log', data=self.global_test_error_log)
                     hf.create_dataset('global_train_error_log', data=self.global_train_error_log)
+
+                    hf.create_dataset('global_dec_log', data=self.global_dec_log)
                 hf.create_dataset('local_test_error_log', data=self.local_test_error_log)
                 hf.create_dataset('local_train_error_log', data=self.local_train_error_log)
+
+                group = hf.create_group('client_local_model_log')
+                for cli in self.all_clients:
+                    data = cli.local_dec_log
+                    group.create_dataset(f"S{cli.ID}_client_local_model_log", data=data)
 
                 # This feature got removed... 
                 #if self.sequential:

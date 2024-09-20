@@ -316,8 +316,7 @@ class Client(ModelBase):
         
         # LOG EVERYTHING
         ## I guess this is actually after train_model is called...
-        # TODO: Revamp this to be self.local_dec_log ...
-        self.dec_log.append(self.w)
+        self.local_dec_log.append(self.w)
         # TODO: Not sure why this would have higher error than global, given that global is right below...
         self.local_train_error_log.append(self.eval_model(which='local'))
         if self.global_method!="NOFL":
