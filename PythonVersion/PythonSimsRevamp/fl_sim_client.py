@@ -33,8 +33,8 @@ class Client(ModelBase):
         self.current_train_update = 0
         self.starting_update = starting_update
         self.final_usable_update_ix = final_usable_update_ix
-        self.local_dataset = full_client_dataset['training'][self.update_ix[starting_update]:self.update_ix[final_usable_update_ix], :]
-        self.local_labelset = full_client_dataset['labels'][self.update_ix[starting_update]:self.update_ix[final_usable_update_ix], :]
+        self.local_dataset = copy.deepcopy(full_client_dataset['training'][self.update_ix[starting_update]:self.update_ix[final_usable_update_ix], :])
+        self.local_labelset = copy.deepcopy(full_client_dataset['labels'][self.update_ix[starting_update]:self.update_ix[final_usable_update_ix], :])
 
         self.global_method = global_method.upper()
         self.validate_memory_IDs = validate_memory_IDs
@@ -315,8 +315,10 @@ class Client(ModelBase):
         self.train_model()
         
         # LOG EVERYTHING
+        #if self.ID==0:
+        #    print(f"LOGGING: cli{self.ID}, round {self.current_round}, len(local_dec_log) {len(self.local_dec_log)}")
         ## I guess this is actually after train_model is called...
-        self.local_dec_log.append(self.w)
+        self.local_dec_log.append(copy.deepcopy(self.w))
         # TODO: Not sure why this would have higher error than global, given that global is right below...
         self.local_train_error_log.append(self.eval_model(which='local'))
         if self.global_method!="NOFL":
