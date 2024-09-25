@@ -49,6 +49,7 @@ class Server(ModelBase):
         self.test_split_type = test_split_type.upper()
         self.num_kfolds = num_kfolds
         self.test_split_frac = test_split_frac
+        self.current_fold = 0
 
         # SAVE FILE RELATED
         # Get the directory of the current script
@@ -312,16 +313,23 @@ class Server(ModelBase):
                 file.write(perfedavg_param_str)
 
 
-    def save_results_h5(self, save_cost_func_comps=False, save_gradient=True):
+    def save_results_h5(self, save_cost_func_comps=False, save_gradient=True, dir_str=None):
         if len(self.local_test_error_log)!=0:
-            print("File path: " + self.h5_file_path + ".h5")
+            if dir_str is None:
+                extra_dir_str = ""
+            else:
+                extra_dir_str = "_" + dir_str
+
+            print("File path: " + self.h5_file_path + f"{extra_dir_str}.h5")
 
             if self.test_split_type=="KFOLDCV":
-                save_filename = self.h5_file_path + f"_KFold{self.current_fold}.h5"
+                # TODO: SWITCH THIS BACK! Lazy solution for main_membership_inference_attack
+                #save_filename = self.h5_file_path + f"_KFold{self.current_fold}.h5"
+                self.save_filename = self.h5_file_path + f"{extra_dir_str}.h5"
             else:
-                save_filename = self.h5_file_path + ".h5"
+                self.save_filename = self.h5_file_path + f"{extra_dir_str}.h5"
 
-            with h5py.File(save_filename, 'w') as hf:
+            with h5py.File(self.save_filename, 'w') as hf:
                 if self.global_method!="NOFL":
                     hf.create_dataset('global_test_error_log', data=self.global_test_error_log)
                     hf.create_dataset('global_train_error_log', data=self.global_train_error_log)
@@ -365,3 +373,7 @@ class Server(ModelBase):
             print("Saving failed.")
 
         
+    def evaluate_client(self, cli_obj):
+        cli_obj.global_w = copy.deepcopy(self.w)
+        loss = cli_obj.eval_model(which='global')
+        return loss
