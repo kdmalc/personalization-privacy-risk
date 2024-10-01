@@ -13,13 +13,14 @@ from fl_sim_base import *
 class Server(ModelBase):
     def __init__(self, ID, D0, opt_method, global_method, all_clients, smoothbatch_lr=0.75, C=0.35, test_split_type='kfoldcv', 
                  num_kfolds=5, test_split_frac=0.3, current_round=0, PCA_comps=64, verbose=False, validate_memory_IDs=True, save_client_loss_logs=True, 
-                 sequential=False, current_datatime="Overwritten"):
+                 sequential=False, current_datatime="Overwritten", privacy_attack=False):
         super().__init__(ID, D0, opt_method, smoothbatch_lr=smoothbatch_lr, current_round=current_round, PCA_comps=PCA_comps, 
                          verbose=verbose, num_clients=14, log_init=0)
         
         self.type = 'Server'
         self.save_client_loss_logs = save_client_loss_logs
         self.sequential = sequential
+        self.privacy_attack = privacy_attack
 
         # CLIENT LISTS!
         self.num_avail_clients = 0
@@ -323,9 +324,10 @@ class Server(ModelBase):
             print("File path: " + self.h5_file_path + f"{extra_dir_str}.h5")
 
             if self.test_split_type=="KFOLDCV":
-                # TODO: SWITCH THIS BACK! Lazy solution for main_membership_inference_attack
-                #save_filename = self.h5_file_path + f"_KFold{self.current_fold}.h5"
-                self.save_filename = self.h5_file_path + f"{extra_dir_str}.h5"
+                if self.privacy_attack:
+                    self.save_filename = self.h5_file_path + f"{extra_dir_str}.h5"
+                else:
+                    self.save_filename = self.h5_file_path + f"_KFold{self.current_fold}.h5"
             else:
                 self.save_filename = self.h5_file_path + f"{extra_dir_str}.h5"
 
@@ -340,8 +342,9 @@ class Server(ModelBase):
 
                 group = hf.create_group('client_local_model_log')
                 for cli in self.all_clients:
-                    data = cli.local_dec_log
-                    group.create_dataset(f"S{cli.ID}_client_local_model_log", data=data)
+                    print(f"S{cli.ID}_client_local_model_log")
+                    group.create_dataset(f"S{cli.ID}_client_local_model_log", data=cli.local_dec_log)
+                print()
 
                 # This feature got removed... 
                 #if self.sequential:
@@ -352,8 +355,9 @@ class Server(ModelBase):
                 if self.save_client_loss_logs:
                     group = hf.create_group('client_local_test_log')
                     for cli in self.all_clients:
-                        data = cli.local_test_error_log
-                        group.create_dataset(f"S{cli.ID}_client_local_test_log", data=data)
+                        print(f"S{cli.ID}_client_local_test_log")
+                        group.create_dataset(f"S{cli.ID}_client_local_test_log", data=cli.local_test_error_log)
+                    print()
 
                 if save_cost_func_comps:
                     # TODO: This is code from PyTorch version, self.cost_func_comps_log doesnt exist here (yet)

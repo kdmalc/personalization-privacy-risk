@@ -3,13 +3,10 @@ import numpy as np
 np.random.seed(0)
 import random
 random.seed(0)
-import time
 import pickle
 from sklearn.model_selection import KFold
 import copy
 from matplotlib import pyplot as plt
-#import seaborn as sns
-#from presentation_sns_config import *
 
 from experiment_params import *
 from cost_funcs import *
@@ -31,9 +28,6 @@ LR=1  # Not used with GDLS?
 
 with open(path+cond0_filename, 'rb') as fp:
     cond0_training_and_labels_lst = pickle.load(fp)
-#with open(path+all_decs_init_filename, 'rb') as fp:
-#    init_decoders = pickle.load(fp)    
-#cond0_init_decs = [dec[0, :, :] for dec in init_decoders]
 
 # THIS K FOLD SCHEME IS ONLY FOR CROSS-SUBJECT ANALYSIS!!!
 # Define number of folds
@@ -42,11 +36,6 @@ kf = KFold(n_splits=NUM_KFOLDS)
 user_ids = list(range(14))
 folds = list(kf.split(user_ids))
 
-#cross_val_res_lst = [[0, 0]]*NUM_KFOLDS
-# ^ THIS IS BAD CODE! 
-## creates a list of references to the same inner list. 
-## This means that when you modify one element, all elements change.
-## Instead, use list comprehension:
 cross_val_res_lst = [[0, 0, 0, 0] for _ in range(NUM_KFOLDS)]
 for fold_idx, (train_ids, test_ids) in enumerate(folds):
     print(f"Fold {fold_idx+1}/{NUM_KFOLDS}")

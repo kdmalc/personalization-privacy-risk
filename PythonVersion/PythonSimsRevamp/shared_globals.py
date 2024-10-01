@@ -11,10 +11,8 @@ id2color = {0:'lightcoral', 1:'maroon', 2:'chocolate', 3:'darkorange', 4:'gold',
             7:'lawngreen', 8:'aquamarine', 9:'deepskyblue', 10:'steelblue', 11:'violet', 12:'darkorchid', 13:'deeppink'}
 implemented_client_training_methods = ['GD', 'FullScipyMin', 'MaxIterScipyMin']
 NUM_USERS = 14
-# For exclusion when plotting later on
-#bad_nodes = [] #[1,3,13]
 D_0 = np.random.rand(2,64)
-num_updates = 18
+num_updates = 18  # Is this even used anymore...
 step_indices = list(range(num_updates))
 
 MAX_ITER=None  # For MAXITERSCIPYMIN. Use FULLSCIPYMIN for complete minimization, otherwise stay with 1

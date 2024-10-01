@@ -21,6 +21,7 @@ from shared_globals import *
 ## Not doing K Folds, don't care here
 
 # GLOBALS
+PRIVACY_ATTACK = True
 GLOBAL_METHOD = "FedAvg"  #FedAvg #PFAFO_GDLS #NOFL
 OPT_METHOD = 'FULLSCIPYMIN' if GLOBAL_METHOD=="NOFL" else 'GDLS'
 GLOBAL_ROUNDS = 12 if GLOBAL_METHOD=="NOFL" else 250
@@ -77,7 +78,7 @@ for pair_idx, (user1, user2) in enumerate(user_pairs):
     full_client_lst = train_clients + test_clients
 
     # Initialize server
-    server_obj = Server(1, copy.deepcopy(D_0), opt_method=OPT_METHOD, global_method=GLOBAL_METHOD, all_clients=full_client_lst)
+    server_obj = Server(1, copy.deepcopy(D_0), opt_method=OPT_METHOD, global_method=GLOBAL_METHOD, privacy_attack=PRIVACY_ATTACK, all_clients=full_client_lst)
     server_obj.set_save_filename(CURRENT_DATETIME)
     server_obj.global_rounds = GLOBAL_ROUNDS
 

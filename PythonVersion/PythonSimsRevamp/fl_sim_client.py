@@ -15,8 +15,7 @@ class Client(ModelBase):
     def __init__(self, ID, w, opt_method, full_client_dataset, data_stream, smoothbatch_lr=0.75, current_round=0, PCA_comps=64, 
                 availability=1, final_usable_update_ix=17, global_method='FedAvg', max_iter=1, normalize_EMG=True, starting_update=10, 
                 track_cost_components=True, log_decs=True, val_set=False,
-                tol=1e-10, lr=1, beta=0.01, track_gradient=True,  
-                num_steps=1, use_zvel=False, current_fold=0, scenario="", 
+                tol=1e-10, lr=1, beta=0.01, track_gradient=True, num_steps=1, use_zvel=False, current_fold=0, scenario="", 
                 mix_in_each_steps=False, mix_mixed_SB=False, delay_scaling=0, random_delays=False, download_delay=1, 
                 upload_delay=1, validate_memory_IDs=True, local_round_threshold=25, condition_number=3, 
                 verbose=False, test_split_type='kfoldcv', num_kfolds=5, test_split_frac=0.3):
