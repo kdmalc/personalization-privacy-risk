@@ -102,12 +102,15 @@ class Client(ModelBase):
         self.log_decs = log_decs
         # Overwrite the logs since global and local track in slightly different ways
         self.track_cost_components = track_cost_components
-        self.performance_log = []
-        self.Dnorm_log = []
-        self.Fnorm_log = []
+        #self.performance_log = []
+        #self.Dnorm_log = []
+        #self.Fnorm_log = []
         self.track_gradient = track_gradient
         self.local_gradient_log = []
         self.update_transition_log = []
+        self.local_cost_func_comps_log = []
+        self.global_cost_func_comps_log = []
+
 
         ## Not used AFAIK... --> control where SmoothBatch is used (verify this code still exists if you plan on using)
         self.mix_in_each_steps = mix_in_each_steps
@@ -323,11 +326,13 @@ class Client(ModelBase):
         if self.global_method!="NOFL":
             # TODO: Still doesn't tell me what that global would be better than local...
             self.global_train_error_log.append(self.eval_model(which='global'))
+
         # Log Cost Comp
-        if self.track_cost_components:
-            self.performance_log.append(self.alphaE*(np.linalg.norm((self.w@self.F - self.V[:,1:]))**2))
-            self.Dnorm_log.append(self.alphaD*(np.linalg.norm(self.w)**2))  # This is the scaled norm...
-            self.Fnorm_log.append(np.linalg.norm(self.F)**2)  # This is FNorm, not the F in the cost func (which is 0 because of self.alphaF)
+        ## I think this is TRAIN only??
+        #if self.track_cost_components:
+        #    self.performance_log.append(self.alphaE*(np.linalg.norm((self.w@self.F - self.V[:,1:]))**2))
+        #    self.Dnorm_log.append(self.alphaD*(np.linalg.norm(self.w)**2))  # This is the scaled norm...
+        #    self.Fnorm_log.append(np.linalg.norm(self.F)**2)  # This is FNorm, not the F in the cost func (which is 0 because of self.alphaF)
 
 
     def set_testset(self, test_dataset_obj):
@@ -787,14 +792,16 @@ class Client(ModelBase):
         return out
         
 
-    def test_metrics(self, model, which, return_cost_func_comps=False):
+    def test_metrics(self, model, which, return_cost_func_comps=True):
         ''' No training, just evaluates the given model on the client's testing dataset (which may be the multi-client CROSS testset, if that has been set externally already) '''
         # NOTE: Hit bound code may be incompatible with this!
         
         if which=='local':
             test_log = self.local_test_error_log
+            cost_func_comps_log = self.local_cost_func_comps_log
         elif which=='global':
             test_log = self.global_test_error_log
+            cost_func_comps_log = self.global_cost_func_comps_log
         else:
             raise ValueError('test_metrics which does not exist. Must be local, global, or pers')
             
@@ -815,13 +822,13 @@ class Client(ModelBase):
                 p_actual = np.cumsum(v_actual, axis=1)*self.dt  # Numerical integration of v_actual to get p_actual
                 V_test = (self.p_test_reference[i] - p_actual)*self.dt
 
+                batch_samples = self.F_test[i].shape[0]
                 if return_cost_func_comps:
                     batch_loss, vel_error, dec_error = cost_l2(self.F_test[i], model, V_test, alphaE=self.alphaE, alphaD=self.alphaD, Ne=self.PCA_comps, return_cost_func_comps=return_cost_func_comps)
                     running_vel_error += vel_error * batch_samples
                     running_dec_error += dec_error * batch_samples
                 else:
                     batch_loss = cost_l2(self.F_test[i], model, V_test, alphaE=self.alphaE, alphaD=self.alphaD, Ne=self.PCA_comps, return_cost_func_comps=return_cost_func_comps)
-                batch_samples = self.F_test[i].shape[0]
                 running_test_loss += batch_loss * batch_samples  # Accumulate weighted loss by number of samples in batch
                 running_num_samples += batch_samples
             normalized_test_loss = running_test_loss / running_num_samples  # Normalize by total number of samples
@@ -852,13 +859,16 @@ class Client(ModelBase):
                 normalized_dec_error = dec_error / total_samples
             test_log.append(normalized_test_loss)
         
+        if return_cost_func_comps:
+            cost_func_comps_log.append((normalized_test_loss, normalized_vel_error, normalized_dec_error))
+            #return normalized_test_loss, normalized_vel_error, normalized_dec_error
+        else:
+            pass
+        
         # This was returning V_test for some reason
         ## I have None as a placeholder for now, maybe I'll return testing samples? But it already has access to that...
         ## Probably should just remove, just have to remove it everywhere in the code...
-        if return_cost_func_comps:
-            return normalized_test_loss, normalized_vel_error, normalized_dec_error
-        else:
-            return normalized_test_loss, None
+        return normalized_test_loss, None
     
 
     def train_metrics(self, model, which):

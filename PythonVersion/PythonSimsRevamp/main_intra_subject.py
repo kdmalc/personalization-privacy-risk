@@ -20,9 +20,7 @@ GLOBAL_METHOD = "PFAFO_GDLS"  #FedAvg #PFAFO_GDLS #NOFL
 OPT_METHOD = 'FULLSCIPYMIN' if GLOBAL_METHOD=="NOFL" else 'GDLS'
 GLOBAL_ROUNDS = 12 if GLOBAL_METHOD=="NOFL" else 250
 LOCAL_ROUND_THRESHOLD = 1 if GLOBAL_METHOD=="NOFL" else 20
-LR=0.1  # Is LR used or is everything line search now...
-NUM_STEPS = 1
-# ^ This is also basically just local_epochs, since I don't batch. Num_grad_steps
+NUM_STEPS = 1 if GLOBAL_METHOD=="NOFL" else NUM_FL_STEPS  # This is basically just local_epochs, since I don't batch. THIS WRAPS BOTH NOFL AND FL ALGOS!
 SCENARIO = "INTRA"  # "CROSS" cant be used in this file!
 
 with open(path+cond0_filename, 'rb') as fp:

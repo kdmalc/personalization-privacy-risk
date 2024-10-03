@@ -314,7 +314,7 @@ class Server(ModelBase):
                 file.write(perfedavg_param_str)
 
 
-    def save_results_h5(self, save_cost_func_comps=False, save_gradient=True, dir_str=None):
+    def save_results_h5(self, save_cost_func_comps=True, save_gradient=True, dir_str=None):
         if len(self.local_test_error_log)!=0:
             if dir_str is None:
                 extra_dir_str = ""
@@ -355,19 +355,29 @@ class Server(ModelBase):
                 if self.save_client_loss_logs:
                     group = hf.create_group('client_local_test_log')
                     for cli in self.all_clients:
-                        print(f"S{cli.ID}_client_local_test_log")
+                        #print(f"S{cli.ID}_client_local_test_log")
                         group.create_dataset(f"S{cli.ID}_client_local_test_log", data=cli.local_test_error_log)
                     print()
 
                 if save_cost_func_comps:
                     # TODO: This is code from PyTorch version, self.cost_func_comps_log doesnt exist here (yet)
-                    G1 = hf.create_group('cost_func_tuples_by_client')
-                    for idx, cost_func_comps in enumerate(self.cost_func_comps_log):
-                        name_index = idx // len(self.condition_number_lst)
-                        if name_index >= len(self.all_subj_IDs):
-                            name_index = len(self.all_subj_IDs) - 1  # Ensure it doesn't exceed the last index
-                        name_str = self.all_subj_IDs[name_index] + "_C" + str(self.condition_number_lst[idx % len(self.condition_number_lst)])
-                        G1.create_dataset(name_str, data=cost_func_comps)
+                    #G1 = hf.create_group('cost_func_tuples_by_client')
+                    #for idx, cost_func_comps in enumerate(self.cost_func_comps_log):
+                    #    name_index = idx // len(self.condition_number_lst)
+                    #    if name_index >= len(self.all_subj_IDs):
+                    #        name_index = len(self.all_subj_IDs) - 1  # Ensure it doesn't exceed the last index
+                    #    name_str = self.all_subj_IDs[name_index] + "_C" + str(self.condition_number_lst[idx % len(self.condition_number_lst)])
+                    #    G1.create_dataset(name_str, data=cost_func_comps)
+
+                    group = hf.create_group('client_local_cost_func_comps_log')
+                    if self.global_method != "NOFL":
+                        global_group = hf.create_group('client_global_cost_func_comps_log')
+                    for cli in self.all_clients:
+                        #print(f"S{cli.ID}_client_local_test_log")
+                        group.create_dataset(f"S{cli.ID}_client_local_cost_func_comps_log", data=cli.local_cost_func_comps_log)
+                        if self.global_method != "NOFL":
+                            global_group.create_dataset(f"S{cli.ID}_client_global_cost_func_comps_log", data=cli.global_cost_func_comps_log)
+                    #print()
 
                 if save_gradient:
                     G2 = hf.create_group('gradient_norm_lists_by_client')

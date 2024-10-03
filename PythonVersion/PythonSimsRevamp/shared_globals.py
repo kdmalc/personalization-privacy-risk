@@ -30,3 +30,5 @@ USE_HITBOUNDS = False
 PLOT_EACH_FOLD = False
 USE_KFOLDCV = True
 TEST_SPLIT_TYPE = 'KFOLDCV'
+LR=0.1  # I think only line search (eg auto setting lr) is used now, so this is irrelevant...
+NUM_FL_STEPS = 5

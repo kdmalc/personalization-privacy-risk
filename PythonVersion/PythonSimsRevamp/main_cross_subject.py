@@ -20,11 +20,10 @@ GLOBAL_METHOD = "FedAvg"  #FedAvg #PFAFO_GDLS #NOFL
 OPT_METHOD = 'FULLSCIPYMIN' if GLOBAL_METHOD=="NOFL" else 'GDLS'
 GLOBAL_ROUNDS = 12 if GLOBAL_METHOD=="NOFL" else 250
 LOCAL_ROUND_THRESHOLD = 1 if GLOBAL_METHOD=="NOFL" else 20
-NUM_STEPS = 3  # This is basically just local_epochs. Num_grad_steps
+NUM_STEPS = 1 if GLOBAL_METHOD=="NOFL" else NUM_FL_STEPS  # This is basically just local_epochs, since I don't batch. THIS WRAPS BOTH NOFL AND FL ALGOS!
 SCENARIO = "CROSS"  # "INTRA" cant be used in this file!
 
 BETA=0.01  # Not used with GDLS? Only pertains to PFA regardless
-LR=1  # Not used with GDLS?
 
 with open(path+cond0_filename, 'rb') as fp:
     cond0_training_and_labels_lst = pickle.load(fp)
