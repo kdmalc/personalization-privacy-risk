@@ -697,18 +697,6 @@ class Client(ModelBase):
             # IF GLOBAL METHOD IS ONE OF THE PFA METHODS, OPT METHOD GETS OVERWRITTEN WITH GDLS
             ## This is a bad loop since it checks both global_method and opt_method...
             if self.global_method=='PFAFO':
-                ## THIS ONE WASNT WORKING
-                stochastic_grad = np.reshape(gradient_cost_l2(self.F, D0, self.V, alphaE=self.alphaE, alphaD=self.alphaD, Ne=self.PCA_comps), 
-                                        (2, self.PCA_comps))
-                self.local_gradient_log.append(np.linalg.norm(stochastic_grad))
-                w_tilde = D0 - self.lr * stochastic_grad
-                # ^ D0 is w_new from the previous iteration, eg w_{t-1}
-                new_stoch_grad = np.reshape(gradient_cost_l2(self.F2, w_tilde, self.V2, alphaE=self.alphaE, alphaD=self.alphaD, Ne=self.PCA_comps), 
-                                        (2, self.PCA_comps))
-                self.local_gradient_log.append(np.linalg.norm(new_stoch_grad))
-                # I mean should I just use linear search here too...
-                self.w_new = D0 - self.beta * new_stoch_grad
-            elif self.global_method=='PFAFO_GDLS':
                 ## THIS IS THE WORKING ONE
 
                 # Step 1: Compute w_tilde
@@ -822,7 +810,7 @@ class Client(ModelBase):
                 p_actual = np.cumsum(v_actual, axis=1)*self.dt  # Numerical integration of v_actual to get p_actual
                 V_test = (self.p_test_reference[i] - p_actual)*self.dt
 
-                batch_samples = self.F_test[i].shape[0]
+                batch_samples = 1 #len(self.F_test[i])  # len is 64, which is NOT the number of samples...
                 if return_cost_func_comps:
                     batch_loss, vel_error, dec_error = cost_l2(self.F_test[i], model, V_test, alphaE=self.alphaE, alphaD=self.alphaD, Ne=self.PCA_comps, return_cost_func_comps=return_cost_func_comps)
                     running_vel_error += vel_error * batch_samples
@@ -844,8 +832,9 @@ class Client(ModelBase):
             p_actual = np.cumsum(v_actual, axis=1)*self.dt  # Numerical integration of v_actual to get p_actual
             V_test = (self.p_test_reference - p_actual)*self.dt
 
+            batch_samples = self.F_test.shape[1]  # Shape of F is (64, 1201)!
             if return_cost_func_comps:
-                test_loss, vel_error, dec_error = cost_l2(self.F_test[i], model, V_test, alphaE=self.alphaE, alphaD=self.alphaD, Ne=self.PCA_comps, return_cost_func_comps=return_cost_func_comps)
+                test_loss, vel_error, dec_error = cost_l2(self.F_test, model, V_test, alphaE=self.alphaE, alphaD=self.alphaD, Ne=self.PCA_comps, return_cost_func_comps=return_cost_func_comps)
                 vel_error = vel_error * batch_samples
                 dec_error = dec_error * batch_samples
             else:
